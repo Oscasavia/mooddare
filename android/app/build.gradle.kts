@@ -65,4 +65,8 @@ flutter {
 dependencies {
     // Bundled detector works offline, including on the first launch.
     implementation("com.google.mlkit:face-detection:16.1.7")
+    // Match the CameraX version used by the pinned Flutter camera plugin.
+    implementation("androidx.camera:camera-camera2:1.5.0-beta01")
+    implementation("androidx.camera:camera-lifecycle:1.5.0-beta01")
+    implementation("com.google.guava:guava:33.4.8-android")
 }

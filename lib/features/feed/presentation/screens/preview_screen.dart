@@ -14,11 +14,13 @@ class PreviewScreen extends StatefulWidget {
   final File mediaFile;
   final String mediaType;
   final String dareText;
+  final String? liveLens;
   const PreviewScreen({
     super.key,
     required this.mediaFile,
     required this.mediaType,
     required this.dareText,
+    this.liveLens,
   });
   @override
   State<PreviewScreen> createState() => _PreviewScreenState();
@@ -300,7 +302,13 @@ class _PreviewScreenState extends State<PreviewScreen>
                                   Icons.compare_arrows,
                                   size: 18,
                                 ),
-                                label: Text(_original ? 'Original' : 'Edited'),
+                                label: Text(
+                                  _original
+                                      ? (widget.liveLens == null
+                                            ? 'Original'
+                                            : 'Captured')
+                                      : 'Edited',
+                                ),
                               ),
                             ),
                           if (_rendering)
@@ -332,10 +340,14 @@ class _PreviewScreenState extends State<PreviewScreen>
                             children: [
                               const Icon(Icons.auto_awesome, size: 18),
                               const SizedBox(width: 8),
-                              const Expanded(
+                              Expanded(
                                 child: Text(
-                                  'Photo studio',
-                                  style: TextStyle(fontWeight: FontWeight.w700),
+                                  widget.liveLens == null
+                                      ? 'Photo studio'
+                                      : '${widget.liveLens} · Photo studio',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
                               Text(

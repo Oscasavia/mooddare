@@ -22,28 +22,35 @@ Choose Discover → mood → Capture your moment → Photo. After capture, the s
 
 The implementation combines **free on-device ML Kit face detection on Android** with our own edge-preserving pixel processing in a Dart isolate. ML Kit is a Google SDK, not an open-source beauty engine. No camera frames are uploaded for processing. Photos are normalized upright and limited to a 1600-pixel longest edge to bound memory and processing cost. Save, share and post use the same edited JPEG.
 
-This is **photo processing after capture**, not a live beauty camera. Videos record without beauty effects, up to 30 seconds. iOS currently supports photo color adjustments and normal capture; face smoothing needs a native iOS detector adapter and device validation. Facial reshaping, virtual makeup and live video effects are future work.
+On Android, tap **✨ beside the shutter** to open **Live beauty**. Swipe the lens carousel: Original, Soft, Glow, Wide eyes, Sculpt, and Studio (a combined look). Strength controls the amount; Compare shows the original. Eye enlargement, lower-face slimming, smoothing and color adjustments run continuously. Original is selected initially. Face effects pause when no suitable face is tracked; global color adjustments remain active.
+
+Live photos are captured from the same GPU-rendered frame as the preview, including selfie mirroring, then enter the existing save/share/post studio. The live look is baked into the capture: the studio's **Captured** comparison restores that capture, not the pre-lens camera frame. Live capture uses preview resolution (960 × 1280 on the tested emulator), not the full sensor resolution. This first live implementation is designed for portrait use.
+
+The live engine uses native CameraX upright RGBA frames, bundled ML Kit landmarks and OpenGL ES shaders. It drops old frames instead of building a processing backlog, checks for stale tracking, and keeps all frame pixels on Android; Flutter receives a texture and small status updates. It does not require a paid SDK or cloud face processing. The approximately 29.5 fps measured on the emulator is not a physical-device performance guarantee; test latency and thermal behavior on actual phones.
+
+Videos record without beauty effects, up to 30 seconds. iOS currently supports photo color adjustments and normal capture; face smoothing and live lenses need native iOS implementation and validation. Virtual makeup, AR masks/stickers, full face-mesh tracking and live effects in recorded video are future work.
 
 ## Verification
 
 ```sh
 flutter analyze
 flutter test
-flutter test integration_test/beauty_test.dart -d <android-device-id>
+flutter test integration_test -d <android-emulator-id>
 flutter build apk --debug --target-platform android-arm64
 npm ci --ignore-scripts --prefix tooling/rules-tests
 firebase emulators:exec --project demo-mooddare --only firestore,storage 'npm --prefix tooling/rules-tests test'
 ```
 
-The Android integration tests use a public-domain U.S. Navy portrait of Grace Hopper (James S. Davis; TensorFlow test crop). They verify real detection, rendering, export, the editor UI and camera capture/retake without posting to Firebase. Allow camera access when Android prompts during the camera test. The test fixture is not part of the normal app bundle.
+The Android integration tests use a public-domain U.S. Navy portrait of Grace Hopper (James S. Davis; TensorFlow test crop). They verify detection, GPU pixel effects, no-face bypass, orientation/mirroring, export, editor UI, continuous frames, camera switching, capture/retake and rapid background/resume without posting to Firebase. Run these on a test emulator: Flutter's integration runner may uninstall the app afterward. Allow camera access when Android prompts. The test fixture is not part of the normal app bundle, and the native fixture entry point is disabled in release builds.
 
 ## Structure
 
-- `lib/features/camera`: pure image processing and platform-channel adapter.
+- `lib/features/camera`: photo processing, lens presets, live camera UI and platform-channel adapters.
 - `lib/features/feed`: capture, preview, posting, playback, likes, blocking and reports.
 - `lib/features/auth`, `user`, `profile`: account flow and profile management.
 - `lib/features/dares`: discovery and local starter dares if the remote catalog is empty or unavailable.
 - `android/.../BeautyPlugin.kt`: bundled native face detector.
+- `android/.../LiveBeautyPlugin.kt` and `LiveBeautyRenderer.kt`: native live camera, landmark tracking and GPU lens rendering/capture.
 - `firestore.rules`, `storage.rules`, `firestore.indexes.json`: versioned backend access policy, not automatically deployed.
 - `docs/RELEASE.md`: required migration and release work.
 

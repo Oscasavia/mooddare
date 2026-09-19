@@ -3,6 +3,7 @@
 ## Implemented
 
 - Android on-device face detection with custom, face-masked photo smoothing; light/warmth controls; original comparison; shared JPEG export path for gallery/share/feed.
+- Android live photo lens carousel: Original, Soft, Glow, Wide eyes, Sculpt and Studio, with strength/compare controls. Native CameraX/ML Kit/OpenGL pipeline applies smoothing, color, eye enlargement and face slimming to preview and captured frames.
 - Camera startup error/retry states, front camera default, photo/video modes, lifecycle cleanup, recording lock and a 30-second limit.
 - Material 3 dark theme, responsive auth/discovery/editor screens, real profile counts and milestones; removed fake social stats, subscriptions, notification switches and unused seed tools.
 - Actual sign-out, Firebase auth errors, guest-to-account linking on signup, username reservations, avatar selection/cropping/upload and profile bio.
@@ -35,7 +36,9 @@ Do not deploy the policy onto unmigrated profiles: old public email fields will 
 
 ## Device acceptance testing
 
-Local verification completed: Flutter analysis with no issues, 10 unit/widget tests, 9 Firebase emulator access-rule tests, and 2 Android emulator integration tests (native face detection/export/editor and camera capture/retake). These checks do not exercise the live Firebase deployment or store signing.
+Local verification completed: Flutter analysis with no issues, 11 unit/widget tests, 9 Firebase emulator access-rule tests, and 4 Android emulator integration tests. The live tests cover real GPU pixel changes for eyes/jaw/smoothing, unmodified background, original bypass, no-face bypass, RGBA color order, upright/mirrored exports, continuing frames, capture/retake, camera switching and rapid background/resume. The rules tests passed in the previous backend work; live-lens changes do not modify backend policy. These checks do not exercise store signing. The user separately confirmed physical-phone posting, photo edits, video playback and audio on the preceding photo-only build.
+
+Live camera measured about 29.5 fps at 960 × 1280 on the emulator. Physical-phone FPS, tracking latency, power consumption and thermal throttling remain acceptance checks. CameraX RGBA conversion/copy and downscaled face detection use CPU; the image effects run on the GPU. Frame queues are bounded. This is a portrait, single-face implementation with geometric landmarks, not a full face mesh or semantic skin segmentation. Test large head turns, lost/reacquired faces, overlapping faces, glasses, facial hair and movement. Live photos preserve the preview resolution and mirrored selfie appearance; test folded/unfolded layouts and orientation before extending landscape support. Live lens effects are baked into captured photos, so the later editor cannot recover a pre-lens original.
 
 Automated Android tests prove integration, not aesthetic quality across users. Validate smoothing with consenting test users across skin tones, lighting, glasses, facial hair and movement before marketing it as a beauty feature. Face detection is limited to the largest front-facing face with usable landmarks; rotated/profile faces are skipped. The geometric mask is not a semantic skin segmentation model.
 

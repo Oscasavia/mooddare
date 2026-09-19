@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'preview_screen.dart';
+import '../../../camera/presentation/live_beauty_screen.dart';
 
 class CameraScreen extends StatefulWidget {
   final String dareText;
@@ -176,6 +177,31 @@ class _CameraScreenState extends State<CameraScreen>
     _index = (_index + 1) % _cameras.length;
     await _initialize();
     if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _openLiveBeauty() async {
+    if (_busy || _recording) return;
+    setState(() => _busy = true);
+    _inPreview = true;
+    try {
+      await _releaseCamera();
+      if (!mounted) return;
+      final posted = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => LiveBeautyScreen(dareText: widget.dareText),
+        ),
+      );
+      _inPreview = false;
+      if (!mounted) return;
+      if (posted == true) {
+        Navigator.of(context).pop(true);
+        return;
+      }
+      await _initialize();
+    } finally {
+      _inPreview = false;
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _flash() async {
@@ -363,7 +389,16 @@ class _CameraScreenState extends State<CameraScreen>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const SizedBox(width: 48),
+                    if (Platform.isAndroid)
+                      IconButton(
+                        tooltip: 'Live beauty lenses',
+                        onPressed: ready && !_busy && !_recording
+                            ? _openLiveBeauty
+                            : null,
+                        icon: const Icon(Icons.auto_awesome),
+                      )
+                    else
+                      const SizedBox(width: 48),
                     Semantics(
                       button: true,
                       label: _recording
@@ -412,7 +447,9 @@ class _CameraScreenState extends State<CameraScreen>
                 child: Text(
                   _videoMode
                       ? 'Record up to 30 seconds · Original video'
-                      : 'Fine-tune your photo with beauty controls after capture',
+                      : (Platform.isAndroid
+                            ? 'Tap ✨ for live beauty lenses'
+                            : 'Fine-tune your photo with beauty controls after capture'),
                   textAlign: TextAlign.center,
                   style: Theme.of(
                     context,
