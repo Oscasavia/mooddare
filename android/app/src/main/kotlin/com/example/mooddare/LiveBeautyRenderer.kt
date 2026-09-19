@@ -330,8 +330,8 @@ internal class LiveBeautyRenderer(surface: Surface) {
                 return feather * feather;
             }
             vec2 enlargeEye(vec2 p, vec4 guide, float openness) {
-                return guide.xy + (p - guide.xy) *
-                    (1.0 - shape.x * settings.w * openness * 0.20 * influence(p, guide));
+                return p - (p - guide.xy) *
+                    (shape.x * settings.w * openness * 0.20 * influence(p, guide));
             }
             void main() {
                 vec2 cropped = (uv - 0.5) * crop + 0.5;
@@ -341,13 +341,18 @@ internal class LiveBeautyRenderer(surface: Surface) {
                     // from the same stabilized mesh as the skin and makeup masks.
                     vec2 metric = vec2(p.x * shapeAspect, p.y);
                     vec2 q = vec2(dot(metric, shapeAxis), dot(metric, vec2(-shapeAxis.y, shapeAxis.x)));
+                    vec2 unwarped = q;
                     vec4 weights = vec4(influence(q, meshJaw[0]), influence(q, meshJaw[1]),
                         influence(q, meshJaw[2]), influence(q, meshJaw[3]));
                     q.x += dot(weights, jawShift) / max(1.0, dot(weights, vec4(1.0))) * shape.y * settings.w;
                     q = enlargeEye(q, meshEyes[0], eyeOpenness.x);
                     q = enlargeEye(q, meshEyes[1], eyeOpenness.y);
-                    metric = vec2(q.x * shapeAxis.x - q.y * shapeAxis.y, q.x * shapeAxis.y + q.y * shapeAxis.x);
-                    p = vec2(metric.x / shapeAspect, metric.y);
+                    // Transform only displacement: pixels outside the guides keep
+                    // their exact input coordinates even on mediump mobile GPUs.
+                    vec2 delta = q - unwarped;
+                    vec2 offset = vec2(delta.x * shapeAxis.x - delta.y * shapeAxis.y,
+                        delta.x * shapeAxis.y + delta.y * shapeAxis.x);
+                    p += vec2(offset.x / shapeAspect, offset.y);
                 }
                 vec3 color = texture2D(image, p).rgb;
                 vec2 maskUV = (p - maskBounds.xy) / max(maskBounds.zw, vec2(0.0001));

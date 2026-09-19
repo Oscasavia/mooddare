@@ -130,7 +130,8 @@ void main() {
               right: original.width ~/ 5,
               bottom: original.height ~/ 5,
             ),
-            lessThan(.5),
+            lessThan(.01),
+            reason: 'Distant pixels retain exact source coordinates',
           );
           if (front) {
             expect(
