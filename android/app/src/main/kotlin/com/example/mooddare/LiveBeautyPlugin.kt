@@ -125,6 +125,10 @@ class LiveBeautyPlugin(
                 if (current == null) result.error("closed", "Camera is closed.", null)
                 else current.setLook(call, result)
             }
+            "stopWithDetectorRaceFixture" -> {
+                if (activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) { result.notImplemented(); return }
+                session?.closeWithDetectorRace(result) ?: result.error("closed", "Camera is closed.", null)
+            }
             "setGeometryFixture" -> {
                 if (activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) { result.notImplemented(); return }
                 session?.setGeometryFixture(result, call.argument<List<List<Number>>>("polygons"))
@@ -217,6 +221,7 @@ class LiveBeautyPlugin(
         private var photoDetecting = false
         @Volatile private var photoDiagnostic: Map<String, Any?> = emptyMap()
         private var threadFinished = false
+        private var renderClosed = false
         private val photoTimeout = Runnable { finishPhoto(null, "Photo capture timed out. Please try again.") }
         private var renderer: LiveBeautyRenderer? = null
         private var pixels: ByteBuffer? = null
@@ -836,24 +841,39 @@ class LiveBeautyPlugin(
             }
         }
 
-        fun close(done: () -> Unit) {
+        fun closeWithDetectorRace(result: MethodChannel.Result) {
+            if (!fixtureMode || closed) { result.error("fixture", "A debug fixture is required.", null); return }
+            session = null
+            close(detectorRaceFixture = true) { result.success(null) }
+        }
+
+        fun close(detectorRaceFixture: Boolean = false, done: () -> Unit) {
             if (closed) { done(); return }
             closed = true; ready = false
             clearCaptureLight()
             finishStartError("closed", "Camera was closed.")
             analysis?.let { it.clearAnalyzer(); provider?.unbind(it) }
             stillCapture?.let { provider?.unbind(it) }; stillCapture = null
-            handler.post {
+            val cleanup = Runnable {
                 finishPhoto(null)
                 finishRecording()
                 renderer?.close(); renderer = null
                 surface.release()
+                renderClosed = true
                 main.post { entry.release(); done() }
                 maybeFinishThread()
             }
+            if (detectorRaceFixture) {
+                // Force the completion callback to run after closed=true but
+                // before cleanup is queued, just as an in-flight detector can.
+                handler.post { maybeFinishThread() }
+                main.postDelayed({ handler.post(cleanup) }, 100)
+            } else handler.post(cleanup)
         }
         private fun maybeFinishThread() {
-            if (!closed || detecting || photoDetecting || threadFinished) return
+            // Detector callbacks can observe closed before main has queued GL
+            // cleanup. Keep this thread alive until both resources and tasks end.
+            if (!closed || !renderClosed || detecting || photoDetecting || threadFinished) return
             threadFinished = true
             detector.close(); photoDetector.close(); meshDetector.close(); photoMeshDetector.close(); thread.quitSafely()
         }

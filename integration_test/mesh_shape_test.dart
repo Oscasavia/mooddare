@@ -163,7 +163,14 @@ void main() {
             lessThan(.1),
             reason: 'Missing mesh must not reuse old shape guides',
           );
-          await channel.invokeMethod<void>('stop');
+          await channel
+              .invokeMethod<void>('stopWithDetectorRaceFixture')
+              .timeout(
+                const Duration(seconds: 5),
+                onTimeout: () => fail(
+                  'Detector completion must not stop the worker before renderer cleanup',
+                ),
+              );
         }
       } finally {
         await channel.invokeMethod<void>('stop');
