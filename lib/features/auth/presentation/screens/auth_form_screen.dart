@@ -197,12 +197,36 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                         ),
                         label: const Text('Continue with Google'),
                       ),
-                      const Divider(
-                        height: 32,
-                        thickness: 1,
-                        color: Colors.white24,
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Divider(
+                                thickness: 1,
+                                color: Colors.white24,
+                              ),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16),
+                              child: Text(
+                                'or',
+                                style: TextStyle(color: Colors.white60),
+                              ),
+                            ),
+                            Expanded(
+                              child: Divider(
+                                thickness: 1,
+                                color: Colors.white24,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                       TextButton(
+                        style: TextButton.styleFrom(
+                          minimumSize: const Size.fromHeight(52),
+                        ),
                         onPressed: _busy
                             ? null
                             : () => setState(() {
