@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function owner(uid) { return signedIn() && request.auth.uid == uid; }
+    function validProfile(uid) {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['id', 'name', 'username', 'username_lower', 'username_normalized', 'photoUrl', 'bio', 'createdAt', 'updatedAt'])
+        && data.id == uid
+        && (!('name' in data) || data.name == null || (data.name is string && data.name.size() <= 50))
+        && (!('bio' in data) || data.bio == null || (data.bio is string && data.bio.size() <= 160))
+        && (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 2048 && data.photoUrl.matches('https://.*')))
+        && (!('username' in data) || data.username == null || (
+          data.username is string && data.username.matches('^[a-zA-Z0-9_]{3,20}$')
+          && data.username_lower == data.username.lower()
+          && getAfter(/databases/$(database)/documents/usernames/$(data.username_lower)).data.uid == uid));
+    }
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create: if owner(uid) && validProfile(uid) && request.resource.data.createdAt == request.time;
+      allow update: if owner(uid) && validProfile(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','username','username_lower','username_normalized','photoUrl','bio','updatedAt']);
+      allow delete: if owner(uid);
+      match /blocked/{authorId} {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid) && authorId != uid
+          && request.resource.data.keys().hasOnly(['createdAt'])
+          && request.resource.data.createdAt == request.time;
+      }
+    }
+    match /usernames/{name} {
+      allow get: if signedIn();
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid
+        && (!exists(/databases/$(database)/documents/usernames/$(name)) || resource.data.uid == request.auth.uid)
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.username_lower == name;
+      allow delete: if owner(resource.data.uid)
+        && (!existsAfter(/databases/$(database)/documents/users/$(request.auth.uid))
+          || getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.username_lower != name);
+    }
+    match /dares/{id} {
+      allow read: if signedIn();
+      // Curated content is managed through trusted administrative tooling.
+      allow write: if false;
+    }
+    match /posts/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['dareText','mediaUrl','mediaPath','mediaType','authorId','createdAt','expiresAt','likedBy'])
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.dareText is string
+        && request.resource.data.dareText.size() > 0 && request.resource.data.dareText.size() <= 500
+        && request.resource.data.mediaType in ['image','video']
+        && request.resource.data.mediaPath == 'posts/' + request.auth.uid + '/' + id + (request.resource.data.mediaType == 'image' ? '.jpg' : '.mp4')
+        && request.resource.data.mediaUrl is string && request.resource.data.mediaUrl.size() <= 2048
+        && request.resource.data.mediaUrl.matches('https://firebasestorage.googleapis.com/.*')
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(25, 'h')
+        && request.resource.data.likedBy == [];
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy'])
+        && request.resource.data.likedBy is list
+        && request.resource.data.likedBy.size() <= 10000
+        && request.resource.data.likedBy.size() == request.resource.data.likedBy.toSet().size()
+        && request.resource.data.likedBy.toSet().difference(resource.data.likedBy.toSet()).hasOnly([request.auth.uid])
+        && resource.data.likedBy.toSet().difference(request.resource.data.likedBy.toSet()).hasOnly([request.auth.uid]);
+      allow delete: if owner(resource.data.authorId);
+    }
+    match /reports/{id} {
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasOnly(['postId','reporterId','reason','createdAt'])
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.postId is string
+        && id == request.auth.uid + '_' + request.resource.data.postId
+        && request.resource.data.reason == 'inappropriate'
+        && request.resource.data.createdAt == request.time;
+      allow read, delete: if owner(resource.data.reporterId);
+    }
+  }
+}

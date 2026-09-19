@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>1010705723283-uim3vifo243b6u4t704arshcm8p46qub.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.1010705723283-uim3vifo243b6u4t704arshcm8p46qub</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>1010705723283-249fbklb8928rtfsj6i7995u41lpqsjs.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyC2pRxiyA5zM3-qWFz48MDs5RUzYXZEBns</string>
+	<key>GCM_SENDER_ID</key>
+	<string>1010705723283</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.example.mooddare</string>
+	<key>PROJECT_ID</key>
+	<string>mooddare</string>
+	<key>STORAGE_BUCKET</key>
+	<string>mooddare.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:1010705723283:ios:509dc8796c2a0ee2270266</string>
+</dict>
+</plist>

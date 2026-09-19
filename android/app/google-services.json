@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "1010705723283",
+    "project_id": "mooddare",
+    "storage_bucket": "mooddare.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1010705723283:android:7e0fad8456d00af6270266",
+        "android_client_info": {
+          "package_name": "com.example.mooddare"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1010705723283-249fbklb8928rtfsj6i7995u41lpqsjs.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.mooddare",
+            "certificate_hash": "0495f6f7c5ccee6544e616e6e1bbe24cc059f45f"
+          }
+        },
+        {
+          "client_id": "1010705723283-7j377hotplnp6lgmqh4cforgm3vnid8a.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCpu6iM86JCIQ0xk5SArXPzT85JAUB8-wU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1010705723283-7j377hotplnp6lgmqh4cforgm3vnid8a.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1010705723283-uim3vifo243b6u4t704arshcm8p46qub.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.mooddare"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
