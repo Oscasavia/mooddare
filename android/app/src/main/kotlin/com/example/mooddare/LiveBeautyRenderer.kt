@@ -25,6 +25,8 @@ internal class LiveBeautyRenderer(surface: Surface) {
     private val maskTexture: Int
     private val geometryMask = FaceGeometryMask()
     private var lastGeometry: FaceGeometry? = null
+    private var shapeGeometry: FaceShapeGeometry? = null
+    private var shapeAspect = 0f
     private val vertices = ByteBuffer.allocateDirect(8 * 4).order(ByteOrder.nativeOrder())
         .asFloatBuffer().apply { put(floatArrayOf(-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f)); position(0) }
     var width = 0; private set
@@ -130,6 +132,8 @@ internal class LiveBeautyRenderer(surface: Surface) {
         GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, maskTexture)
         if (geometry != null && (lastGeometry == null || !lastGeometry!!.points.contentEquals(geometry.points))) {
+            shapeAspect = sourceWidth.toFloat() / sourceHeight
+            shapeGeometry = FaceShapeGeometry.create(geometry, shapeAspect)
             geometryMask.update(geometry)
             GLUtils.texSubImage2D(GLES20.GL_TEXTURE_2D, 0, 0, 0, geometryMask.bitmap)
             lastGeometry = geometry
@@ -140,6 +144,18 @@ internal class LiveBeautyRenderer(surface: Surface) {
         GLES20.glUniform1f(uniform("makeup"), if (original || geometry == null) 0f else makeup)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         val sourceAspect = sourceWidth.toFloat() / sourceHeight
+        if (geometry != null && shapeAspect != sourceAspect) {
+            shapeAspect = sourceAspect
+            shapeGeometry = FaceShapeGeometry.create(geometry, sourceAspect)
+        }
+        val guides = if (geometry != null) shapeGeometry else null
+        GLES20.glUniform1f(uniform("shapeAspect"), sourceAspect)
+        GLES20.glUniform1f(uniform("hasShape"), if (guides != null) 1f else 0f)
+        GLES20.glUniform2fv(uniform("shapeAxis"), 1, guides?.axis ?: floatArrayOf(1f, 0f), 0)
+        GLES20.glUniform4fv(uniform("meshEyes[0]"), 2, guides?.eyes ?: FloatArray(8), 0)
+        GLES20.glUniform2fv(uniform("eyeOpenness"), 1, guides?.eyeStrength ?: FloatArray(2), 0)
+        GLES20.glUniform4fv(uniform("meshJaw[0]"), 4, guides?.jaw ?: FloatArray(16), 0)
+        GLES20.glUniform4fv(uniform("jawShift"), 1, guides?.jawShift ?: FloatArray(4), 0)
         val targetAspect = w.toFloat() / h
         GLES20.glUniform2f(uniform("crop"),
             if (sourceAspect > targetAspect) targetAspect / sourceAspect else 1f,
@@ -294,6 +310,13 @@ internal class LiveBeautyRenderer(surface: Surface) {
             uniform vec4 eyes;
             uniform vec4 features;
             uniform vec2 shape;
+            uniform float shapeAspect;
+            uniform float hasShape;
+            uniform vec2 shapeAxis;
+            uniform vec4 meshEyes[2];
+            uniform vec2 eyeOpenness;
+            uniform vec4 meshJaw[4];
+            uniform vec4 jawShift;
             float ellipse(vec2 p, vec2 center, vec2 radius) {
                 vec2 d = (p - center) / max(radius, vec2(0.0001));
                 return dot(d, d);
@@ -301,23 +324,30 @@ internal class LiveBeautyRenderer(surface: Surface) {
             float protect(vec2 p, vec2 center, vec2 radius) {
                 return clamp((ellipse(p, center, radius) - 1.0) / 0.65, 0.0, 1.0);
             }
-            vec2 enlargeEye(vec2 p, vec2 center) {
-                float distance = ellipse(p, center, face.zw * vec2(0.23, 0.15));
-                float falloff = pow(1.0 - clamp(distance, 0.0, 1.0), 2.0);
-                return center + (p - center) * (1.0 - shape.x * settings.w * 0.20 * falloff);
+            float influence(vec2 p, vec4 guide) {
+                float d = ellipse(p, guide.xy, guide.zw);
+                float feather = 1.0 - clamp(d, 0.0, 1.0);
+                return feather * feather;
+            }
+            vec2 enlargeEye(vec2 p, vec4 guide, float openness) {
+                return guide.xy + (p - guide.xy) *
+                    (1.0 - shape.x * settings.w * openness * 0.20 * influence(p, guide));
             }
             void main() {
                 vec2 cropped = (uv - 0.5) * crop + 0.5;
                 vec2 p = vec2(mix(cropped.x, 1.0 - cropped.x, mirror), cropped.y);
-                if (settings.w > 0.0) {
-                    // Inverse texture warps remain local and feather to zero at the boundary.
-                    float d = ellipse(p, face.xy + face.zw * vec2(0.5, 0.63), face.zw * vec2(0.53, 0.55));
-                    float y = (p.y - face.y) / max(face.w, 0.0001);
-                    float jaw = smoothstep(0.35, 0.65, y) * (1.0 - smoothstep(0.85, 1.18, y));
-                    p.x += (p.x - face.x - face.z * 0.5) * shape.y * settings.w * 0.18 * jaw *
-                        pow(1.0 - clamp(d, 0.0, 1.0), 2.0);
-                    p = enlargeEye(p, eyes.xy);
-                    p = enlargeEye(p, eyes.zw);
+                if (settings.w > 0.0 && hasShape > 0.5 && (shape.x > 0.0 || shape.y > 0.0)) {
+                    // Work in a physical-aspect, eye-aligned frame. All guides come
+                    // from the same stabilized mesh as the skin and makeup masks.
+                    vec2 metric = vec2(p.x * shapeAspect, p.y);
+                    vec2 q = vec2(dot(metric, shapeAxis), dot(metric, vec2(-shapeAxis.y, shapeAxis.x)));
+                    vec4 weights = vec4(influence(q, meshJaw[0]), influence(q, meshJaw[1]),
+                        influence(q, meshJaw[2]), influence(q, meshJaw[3]));
+                    q.x += dot(weights, jawShift) / max(1.0, dot(weights, vec4(1.0))) * shape.y * settings.w;
+                    q = enlargeEye(q, meshEyes[0], eyeOpenness.x);
+                    q = enlargeEye(q, meshEyes[1], eyeOpenness.y);
+                    metric = vec2(q.x * shapeAxis.x - q.y * shapeAxis.y, q.x * shapeAxis.y + q.y * shapeAxis.x);
+                    p = vec2(metric.x / shapeAspect, metric.y);
                 }
                 vec3 color = texture2D(image, p).rgb;
                 vec2 maskUV = (p - maskBounds.xy) / max(maskBounds.zw, vec2(0.0001));

@@ -125,6 +125,11 @@ class LiveBeautyPlugin(
                 if (current == null) result.error("closed", "Camera is closed.", null)
                 else current.setLook(call, result)
             }
+            "setGeometryFixture" -> {
+                if (activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) { result.notImplemented(); return }
+                session?.setGeometryFixture(result, call.argument<List<List<Number>>>("polygons"))
+                    ?: result.error("closed", "Camera is closed.", null)
+            }
             "inspectFaceGeometry" -> {
                 if (activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) { result.notImplemented(); return }
                 session?.inspectGeometry(result, call.argument<List<List<Number>>>("polygons"))
@@ -399,7 +404,8 @@ class LiveBeautyPlugin(
             val input = InputImage.fromBitmap(bitmap, 0)
             val facesTask = detector.process(input)
             val meshTask = try {
-                if (fixtureMode || (renderer?.smooth ?: 0f) > 0f || (renderer?.makeup ?: 0f) > 0f) meshDetector.process(input)
+                if (fixtureMode || (renderer?.smooth ?: 0f) > 0f || (renderer?.makeup ?: 0f) > 0f ||
+                    (renderer?.eyeSize ?: 0f) > 0f || (renderer?.faceSlim ?: 0f) > 0f) meshDetector.process(input)
                 else Tasks.forResult(emptyList<FaceMesh>())
             }
                 catch (e: Exception) { Tasks.forException<List<FaceMesh>>(e) }
@@ -462,6 +468,16 @@ class LiveBeautyPlugin(
                     result[4 + i * 2] = point.x / w; result[5 + i * 2] = point.y / h
                 }
             return result
+        }
+
+        fun setGeometryFixture(result: MethodChannel.Result, polygons: List<List<Number>>?) {
+            handler.post {
+                if (!fixtureMode || closed) { main.post { result.error("fixture", "A debug fixture is required.", null) }; return@post }
+                renderer?.faceGeometry = polygons?.let { FaceGeometry.create(it.map { p -> p.map { v -> v.toFloat() }.toFloatArray() }) }
+                geometryVisible = renderer?.faceGeometry != null
+                renderer?.draw()
+                main.post { result.success(null) }
+            }
         }
 
         fun inspectGeometry(result: MethodChannel.Result, polygons: List<List<Number>>? = null) {
@@ -726,7 +742,7 @@ class LiveBeautyPlugin(
                             "faces" to task.result.size, "candidates" to candidates.size,
                             "quality" to quality, "pitch" to picked?.first?.headEulerAngleX,
                             "yaw" to picked?.first?.headEulerAngleY, "roll" to picked?.first?.headEulerAngleZ)
-                        if (picked != null && quality > 0f && (output.smooth > 0f || output.makeup > 0f)) {
+                        if (picked != null && quality > 0f && (output.smooth > 0f || output.makeup > 0f || output.eyeSize > 0f || output.faceSlim > 0f)) {
                             handedToMesh = true
                             detectPhotoMesh(photo, picked.second, quality, request, 0)
                         } else renderStill(photo, picked?.second, quality)

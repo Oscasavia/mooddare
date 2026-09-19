@@ -107,6 +107,33 @@ void main() {
     },
   );
 
+  testWidgets('shaping explains missing mesh and clears the hint on recovery', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.build(),
+        home: const LiveBeautyScreen(dareText: 'Shape test'),
+      ),
+    );
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 250));
+    }
+    final shutter = find.byKey(const ValueKey('capture_shutter'));
+    for (var i = 0; i < 3; i++) {
+      await tester.drag(shutter, const Offset(-90, 0));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Wide eyes'), findsOneWidget);
+    expect(find.text('Face the camera for shaping'), findsOneWidget);
+    geometryAvailable = true;
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+    expect(find.text('Face the camera for shaping'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
   for (final size in [const Size(320, 640), const Size(768, 1024)]) {
     testWidgets(
       'custom look retains independent amounts, compares and resets at $size',

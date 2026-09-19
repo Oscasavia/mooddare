@@ -47,6 +47,13 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   CustomBeautyLook _customLook = const CustomBeautyLook();
   BeautyAdjustment _customAdjustment = BeautyAdjustment.smooth;
   bool get _isCustom => BeautyLens.all[_selected] == BeautyLens.custom;
+  bool get _needsMesh {
+    if (_isCustom) return _customLook.eyes > 0 || _customLook.face > 0;
+    final lens = BeautyLens.all[_selected];
+    return _strength > 0 &&
+        (lens.makeup > 0 || lens.eyeSize > 0 || lens.faceSlim > 0);
+  }
+
   bool _ready = false, _face = false, _geometry = false, _front = true;
   bool _busy = false, _comparing = false, _active = true, _inPreview = false;
   bool _recording = false, _showAdjustments = false;
@@ -895,16 +902,18 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                                     if (_selected != 0 &&
                                         _ready &&
                                         !_comparing &&
-                                        (!_face ||
-                                            (BeautyLens.all[_selected].makeup >
-                                                    0 &&
-                                                !_geometry)))
+                                        (!_face || (_needsMesh && !_geometry)))
                                       Padding(
                                         padding: const EdgeInsets.only(top: 4),
                                         child: Text(
                                           !_face
                                               ? 'Find your face'
-                                              : 'Face the camera for makeup',
+                                              : BeautyLens
+                                                        .all[_selected]
+                                                        .makeup >
+                                                    0
+                                              ? 'Face the camera for makeup'
+                                              : 'Face the camera for shaping',
                                           style: const TextStyle(
                                             fontSize: 11,
                                             color: Colors.white70,
