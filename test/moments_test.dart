@@ -259,7 +259,7 @@ void main() {
   );
 
   testWidgets(
-    'back refreshes to top, then exits; timeout and sheet back do not exit',
+    'back refreshes to top, then exits even after waiting or a system swipe',
     (tester) async {
       final calls = <MethodCall>[];
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -287,13 +287,20 @@ void main() {
         findsOneWidget,
       );
       expect(calls.where((c) => c.method == 'SystemNavigator.pop'), isEmpty);
-      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 5));
+      // Android cancels the app pointer when it takes over an edge back swipe.
+      final backSwipe = await tester.startGesture(const Offset(1, 300));
+      await backSwipe.moveBy(const Offset(70, 0));
+      await backSwipe.cancel();
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(repo.reads, 2);
+      expect(calls.where((c) => c.method == 'SystemNavigator.pop').length, 1);
+
+      // Reopening the app starts a fresh two-press sequence.
       await tester.binding.handlePopRoute();
       await tester.pump();
       expect(repo.reads, 3);
-      await tester.binding.handlePopRoute();
-      await tester.pump();
-      expect(calls.where((c) => c.method == 'SystemNavigator.pop').length, 1);
       await tester.tap(find.byTooltip('Filter by mood'));
       await tester.pumpAndSettle();
       await tester.binding.handlePopRoute();
@@ -301,6 +308,22 @@ void main() {
       expect(find.text('All moods'), findsNothing);
       expect(repo.reads, 3);
       expect(calls.where((c) => c.method == 'SystemNavigator.pop').length, 1);
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(repo.reads, 4);
+      expect(calls.where((c) => c.method == 'SystemNavigator.pop').length, 1);
+
+      // Continuing to browse disarms exit, so Back refreshes the feed again.
+      await tester.drag(find.byType(PageView), const Offset(0, -650));
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(repo.reads, 5);
+      expect(calls.where((c) => c.method == 'SystemNavigator.pop').length, 1);
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(repo.reads, 5);
+      expect(calls.where((c) => c.method == 'SystemNavigator.pop').length, 2);
     },
   );
 

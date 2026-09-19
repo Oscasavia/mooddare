@@ -27,11 +27,9 @@ class _FeedScreenState extends State<FeedScreen> {
   String? _moodId;
   final List<PostModel> _loaded = [];
   final _moodOptions = <String, String>{};
-  Timer? _exitTimer;
   bool _exitArmed = false;
 
   void _disarmExit() {
-    _exitTimer?.cancel();
     _exitArmed = false;
   }
 
@@ -46,13 +44,12 @@ class _FeedScreenState extends State<FeedScreen> {
   void _back() {
     if (ModalRoute.of(context)?.isCurrent != true) return;
     if (_exitArmed) {
+      _disarmExit();
       SystemNavigator.pop();
       return;
     }
     _refresh();
     _exitArmed = true;
-    _exitTimer?.cancel();
-    _exitTimer = Timer(const Duration(seconds: 2), _disarmExit);
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -126,7 +123,6 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   void dispose() {
-    _exitTimer?.cancel();
     _clock?.cancel();
     _blocks?.cancel();
     _pages.dispose();
@@ -140,7 +136,9 @@ class _FeedScreenState extends State<FeedScreen> {
       if (!didPop) _back();
     },
     child: Listener(
-      onPointerDown: (_) => _disarmExit(),
+      // Android cancels the pointer when it takes over a system back swipe.
+      // Only completed feed interactions should clear the second-back action.
+      onPointerUp: (_) => _disarmExit(),
       child: Scaffold(
         appBar: AppBar(
           title: const Text('mooddare'),
