@@ -1,32 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:mooddare/core/user_message.dart';
-import '../../data/repositories/auth_repository.dart';
+import '../widgets/welcome_artwork.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
 
-class WelcomeScreen extends StatefulWidget {
+class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
-  @override
-  State<WelcomeScreen> createState() => _WelcomeScreenState();
-}
-
-class _WelcomeScreenState extends State<WelcomeScreen> {
-  bool _busy = false;
-  Future<void> _guest() async {
-    setState(() => _busy = true);
-    try {
-      await AuthRepository().signInAnonymously();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(userMessage(e))));
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) => Scaffold(
     body: SafeArea(
@@ -46,27 +24,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 48),
-                Container(
-                  height: 190,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(36),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF302547), Color(0xFF1C2936)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: const Center(
-                    child: Wrap(
-                      spacing: 24,
-                      children: [
-                        Text('✨', style: TextStyle(fontSize: 48)),
-                        Text('📸', style: TextStyle(fontSize: 64)),
-                        Text('⚡', style: TextStyle(fontSize: 48)),
-                      ],
-                    ),
-                  ),
-                ),
+                const WelcomeArtwork(),
                 const SizedBox(height: 32),
                 const Text(
                   'A little dare.\nA great story.',
@@ -88,31 +46,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 ),
                 const SizedBox(height: 32),
                 FilledButton(
-                  onPressed: _busy
-                      ? null
-                      : () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SignupScreen(),
-                          ),
-                        ),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SignupScreen()),
+                  ),
                   child: const Text('Find your next dare'),
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton(
-                  onPressed: _busy
-                      ? null
-                      : () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const LoginScreen(),
-                          ),
-                        ),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  ),
                   child: const Text('I already have an account'),
-                ),
-                TextButton(
-                  onPressed: _busy ? null : _guest,
-                  child: Text(_busy ? 'Getting ready…' : 'Explore as a guest'),
                 ),
               ],
             ),

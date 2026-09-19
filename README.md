@@ -16,6 +16,12 @@ Use your own Java 17 path on other machines. Flutter may otherwise choose Androi
 
 If the debugger connection hangs on the splash screen on this Mac, the verified fallback is `flutter run -d sdk --no-hot --no-resident`. It installs and opens the app without a hot-reload session. The standalone debug APK also launches normally.
 
+## Welcome and account screens
+
+Welcome keeps the two sign-up/sign-in actions and uses an original offline mood-card illustration. New guest entry is removed from this screen; existing anonymous accounts and their account-linking support remain intact. The Google buttons use the unmodified multicolor logo from [Google’s official branding assets](https://developers.google.com/identity/branding-guidelines) on a white button. Design direction for the original welcome artwork: [playful dark onboarding](https://dribbble.com/shots/27037136-Cosmic-Social-App-Onboarding-UI-Dark-Mode-Exploration), retaining MoodDare’s existing type, layout and lavender palette.
+
+Edit profile saves from the top-right toolbar. Save stays disabled while loading, choosing a photo or saving; failed/missing profile loads show Retry instead of a blank editable form. Validation, upload behavior and success navigation are preserved.
+
 ## Settings
 
 Settings groups account details, privacy/preferences, help and app information into borderless cards. Sign out and Delete account are the final two rows and both require confirmation; pending operations prevent repeated requests and Back navigation. Google provider cleanup failures no longer report a failed sign-out after the Firebase session has already ended.
@@ -36,7 +42,7 @@ Comments open in a keyboard-aware bottom sheet from either surface. Signed-in us
 
 The full-screen Back, mute and menu controls share one safe-area toolbar. Mute is a floating icon in both views. Avatar and username sit close together and both open the author’s profile. Long-press the post heart to see a fresh list of people who liked it. Profiles load as the list scrolls; blocked accounts are hidden and missing profiles are unavailable. Each available avatar and username opens that profile. Heart, comment and paper-plane share icons use the same size/color; filled hearts indicate liked items. Like/comment totals use lowercase compact notation (`1k`, `1.2k`, `10k`, `1m`), with full counts exposed to accessibility. Comment totals use an aggregate query over all comments, refreshed on open, after closing comments/returning from a viewer, and each minute while the card is active.
 
-Videos start muted on each app launch. The mute button changes a session-wide preference shared by subsequent videos and profile/full-screen viewers. The feed's filter button selects a mood with a server-side query; new posts retain mood ID/name through capture and review. Older posts without this metadata remain under All moods. Back refreshes the current filter and returns to the first card; a second Back within two seconds exits. Opening a sheet or interacting with the feed cancels the exit countdown.
+Videos start muted on each app launch. The mute button changes a session-wide preference shared by subsequent videos and profile/full-screen viewers. The feed's filter button opens a searchable mood list. Search matches mood names case-insensitively, trims whitespace, offers clear/empty states, and keeps All moods available. Typing only filters the choices locally; selecting a mood queries the feed server-side; new posts retain mood ID/name through capture and review. Older posts without this metadata remain under All moods. Back refreshes the current filter and returns to the first card; a second Back within two seconds exits. Opening a sheet or interacting with the feed cancels the exit countdown.
 
 
 ## Mood collections

@@ -6,6 +6,7 @@ import 'package:mooddare/core/widgets/app_empty_state.dart';
 import 'package:mooddare/models/post_model.dart';
 import '../../data/repositories/post_repository.dart';
 import '../widgets/dare_proof_card.dart';
+import '../widgets/mood_filter_sheet.dart';
 
 class FeedScreen extends StatefulWidget {
   final PostRepository? repository;
@@ -80,45 +81,7 @@ class _FeedScreenState extends State<FeedScreen> {
       showDragHandle: true,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (context) => SafeArea(
-        top: false,
-        child: SizedBox(
-          height: MediaQuery.sizeOf(context).height * .6,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-                child: Text(
-                  'Filter by mood',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              Expanded(
-                child: ListView(
-                  children: [
-                    ListTile(
-                      title: const Text('All moods'),
-                      trailing: _moodId == null
-                          ? const Icon(Icons.check_rounded)
-                          : null,
-                      onTap: () => Navigator.pop(context, ''),
-                    ),
-                    for (final mood in moods)
-                      ListTile(
-                        title: Text(mood.value),
-                        trailing: _moodId == mood.key
-                            ? const Icon(Icons.check_rounded)
-                            : null,
-                        onTap: () => Navigator.pop(context, mood.key),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (_) => MoodFilterSheet(moods: moods, selectedId: _moodId),
     );
     if (!mounted || selected == null) return;
     if (_pages.hasClients) _pages.jumpToPage(0);

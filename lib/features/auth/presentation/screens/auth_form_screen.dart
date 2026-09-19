@@ -5,7 +5,8 @@ import 'forgot_password_screen.dart';
 
 class AuthFormScreen extends StatefulWidget {
   final bool signUp;
-  const AuthFormScreen({super.key, this.signUp = false});
+  final AuthRepository? repository;
+  const AuthFormScreen({super.key, this.signUp = false, this.repository});
   @override
   State<AuthFormScreen> createState() => _AuthFormScreenState();
 }
@@ -13,7 +14,7 @@ class AuthFormScreen extends StatefulWidget {
 class _AuthFormScreenState extends State<AuthFormScreen> {
   final _form = GlobalKey<FormState>();
   final _email = TextEditingController(), _password = TextEditingController();
-  final _auth = AuthRepository();
+  late final _auth = widget.repository ?? AuthRepository();
   late bool _signUp = widget.signUp;
   bool _busy = false, _obscure = true;
   String? _error;
@@ -180,9 +181,20 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                             : Text(_signUp ? 'Create account' : 'Sign in'),
                       ),
                       const SizedBox(height: 16),
-                      OutlinedButton.icon(
+                      FilledButton.icon(
+                        key: const ValueKey('google_sign_in'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFF1F1F1F),
+                        ),
                         onPressed: _busy ? null : () => _submit(google: true),
-                        icon: const Icon(Icons.login),
+                        icon: Image.asset(
+                          'assets/branding/google-g.png',
+                          width: 20,
+                          height: 20,
+                          fit: BoxFit.contain,
+                          excludeFromSemantics: true,
+                        ),
                         label: const Text('Continue with Google'),
                       ),
                       const SizedBox(height: 24),

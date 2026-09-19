@@ -59,8 +59,19 @@ void main() {
         await tester.pump(const Duration(seconds: 2));
         clip = File((await channel.invokeMethod<String>('stopRecording'))!);
         await channel.invokeMethod<void>('stop');
-        final photo = moment('photo', url: 'https://fixture.invalid/photo.jpg');
-        final video = moment('video', type: 'video', url: clip.uri.toString());
+        final photo = moment(
+          'photo',
+          url: 'https://fixture.invalid/photo.jpg',
+          moodId: 'happy',
+          moodName: 'Happy',
+        );
+        final video = moment(
+          'video',
+          type: 'video',
+          url: clip.uri.toString(),
+          moodId: 'happy',
+          moodName: 'Happy',
+        );
         final repository = MemoryPosts([photo, video])
           ..likerIds = ['liked-user'];
         repository.authors['liked-user'] = UserModel(
@@ -78,6 +89,17 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('mooddare'), findsOneWidget);
+        await tester.tap(find.byTooltip('Filter by mood'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const ValueKey('mood_filter_search')),
+          '  hApP ',
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Happy'), findsOneWidget);
+        await tester.tap(find.text('Happy'));
+        await tester.pumpAndSettle();
+        expect(repository.selectedMood, 'happy');
         expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.cover);
         for (
           var i = 0;

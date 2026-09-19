@@ -4,11 +4,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:mooddare/core/user_message.dart';
+import 'package:mooddare/core/widgets/app_empty_state.dart';
 import 'package:mooddare/core/validation.dart';
 import 'package:mooddare/features/user/data/repositories/user_repository.dart';
 
 class EditProfileScreen extends StatefulWidget {
-  const EditProfileScreen({super.key});
+  final UserRepository? repository;
+  final String? userId;
+  const EditProfileScreen({super.key, this.repository, this.userId});
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
 }
@@ -18,7 +21,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _name = TextEditingController(),
       _username = TextEditingController(),
       _bio = TextEditingController();
-  bool _loading = true, _busy = false;
+  late final _repository = widget.repository ?? UserRepository();
+  bool _loading = true, _loadFailed = false, _busy = false, _saving = false;
   String? _photo, _error;
   File? _image;
   @override
@@ -28,18 +32,30 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _loadFailed = false;
+      _error = null;
+    });
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final uid = widget.userId ?? FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) throw StateError('Not signed in');
-      final doc = await UserRepository().getUser(uid);
+      final profile = await _repository.getUserModel(uid);
+      if (profile == null) {
+        throw const FormatException(
+          'Could not find your profile. Please sign in again.',
+        );
+      }
       if (!mounted) return;
-      final data = doc.data() ?? {};
-      _name.text = data['name'] as String? ?? '';
-      _username.text = data['username'] as String? ?? '';
-      _bio.text = data['bio'] as String? ?? '';
-      _photo = data['photoUrl'] as String?;
+      _name.text = profile.name ?? '';
+      _username.text = profile.username ?? '';
+      _bio.text = profile.bio ?? '';
+      _photo = profile.photoUrl;
     } catch (e) {
-      if (mounted) _error = userMessage(e);
+      if (mounted) {
+        _loadFailed = true;
+        _error = userMessage(e);
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -72,18 +88,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _saving = false;
+        });
+      }
     }
   }
 
   Future<void> _save() async {
-    if (!_form.currentState!.validate() || _busy) return;
+    if (_busy || _loading || _loadFailed || !_form.currentState!.validate()) {
+      return;
+    }
+    FocusScope.of(context).unfocus();
     setState(() {
       _busy = true;
+      _saving = true;
       _error = null;
     });
     try {
-      await UserRepository().saveProfile(
+      await _repository.saveProfile(
         username: _username.text,
         name: _name.text,
         bio: _bio.text,
@@ -93,7 +118,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } catch (e) {
       if (mounted) setState(() => _error = userMessage(e));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _saving = false;
+        });
+      }
     }
   }
 
@@ -109,9 +139,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: Scaffold(
-      appBar: AppBar(title: const Text('Edit profile')),
+      appBar: AppBar(
+        title: const Text('Edit profile'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: TextButton(
+              key: const ValueKey('profile_save'),
+              onPressed: _loading || _loadFailed || _busy ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        semanticsLabel: 'Saving profile',
+                      ),
+                    )
+                  : const Text('Save'),
+            ),
+          ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
+          : _loadFailed
+          ? AppEmptyState(
+              icon: Icons.cloud_off_outlined,
+              title: 'Could not load your profile',
+              message: _error ?? 'Please try again.',
+              actionLabel: 'Retry',
+              onAction: _load,
+            )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Form(
@@ -177,11 +236,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           ),
                         ),
                       ),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: _busy ? null : _save,
-                      child: Text(_busy ? 'Saving…' : 'Save changes'),
-                    ),
                   ],
                 ),
               ),
