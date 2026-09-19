@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mooddare/models/mood_model.dart';
 import 'package:mooddare/features/feed/presentation/screens/camera_screen.dart';
+import '../widgets/mood_preview.dart';
 
 class DareDisplayScreen extends StatefulWidget {
   final MoodModel mood;
@@ -28,7 +29,11 @@ class _DareDisplayScreenState extends State<DareDisplayScreen> {
   }
 
   void _shuffle() {
-    if (_openingCamera || widget.mood.dareList.length < 2) return;
+    if (_openingCamera ||
+        !widget.mood.isAvailable ||
+        widget.mood.dareList.length < 2) {
+      return;
+    }
     HapticFeedback.selectionClick();
     setState(
       () => _index =
@@ -38,7 +43,7 @@ class _DareDisplayScreenState extends State<DareDisplayScreen> {
   }
 
   Future<void> _capture(String dare) async {
-    if (_openingCamera) return;
+    if (_openingCamera || !widget.mood.isAvailable) return;
     setState(() => _openingCamera = true);
     try {
       final posted = await Navigator.push<bool>(
@@ -54,6 +59,17 @@ class _DareDisplayScreenState extends State<DareDisplayScreen> {
   @override
   Widget build(BuildContext context) {
     final mood = widget.mood;
+    if (mood.isPremium || mood.isLocked) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: MoodPreviewContent(mood: mood),
+          ),
+        ),
+      );
+    }
     final hasDares = mood.dareList.isNotEmpty;
     final dare = hasDares
         ? mood.dareList[_index]

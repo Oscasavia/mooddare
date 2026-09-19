@@ -16,6 +16,14 @@ Use your own Java 17 path on other machines. Flutter may otherwise choose Androi
 
 If the debugger connection hangs on the splash screen on this Mac, the verified fallback is `flutter run -d sdk --no-hot --no-resident`. It installs and opens the app without a hot-reload session. The standalone debug APK also launches normally.
 
+## Mood collections
+
+Discover has a searchable mood grid with All, Free, Gold, Diamond and Seasonal filters. The original Daring and Epic mood names are restored as Gold and Diamond previews. Tapping a premium mood shows **Coming soon**, including for legacy premium documents marked unlocked. Subscriptions, checkout and paid access are not implemented. Free moods still open the selected-dare screen and camera.
+
+Christmas and New Year start the Seasonal collection with three free themed dares each. These are available year-round for now; there is no automatic holiday calendar. A mood's optional `season` metadata is separate from its tier, so future holidays can have free or premium moods. The optional Firestore `tier` field accepts `basic`/`free`, `gold`, or `diamond`; legacy `pack` values remain supported. Remote entries take precedence over local defaults by ID or normalized name. Empty, failed or timed-out catalogs keep local free moods available; Retry refreshes without clearing search or the selected collection. This does not write or seed Firestore.
+
+Premium previews are presentation only, not a paid-content security boundary. See [release gates](docs/RELEASE.md) before adding subscriptions or publishing paid dares.
+
 ## Camera and photo studio
 
 Choose Discover → mood → Open camera. The selected mood has its own color treatment and a focused dare card; tap the shuffle icon for another dare. Long dares scroll while the camera action stays visible. Android opens directly into the live-lens camera with floating controls. Framing starts at **9:16**; tap the ratio button beneath camera flip to choose **3:4** or **Full** (the screen shape). Tap the shutter for a photo. After capture, the review screen gives the photo most of the space. Tap the sliders button to open Adjust, swipe the circular icon wheel (or tap a neighboring icon) to choose Smooth, Light or Warmth, and use the slider below it. The wheel wraps in both directions, shows the selected effect name above it, and preserves each adjustment when switching. Controls float over a shaded lower part of the photo; opening them never changes the photo framing or rounded corners. Effect icons have no tap splash. Reset is inside Adjust; Compare appears after an edit. Save and Share are in the top-right menu, and Post dare is the primary action. Smoothing starts at zero. The strongest usable front-facing face is processed; eyes, mouth and nose are protected with a feathered mask. If no suitable face is found, smoothing is disabled and color adjustments remain available.
@@ -48,6 +56,8 @@ firebase emulators:exec --project demo-mooddare --only firestore,storage 'npm --
 ```
 
 The Android integration tests use a public-domain U.S. Navy portrait of Grace Hopper (James S. Davis; TensorFlow test crop). They cover detection, GPU pixel effects, no-face bypass, orientation/mirroring, export, editor UI, continuous frames, camera switching, capture/retake and rapid background/resume without posting to Firebase. Widget tests cover tap/hold/lock, pointer cancellation, release during recorder startup and switching between 9:16, 3:4 and Full on narrow/foldable layouts with enlarged text. Photo review tests cover opening/closing adjustments, rendered edits, comparison, reset and the export menu. Video tests check playback controls and encoded effects against a GPU still, H.264/AAC tracks and duration, playback, the 30-second limit and interrupted-clip recovery. Run these on a test emulator: Flutter's integration runner may uninstall the app afterward. Allow camera and microphone access when Android prompts. The test fixture is not part of the normal app bundle, and native fixture/track-inspection entry points are disabled in release builds.
+
+The mood regression suite covers legacy tier parsing, malformed catalog data, duplicate handling, source timeouts, offline fallback/retry, collection/search combinations, locked previews, direct premium-route guards and narrow/foldable layouts with enlarged text. The Android mood integration test follows an offline catalog through a premium preview, seasonal dare, live capture, floating photo controls and return navigation. It never posts or modifies Firebase. Unit/widget tests run in the existing GitHub workflow on pushes and pull requests; native integration tests currently run locally on a disposable Android emulator.
 
 ## Structure
 

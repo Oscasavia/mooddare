@@ -2,22 +2,56 @@ import 'package:flutter/material.dart';
 import 'package:mooddare/core/widgets/app_empty_state.dart';
 import 'package:mooddare/models/mood_model.dart';
 import '../../data/repositories/dares_repository.dart';
+import '../../domain/mood_catalog.dart';
 import '../widgets/mood_card.dart';
+import '../widgets/mood_preview.dart';
 import 'dare_generation_screen.dart';
 
 class DaresScreen extends StatefulWidget {
-  const DaresScreen({super.key});
+  final DaresRepository? repository;
+  const DaresScreen({super.key, this.repository});
   @override
   State<DaresScreen> createState() => _DaresScreenState();
 }
 
 class _DaresScreenState extends State<DaresScreen> {
   final _search = TextEditingController();
-  late Future<Map<String, List<MoodModel>>> _packs;
+  late final DaresRepository _repository;
+  late Future<MoodCatalog> _catalog;
+  MoodCollection _collection = MoodCollection.all;
+
   @override
   void initState() {
     super.initState();
-    _packs = DaresRepository().getDarePacks();
+    _repository = widget.repository ?? DaresRepository();
+    _catalog = _repository.getCatalog();
+  }
+
+  Future<void> _refresh() async {
+    final next = _repository.getCatalog();
+    setState(() {
+      _catalog = next;
+    });
+    await next;
+  }
+
+  void _select(MoodCollection collection) {
+    FocusScope.of(context).unfocus();
+    setState(() => _collection = collection);
+  }
+
+  void _open(MoodModel mood) {
+    FocusScope.of(context).unfocus();
+    if (!mood.isAvailable) {
+      showMoodPreview(context, mood);
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DareDisplayScreen(mood: mood, isProofRequired: false),
+      ),
+    );
   }
 
   @override
@@ -29,157 +63,237 @@ class _DaresScreenState extends State<DaresScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     body: SafeArea(
-      child: FutureBuilder<Map<String, List<MoodModel>>>(
-        future: _packs,
+      child: FutureBuilder<MoodCatalog>(
+        future: _catalog,
         builder: (context, snapshot) {
-          final local = snapshot.hasError;
+          final waiting = snapshot.connectionState == ConnectionState.waiting;
+          final catalog = snapshot.data;
           final moods =
-              (local
-                      ? DaresRepository.starterMoods
-                      : snapshot.data?.values.expand((m) => m).toList() ??
-                            <MoodModel>[])
-                  .where(
-                    (m) => m.name.toLowerCase().contains(
-                      _search.text.trim().toLowerCase(),
-                    ),
-                  )
-                  .toList();
-          return CustomScrollView(
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-                sliver: SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'MAKE TODAY A STORY',
-                        style: TextStyle(
-                          fontSize: 11,
-                          letterSpacing: 2.5,
-                          fontWeight: FontWeight.w700,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      const Text(
-                        'What’s your\nmood?',
-                        style: TextStyle(
-                          fontSize: 42,
-                          height: 1.1,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'A small challenge. A new perspective.',
-                        style: TextStyle(color: Colors.white60, fontSize: 15),
-                      ),
-                      const SizedBox(height: 24),
-                      TextField(
-                        controller: _search,
-                        onChanged: (_) => setState(() {}),
-                        decoration: InputDecoration(
-                          hintText: 'Find your mood',
-                          prefixIcon: const Icon(Icons.search),
-                          suffixIcon: _search.text.isEmpty
-                              ? null
-                              : IconButton(
-                                  tooltip: 'Clear search',
-                                  onPressed: () => setState(_search.clear),
-                                  icon: const Icon(Icons.close),
+              catalog?.filter(_collection, _search.text) ?? <MoodModel>[];
+          final premium =
+              _collection == MoodCollection.gold ||
+              _collection == MoodCollection.diamond;
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: CustomScrollView(
+              key: const PageStorageKey('mood_catalog_scroll'),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Find your mood.',
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  height: 1.15,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -1,
                                 ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'About collections',
+                              onPressed: () => showMoodCollections(context),
+                              icon: const Icon(
+                                Icons.layers_outlined,
+                                color: Colors.white70,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
+                        const SizedBox(height: 8),
+                        const Text(
+                          'A little dare for every kind of day.',
+                          style: TextStyle(color: Colors.white60, height: 1.5),
+                        ),
+                        const SizedBox(height: 24),
+                        TextField(
+                          controller: _search,
+                          onChanged: (_) => setState(() {}),
+                          textInputAction: TextInputAction.search,
+                          onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                          decoration: InputDecoration(
+                            hintText: 'Search moods',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            suffixIcon: _search.text.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Clear search',
+                                    onPressed: () => setState(_search.clear),
+                                    icon: const Icon(Icons.close),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: MoodCollection.values
+                          .map(
+                            (collection) => Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                key: ValueKey('collection_${collection.name}'),
+                                showCheckmark: false,
+                                label: Text(collection.label),
+                                selected: _collection == collection,
+                                onSelected: (_) => _select(collection),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                ),
+                if (catalog?.loadFailed ?? false)
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                    sliver: SliverToBoxAdapter(
+                      child: Row(
                         children: [
                           const Expanded(
                             child: Text(
-                              'Pick your energy',
+                              'Couldn’t refresh. Starter moods are ready.',
                               style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
+                                color: Colors.white60,
+                                fontSize: 12,
                               ),
                             ),
                           ),
-                          Text(
-                            '${moods.length} moods',
-                            style: const TextStyle(color: Colors.white54),
+                          TextButton(
+                            onPressed: waiting ? null : _refresh,
+                            child: const Text('Retry'),
                           ),
                         ],
                       ),
-                      if (local)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: Row(
-                            children: [
-                              const Expanded(
-                                child: Text(
-                                  'Offline? Explore our starter dares.',
-                                  style: TextStyle(color: Colors.white60),
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: () => setState(
-                                  () =>
-                                      _packs = DaresRepository().getDarePacks(),
-                                ),
-                                child: const Text('Retry'),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-              if (snapshot.connectionState == ConnectionState.waiting)
-                const SliverFillRemaining(
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (moods.isEmpty)
-                const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: AppEmptyState(
-                    icon: Icons.search_off,
-                    title: 'No matching moods',
-                    message: 'Try a different word.',
-                  ),
-                )
-              else
+                if (waiting && catalog != null)
+                  const SliverToBoxAdapter(child: LinearProgressIndicator()),
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                  sliver: SliverLayoutBuilder(
-                    builder: (context, constraints) => SliverGrid(
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: constraints.crossAxisExtent > 600
-                            ? 3
-                            : 2,
-                        mainAxisExtent: 174,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, i) => MoodCard(
-                          mood: moods[i],
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => DareDisplayScreen(
-                                mood: moods[i],
-                                isProofRequired: false,
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 18),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                switch (_collection) {
+                                  MoodCollection.all => 'Pick your energy',
+                                  MoodCollection.free => 'Yours to explore',
+                                  MoodCollection.gold => 'A little more daring',
+                                  MoodCollection.diamond => 'Make it memorable',
+                                  MoodCollection.seasonal => 'Seasonal moments',
+                                },
+                                style: const TextStyle(
+                                  fontSize: 19,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
-                          ),
+                            if (catalog != null) ...[
+                              const SizedBox(width: 12),
+                              Text(
+                                '${moods.length}',
+                                style: const TextStyle(color: Colors.white54),
+                              ),
+                            ],
+                          ],
                         ),
-                        childCount: moods.length,
-                      ),
+                        if (premium ||
+                            _collection == MoodCollection.seasonal) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            premium
+                                ? '${_collection.label} · Coming soon. Tap a mood for a preview.'
+                                : 'Christmas, New Year, and moments worth celebrating. Available year-round.',
+                            style: const TextStyle(
+                              color: Colors.white60,
+                              fontSize: 13,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
-            ],
+                if (catalog == null)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        semanticsLabel: 'Loading moods',
+                      ),
+                    ),
+                  )
+                else if (moods.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: AppEmptyState(
+                      icon: Icons.search_off_rounded,
+                      title: 'No matching moods',
+                      message: 'Try another word or collection.',
+                      actionLabel: 'Show all moods',
+                      onAction: () {
+                        FocusScope.of(context).unfocus();
+                        setState(() {
+                          _search.clear();
+                          _collection = MoodCollection.all;
+                        });
+                      },
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                    sliver: SliverLayoutBuilder(
+                      builder: (context, constraints) {
+                        final scale =
+                            MediaQuery.textScalerOf(context).scale(20) / 20;
+                        final columns =
+                            (constraints.crossAxisExtent /
+                                    (scale > 1.2 ? 240 : 170))
+                                .floor()
+                                .clamp(1, 4);
+                        return SliverGrid(
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: columns,
+                                mainAxisExtent: 132 + 64 * scale,
+                                mainAxisSpacing: 12,
+                                crossAxisSpacing: 12,
+                              ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) => MoodCard(
+                              key: ValueKey('mood_${moods[index].id}'),
+                              mood: moods[index],
+                              onTap: () => _open(moods[index]),
+                            ),
+                            childCount: moods.length,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
           );
         },
       ),
