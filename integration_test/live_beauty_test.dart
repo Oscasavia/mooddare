@@ -81,29 +81,31 @@ void main() {
           reason: 'RGBA color order and upright output must match the input',
         );
 
-        await channel.invokeMethod<void>('setLook', {
-          ...BeautyLens.all.first.settings(0),
-          'aspectRatio': 9 / 16,
-        });
-        final cropped = await capture();
-        final cropWidth = (source.height * 9 / 16).toInt();
-        expect(cropped.width, cropWidth);
-        expect(cropped.height, source.height);
-        expect(
-          difference(
-            cropped,
-            img.copyCrop(
-              source,
-              x: (source.width - cropWidth) ~/ 2,
-              y: 0,
-              width: cropWidth,
-              height: source.height,
+        for (final ratio in [9 / 16, 3 / 4]) {
+          await channel.invokeMethod<void>('setLook', {
+            ...BeautyLens.all.first.settings(0),
+            'aspectRatio': ratio,
+          });
+          final cropped = await capture();
+          final cropWidth = (source.height * ratio).toInt();
+          expect(cropped.width, cropWidth);
+          expect(cropped.height, source.height);
+          expect(
+            difference(
+              cropped,
+              img.copyCrop(
+                source,
+                x: (source.width - cropWidth) ~/ 2,
+                y: 0,
+                width: cropWidth,
+                height: source.height,
+              ),
             ),
-          ),
-          lessThan(6),
-          reason:
-              'The saved photo must match the centered full-screen preview crop',
-        );
+            lessThan(6),
+            reason:
+                'The saved photo must match the selected preview ratio without stretching',
+          );
+        }
         await channel.invokeMethod<void>('setLook', {
           ...BeautyLens.all.first.settings(0),
           'aspectRatio': null,

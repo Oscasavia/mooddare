@@ -164,6 +164,10 @@ void main() {
         await limitedPlayer.dispose();
       }
 
+      await channel.invokeMethod<void>('setLook', {
+        ...BeautyLens.all.last.settings(1),
+        'aspectRatio': 3 / 4,
+      });
       await channel.invokeMethod<void>('startRecording');
       await tester.pump(const Duration(seconds: 2));
       await channel.invokeMethod<void>('stop');
@@ -172,6 +176,14 @@ void main() {
       );
       clips.add(interrupted);
       await checkTracks(interrupted);
+      final photoRatioPlayer = VideoPlayerController.file(interrupted);
+      try {
+        await photoRatioPlayer.initialize();
+        expect(photoRatioPlayer.value.size.aspectRatio, closeTo(3 / 4, .005));
+      } finally {
+        await photoRatioPlayer.dispose();
+      }
+
       expect(await channel.invokeMethod<String>('takePendingVideo'), isNull);
     } finally {
       await channel.invokeMethod<void>('stop');

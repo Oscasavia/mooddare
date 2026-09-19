@@ -6,6 +6,16 @@ import '../../feed/presentation/screens/preview_screen.dart';
 import '../domain/beauty_lens.dart';
 import 'capture_shutter.dart';
 
+enum _CameraFrame {
+  story('9:16', 9 / 16),
+  photo('3:4', 3 / 4),
+  full('Full', null);
+
+  final String label;
+  final double? aspect;
+  const _CameraFrame(this.label, this.aspect);
+}
+
 class LiveBeautyScreen extends StatefulWidget {
   final String dareText;
   const LiveBeautyScreen({super.key, required this.dareText});
@@ -27,6 +37,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   bool _busy = false, _comparing = false, _active = true, _inPreview = false;
   bool _recording = false, _showAdjustments = false;
   bool _askedForCamera = false;
+  _CameraFrame _framing = _CameraFrame.story;
   double _viewportAspect = .5625;
   int _recordingMillis = 0;
   String? _lastRecordingError;
@@ -467,8 +478,9 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   @override
   Widget build(BuildContext context) {
     final viewport = MediaQuery.sizeOf(context);
-    if (_viewportAspect != viewport.aspectRatio && !_recording) {
-      _viewportAspect = viewport.aspectRatio;
+    final frameAspect = _framing.aspect ?? viewport.aspectRatio;
+    if (_viewportAspect != frameAspect && !_recording) {
+      _viewportAspect = frameAspect;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _ready) _adjust();
       });
@@ -490,14 +502,21 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
             fit: StackFit.expand,
             children: [
               if (_texture != null)
-                ClipRect(
-                  child: SizedBox.expand(
-                    child: FittedBox(
-                      fit: BoxFit.cover,
-                      child: SizedBox(
-                        width: _aspect * 1000,
-                        height: 1000,
-                        child: Texture(textureId: _texture!),
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: AspectRatio(
+                    key: const ValueKey('camera_frame'),
+                    aspectRatio: _viewportAspect,
+                    child: ClipRect(
+                      child: SizedBox.expand(
+                        child: FittedBox(
+                          fit: BoxFit.cover,
+                          child: SizedBox(
+                            width: _aspect * 1000,
+                            height: 1000,
+                            child: Texture(textureId: _texture!),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -621,6 +640,45 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                             ),
                             if (!_recording) ...[
                               const SizedBox(height: 8),
+                              PopupMenuButton<_CameraFrame>(
+                                key: const ValueKey('camera_ratio'),
+                                tooltip: 'Change frame',
+                                enabled: enabled,
+                                initialValue: _framing,
+                                onSelected: (value) {
+                                  if (_busy || _recording) return;
+                                  setState(() => _framing = value);
+                                },
+                                itemBuilder: (_) => _CameraFrame.values
+                                    .map(
+                                      (value) => CheckedPopupMenuItem(
+                                        value: value,
+                                        checked: value == _framing,
+                                        child: Text(value.label),
+                                      ),
+                                    )
+                                    .toList(),
+                                child: Container(
+                                  width: 48,
+                                  height: 48,
+                                  alignment: Alignment.center,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.black38,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    _framing.label,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: enabled
+                                          ? Colors.white
+                                          : Colors.white38,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
                               _floatingButton(
                                 'Adjust lens',
                                 Icons.tune_rounded,
@@ -642,7 +700,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
               ),
               if (_showAdjustments && !_recording)
                 Positioned(
-                  top: MediaQuery.paddingOf(context).top + 120,
+                  top: MediaQuery.paddingOf(context).top + 176,
                   left: 24,
                   right: 24,
                   child: Container(
