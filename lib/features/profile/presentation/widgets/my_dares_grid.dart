@@ -9,13 +9,15 @@ import 'package:mooddare/core/widgets/app_empty_state.dart';
 
 class MyDaresGrid extends StatefulWidget {
   final String userId;
-  const MyDaresGrid({super.key, required this.userId});
+  final PostRepository? repository;
+  const MyDaresGrid({super.key, required this.userId, this.repository});
   @override
   State<MyDaresGrid> createState() => _MyDaresGridState();
 }
 
 class _MyDaresGridState extends State<MyDaresGrid> {
-  late final _posts = PostRepository().getUserPosts(widget.userId);
+  late final _repository = widget.repository ?? PostRepository();
+  late final _posts = _repository.getUserPosts(widget.userId);
   final _thumbnails = <String, Future<String?>>{};
   Future<String?> _thumbnail(String url) async => VideoThumbnail.thumbnailFile(
     video: url,
@@ -65,7 +67,8 @@ class _MyDaresGridState extends State<MyDaresGrid> {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => PostDetailsScreen(post: post),
+                    builder: (_) =>
+                        PostDetailsScreen(post: post, repository: _repository),
                   ),
                 ),
                 child: post.mediaType == 'image'

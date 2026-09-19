@@ -22,6 +22,8 @@ Welcome keeps the two sign-up/sign-in actions and uses an original offline mood-
 
 Edit profile saves from the top-right toolbar. Save stays disabled while loading, choosing a photo or saving; failed/missing profile loads show Retry instead of a blank editable form. Validation, upload behavior and success navigation are preserved.
 
+Profile details subscribe to saved changes, so the display name, username, bio and photo update without restarting or reopening the page. New avatar uploads use unique object URLs to avoid reusing a cached photo; the bottom navigation follows the same live profile document. Older avatar objects remain until account cleanup.
+
 ## Settings
 
 Settings groups account details, privacy/preferences, help and app information into borderless cards. Sign out and Delete account are the final two rows and both require confirmation; pending operations prevent repeated requests and Back navigation. Google provider cleanup failures no longer report a failed sign-out after the Firebase session has already ended.

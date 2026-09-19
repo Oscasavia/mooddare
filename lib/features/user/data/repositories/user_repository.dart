@@ -5,6 +5,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:mooddare/core/validation.dart';
 import 'package:mooddare/models/user_model.dart';
 import 'package:mooddare/models/post_model.dart';
+import 'package:uuid/uuid.dart';
 
 class UserRepository {
   final FirebaseFirestore _firestore;
@@ -19,6 +20,7 @@ class UserRepository {
        _auth = auth ?? FirebaseAuth.instance;
   CollectionReference<Map<String, dynamic>> get _users =>
       _firestore.collection('users');
+  String? get currentUserId => _auth.currentUser?.uid;
 
   Future<void> upsertUser(User user, {String? name}) async {
     final ref = _users.doc(user.uid);
@@ -70,7 +72,11 @@ class UserRepository {
           'Choose a profile photo smaller than 5 MB.',
         );
       }
-      final ref = _storage.ref('profile_pictures/${user.uid}/avatar.jpg');
+      // A new URL prevents both Flutter and HTTP caches from retaining the old
+      // avatar. It also leaves the current photo intact if the save fails.
+      final ref = _storage.ref(
+        'profile_pictures/${user.uid}/${const Uuid().v4()}.jpg',
+      );
       await ref.putFile(imageFile, SettableMetadata(contentType: 'image/jpeg'));
       photoUrl = await ref.getDownloadURL();
     }
@@ -119,6 +125,11 @@ class UserRepository {
     final doc = await getUser(uid);
     return doc.exists ? UserModel.fromFirestore(doc) : null;
   }
+
+  Stream<UserModel?> watchUserModel(String uid) => _users
+      .doc(uid)
+      .snapshots()
+      .map((doc) => doc.exists ? UserModel.fromFirestore(doc) : null);
 
   Future<bool> isUsernameTaken(String username) async =>
       (await _firestore

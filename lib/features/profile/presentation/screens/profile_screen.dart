@@ -1,6 +1,5 @@
 // lib/features/profile/presentation/screens/profile_screen.dart
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:mooddare/models/user_model.dart';
 import 'package:mooddare/features/user/data/repositories/user_repository.dart';
 import 'package:mooddare/features/feed/data/repositories/post_repository.dart';
@@ -14,13 +13,17 @@ import 'package:mooddare/features/profile/presentation/screens/settings_screen.d
 class ProfileScreen extends StatefulWidget {
   final bool isGuest;
   final String? userId;
-  final VoidCallback? onProfileUpdated; // Added parameter
+  final VoidCallback? onProfileUpdated;
+  final UserRepository? repository;
+  final PostRepository? postRepository;
 
   const ProfileScreen({
     super.key,
     required this.isGuest,
     this.userId,
-    this.onProfileUpdated, // Added to constructor
+    this.onProfileUpdated,
+    this.repository,
+    this.postRepository,
   });
 
   @override
@@ -30,29 +33,32 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final UserRepository _userRepository = UserRepository();
-  final PostRepository _postRepository = PostRepository();
-  late Future<UserProfileData> _profileDataFuture;
+  late final _userRepository = widget.repository ?? UserRepository();
+  late final _postRepository = widget.postRepository ?? PostRepository();
+  late Stream<UserProfileData> _profileData;
   late String _displayUserId;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _displayUserId =
-        widget.userId ?? FirebaseAuth.instance.currentUser?.uid ?? '';
-    _profileDataFuture = _loadProfileData();
+    _displayUserId = widget.userId ?? _userRepository.currentUserId ?? '';
+    _profileData = _loadProfileData();
   }
 
-  Future<UserProfileData> _loadProfileData() async {
-    final user = await _userRepository.getUserModel(_displayUserId);
-    final stats = await _postRepository.getUserStats(_displayUserId);
-    return UserProfileData(user: user, stats: stats);
+  Stream<UserProfileData> _loadProfileData() {
+    Future<Map<String, int>>? stats;
+    return _userRepository.watchUserModel(_displayUserId).asyncMap((
+      user,
+    ) async {
+      stats ??= _postRepository.getUserStats(_displayUserId);
+      return UserProfileData(user: user, stats: await stats!);
+    });
   }
 
   void _refreshProfileData() {
     setState(() {
-      _profileDataFuture = _loadProfileData();
+      _profileData = _loadProfileData();
     });
   }
 
@@ -75,13 +81,14 @@ class _ProfileScreenState extends State<ProfileScreen>
                   onPressed: () async {
                     final result = await Navigator.of(context).push<bool>(
                       MaterialPageRoute(
-                        builder: (_) => const EditProfileScreen(),
+                        builder: (_) => EditProfileScreen(
+                          repository: _userRepository,
+                          userId: _displayUserId,
+                        ),
                       ),
                     );
                     if (mounted && result == true) {
-                      _refreshProfileData();
-                      widget.onProfileUpdated
-                          ?.call(); // Call the callback here!
+                      widget.onProfileUpdated?.call();
                     }
                   },
                 ),
@@ -103,8 +110,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         backgroundColor: const Color(0xFF0A0A0D),
         elevation: 0,
       ),
-      body: FutureBuilder<UserProfileData>(
-        future: _profileDataFuture,
+      body: StreamBuilder<UserProfileData>(
+        stream: _profileData,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -148,7 +155,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      MyDaresGrid(userId: _displayUserId),
+                      MyDaresGrid(
+                        userId: _displayUserId,
+                        repository: _postRepository,
+                      ),
                       StatsAndBadges(
                         daresCompleted: stats['daresCompleted'] ?? 0,
                         totalLikes: stats['totalLikes'] ?? 0,
@@ -183,6 +193,14 @@ class _ProfileScreenState extends State<ProfileScreen>
               : null,
         ),
         const SizedBox(height: 10),
+        if (user.name?.trim().isNotEmpty ?? false) ...[
+          Text(
+            user.name!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+        ],
         Text(
           '@${user.username ?? 'member'}',
           style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
