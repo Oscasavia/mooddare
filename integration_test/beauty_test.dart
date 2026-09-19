@@ -70,7 +70,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.build(),
-        home: const CameraScreen(dareText: 'A camera test moment.'),
+        home: const BasicCameraScreen(dareText: 'A camera test moment.'),
       ),
     );
     for (var i = 0; i < 40; i++) {

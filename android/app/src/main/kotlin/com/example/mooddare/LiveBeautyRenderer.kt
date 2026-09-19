@@ -32,6 +32,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
     var eyeSize = 0f
     var faceSlim = 0f
     var original = false
+    var outputAspect: Float? = null
     var face: FloatArray? = null
 
     init {
@@ -109,6 +110,11 @@ internal class LiveBeautyRenderer(surface: Surface) {
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture)
         GLES20.glUniform1i(uniform("image"), 0)
+        val sourceAspect = width.toFloat() / height
+        val targetAspect = w.toFloat() / h
+        GLES20.glUniform2f(uniform("crop"),
+            if (sourceAspect > targetAspect) targetAspect / sourceAspect else 1f,
+            if (sourceAspect < targetAspect) sourceAspect / targetAspect else 1f)
         GLES20.glUniform1f(uniform("mirror"), if (mirror) 1f else 0f)
         GLES20.glUniform2f(uniform("stepSize"), 2f / width, 2f / height)
         val f = face
@@ -136,16 +142,24 @@ internal class LiveBeautyRenderer(surface: Surface) {
     }
 
     /** Read the same shader output before swap; EGL back buffers are not preserved. */
+    fun captureSize(): Pair<Int, Int> {
+        val aspect = outputAspect ?: return Pair(width, height)
+        return if (width.toFloat() / height > aspect) Pair((height * aspect).toInt().coerceAtLeast(2), height)
+            else Pair(width, (width / aspect).toInt().coerceAtLeast(2))
+    }
+
     fun capture(file: File) {
         check(width > 0) { "Camera is not ready" }
         draw(present = false)
-        val pixels = ByteBuffer.allocateDirect(width * height * 4)
-        GLES20.glReadPixels(0, 0, width, height, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels)
+        val (w, h) = captureSize()
+        val pixels = ByteBuffer.allocateDirect(w * h * 4)
+        // Flutter's full-bleed preview uses a centered BoxFit.cover crop.
+        GLES20.glReadPixels((width - w) / 2, (height - h) / 2, w, h, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixels)
         check(GLES20.glGetError() == GLES20.GL_NO_ERROR)
-        val bottomUp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val bottomUp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         pixels.position(0)
         bottomUp.copyPixelsFromBuffer(pixels)
-        val upright = Bitmap.createBitmap(bottomUp, 0, 0, width, height,
+        val upright = Bitmap.createBitmap(bottomUp, 0, 0, w, h,
             Matrix().apply { preScale(1f, -1f) }, false)
         try {
             file.outputStream().use { check(upright.compress(Bitmap.CompressFormat.JPEG, 95, it)) }
@@ -192,6 +206,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
             uniform sampler2D image;
             uniform vec2 stepSize;
             uniform float mirror;
+            uniform vec2 crop;
             uniform vec4 settings;
             uniform vec4 face;
             uniform vec4 eyes;
@@ -210,7 +225,8 @@ internal class LiveBeautyRenderer(surface: Surface) {
                 return center + (p - center) * (1.0 - shape.x * 0.28 * falloff);
             }
             void main() {
-                vec2 p = vec2(mix(uv.x, 1.0 - uv.x, mirror), uv.y);
+                vec2 cropped = (uv - 0.5) * crop + 0.5;
+                vec2 p = vec2(mix(cropped.x, 1.0 - cropped.x, mirror), cropped.y);
                 if (settings.w > 0.5) {
                     // Inverse texture warps remain local and feather to zero at the boundary.
                     float d = ellipse(p, face.xy + face.zw * vec2(0.5, 0.63), face.zw * vec2(0.65, 0.6));

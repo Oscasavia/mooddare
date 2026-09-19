@@ -6,14 +6,24 @@ import 'package:flutter/services.dart';
 import 'preview_screen.dart';
 import '../../../camera/presentation/live_beauty_screen.dart';
 
-class CameraScreen extends StatefulWidget {
+class CameraScreen extends StatelessWidget {
   final String dareText;
   const CameraScreen({super.key, required this.dareText});
   @override
-  State<CameraScreen> createState() => _CameraScreenState();
+  Widget build(BuildContext context) => Platform.isAndroid
+      ? LiveBeautyScreen(dareText: dareText)
+      : BasicCameraScreen(dareText: dareText);
 }
 
-class _CameraScreenState extends State<CameraScreen>
+/// Fallback for platforms that do not yet implement native live lenses.
+class BasicCameraScreen extends StatefulWidget {
+  final String dareText;
+  const BasicCameraScreen({super.key, required this.dareText});
+  @override
+  State<BasicCameraScreen> createState() => _CameraScreenState();
+}
+
+class _CameraScreenState extends State<BasicCameraScreen>
     with WidgetsBindingObserver {
   CameraController? _camera;
   List<CameraDescription> _cameras = [];

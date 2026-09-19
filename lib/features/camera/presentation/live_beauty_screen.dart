@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../feed/presentation/screens/preview_screen.dart';
 import '../domain/beauty_lens.dart';
+import 'capture_shutter.dart';
 
 class LiveBeautyScreen extends StatefulWidget {
   final String dareText;
@@ -16,7 +17,7 @@ class LiveBeautyScreen extends StatefulWidget {
 class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     with WidgetsBindingObserver {
   static const _channel = MethodChannel('mooddare/live_beauty');
-  final _carousel = PageController(viewportFraction: .23);
+  final _carousel = PageController(initialPage: 3000, viewportFraction: .23);
   Future<void> _operations = Future<void>.value();
   Timer? _poll, _lookDebounce;
   int? _texture;
@@ -24,7 +25,9 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   double _strength = .65, _aspect = .75;
   bool _ready = false, _face = false, _front = true;
   bool _busy = false, _comparing = false, _active = true, _inPreview = false;
-  bool _videoMode = false, _recording = false;
+  bool _recording = false, _showAdjustments = false;
+  bool _askedForCamera = false;
+  double _viewportAspect = .5625;
   int _recordingMillis = 0;
   String? _lastRecordingError;
   File? _interruptedClip;
@@ -86,6 +89,20 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
           return <String, dynamic>{'pendingVideo': true};
         }
         if (generation != _generation) return null;
+        final prompt = !_askedForCamera;
+        _askedForCamera = true;
+        final allowed =
+            await _channel.invokeMethod<bool>('requestCamera', {
+              'prompt': prompt,
+            }) ??
+            false;
+        if (!mounted || generation != _generation) return null;
+        if (!allowed) {
+          throw PlatformException(
+            code: 'permission',
+            message: 'Allow camera access in phone settings, then try again.',
+          );
+        }
         return _channel.invokeMapMethod<String, dynamic>('start', {
           'front': _front,
         });
@@ -172,10 +189,10 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     });
   }
 
-  Future<void> _sendLook() => _channel.invokeMethod<void>(
-    'setLook',
-    BeautyLens.all[_selected].settings(_strength, original: _comparing),
-  );
+  Future<void> _sendLook() => _channel.invokeMethod<void>('setLook', {
+    ...BeautyLens.all[_selected].settings(_strength, original: _comparing),
+    'aspectRatio': _viewportAspect,
+  });
 
   void _adjust() {
     _lookDebounce?.cancel();
@@ -259,49 +276,33 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     }
   }
 
-  Future<void> _selectMode(bool video) async {
-    if (_busy || _recording || video == _videoMode) return;
-    if (!video) {
-      setState(() => _videoMode = false);
-      return;
-    }
-    setState(() => _busy = true);
+  Future<bool> _beginVideo(bool Function() stillHeld) async {
+    if (!_ready || _busy || !_active) return false;
+    final generation = _generation;
+    setState(() {
+      _busy = true;
+      _showAdjustments = false;
+    });
     try {
       final allowed =
           await _channel.invokeMethod<bool>('requestMicrophone') ?? false;
-      if (!mounted) return;
-      if (allowed) {
-        setState(() => _videoMode = true);
-      } else {
+      if (!mounted) return false;
+      if (!allowed) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Allow microphone access in phone settings to record video with audio.',
+              'Allow microphone access in phone settings to record video.',
             ),
           ),
         );
+        return false;
       }
-    } on PlatformException {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not request microphone access. Please try again.',
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _beginVideo() async {
-    if (!_ready || _busy) return;
-    setState(() => _busy = true);
-    try {
+      // Permission dialogs release the finger and interrupt the camera. Never
+      // start recording automatically after the dialog has been dismissed.
+      if (generation != _generation || !_active || !stillHeld()) return false;
       _lookDebounce?.cancel();
       await _sendLook();
+      if (!stillHeld() || generation != _generation) return false;
       await _channel.invokeMethod<void>('startRecording');
       if (mounted && _active) {
         setState(() {
@@ -309,21 +310,23 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
           _recordingMillis = 0;
         });
       }
+      return true;
     } on PlatformException catch (error) {
-      if (mounted) {
+      if (mounted && _active) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(error.message ?? 'Could not start recording.'),
           ),
         );
       }
+      return false;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _finishVideo() async {
-    if (_busy) return;
+    if (!mounted || _busy) return;
     setState(() => _busy = true);
     try {
       final path = await _channel.invokeMethod<String>('stopRecording');
@@ -379,332 +382,440 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     super.dispose();
   }
 
+  static const _lensIcons = [
+    Icons.camera_alt_outlined,
+    Icons.blur_on_rounded,
+    Icons.wb_sunny_outlined,
+    Icons.visibility_outlined,
+    Icons.face_retouching_natural,
+    Icons.auto_awesome,
+  ];
+  static const _lensColors = [
+    [Color(0xFFE5E0D8), Color(0xFF8B8580)],
+    [Color(0xFFF0C9C2), Color(0xFFAD7593)],
+    [Color(0xFFFFE2AA), Color(0xFFE99773)],
+    [Color(0xFFB6DCEE), Color(0xFF697FBD)],
+    [Color(0xFFCDC3F1), Color(0xFF8774B3)],
+    [Color(0xFFF2CEEA), Color(0xFFA583CB)],
+  ];
+
+  Widget _lensDisc(int index) => DecoratedBox(
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: _lensColors[index],
+      ),
+      border: Border.all(color: Colors.white.withValues(alpha: .4)),
+    ),
+    child: Icon(_lensIcons[index], color: Colors.white, size: 28),
+  );
+
+  void _chooseLens(int index) {
+    if (_busy || _recording || index < 0) {
+      return;
+    }
+    _carousel.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  Widget _floatingButton(
+    String tooltip,
+    IconData icon,
+    VoidCallback? action, {
+    bool selected = false,
+  }) => IconButton(
+    tooltip: tooltip,
+    onPressed: action,
+    style: IconButton.styleFrom(
+      backgroundColor: selected ? Colors.white : Colors.black38,
+      foregroundColor: selected ? Colors.black : Colors.white,
+      disabledBackgroundColor: Colors.black12,
+      disabledForegroundColor: Colors.white38,
+    ),
+    icon: Icon(icon, size: 24),
+  );
+
+  void _showDare() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Your dare', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              Text(
+                widget.dareText,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: !_busy && !_recording,
-    child: Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                children: [
-                  IconButton(
-                    tooltip: 'Close live camera',
-                    onPressed: _busy || _recording
-                        ? null
-                        : () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                  const Expanded(
-                    child: Text(
-                      'Live beauty',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontWeight: FontWeight.w700),
+  Widget build(BuildContext context) {
+    final viewport = MediaQuery.sizeOf(context);
+    if (_viewportAspect != viewport.aspectRatio && !_recording) {
+      _viewportAspect = viewport.aspectRatio;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _ready) _adjust();
+      });
+    }
+    final enabled = _ready && !_busy && _error == null && _active;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+      child: PopScope(
+        canPop: !_busy && !_recording,
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (_texture != null)
+                ClipRect(
+                  child: SizedBox.expand(
+                    child: FittedBox(
+                      fit: BoxFit.cover,
+                      child: SizedBox(
+                        width: _aspect * 1000,
+                        height: 1000,
+                        child: Texture(textureId: _texture!),
+                      ),
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Switch live camera',
-                    onPressed: _busy || _recording ? null : _flip,
-                    icon: const Icon(Icons.flip_camera_ios_outlined),
+                ),
+              const IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      stops: [0, .23, .6, 1],
+                      colors: [
+                        Colors.black54,
+                        Colors.transparent,
+                        Colors.transparent,
+                        Colors.black54,
+                      ],
+                    ),
                   ),
-                ],
+                ),
               ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
-                  child: ColoredBox(
-                    color: const Color(0xFF18181F),
-                    child: Stack(
-                      fit: StackFit.expand,
+              if (!_ready && _error == null)
+                const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                ),
+              if (_error != null)
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.all(32),
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.black87,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (_texture != null)
-                          Center(
-                            child: AspectRatio(
-                              aspectRatio: _aspect,
-                              child: Texture(textureId: _texture!),
-                            ),
-                          ),
-                        if (!_ready && _error == null)
-                          const Center(child: CircularProgressIndicator()),
-                        if (_error != null)
-                          Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.no_photography_outlined,
-                                    size: 36,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(_error!, textAlign: TextAlign.center),
-                                  const SizedBox(height: 12),
-                                  FilledButton(
-                                    onPressed: _busy ? null : _start,
-                                    child: const Text('Try again'),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        if (_ready)
-                          Positioned(
-                            top: 12,
-                            left: 12,
-                            right: 12,
-                            child: Row(
-                              children: [
-                                Flexible(
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: Colors.black54,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Padding(
+                        const Icon(Icons.no_photography_outlined, size: 32),
+                        const SizedBox(height: 12),
+                        Text(_error!, textAlign: TextAlign.center),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                          onPressed: _busy
+                              ? null
+                              : () {
+                                  _askedForCamera = false;
+                                  _start();
+                                },
+                          child: const Text('Try again'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _floatingButton(
+                          'Close camera',
+                          Icons.close,
+                          _busy || _recording
+                              ? null
+                              : () => Navigator.pop(context),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Center(
+                              heightFactor: 1,
+                              child: _recording
+                                  ? Container(
                                       padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
+                                        horizontal: 14,
                                         vertical: 8,
                                       ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFDA3655),
+                                        borderRadius: BorderRadius.circular(24),
+                                      ),
                                       child: Text(
-                                        _selected == 0 || _comparing
-                                            ? 'Original'
-                                            : (_face
-                                                  ? 'Face tracked'
-                                                  : 'Face the camera · find good light'),
+                                        '● 00:${(_recordingMillis ~/ 1000).clamp(0, 30).toString().padLeft(2, '0')} / 00:30',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    )
+                                  : TextButton(
+                                      onPressed: _busy ? null : _showDare,
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.white,
+                                        backgroundColor: Colors.black26,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 14,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        widget.dareText,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(fontSize: 12),
                                       ),
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                IconButton.filledTonal(
-                                  tooltip: _comparing
-                                      ? 'Show lens'
-                                      : 'Compare original',
-                                  onPressed: _busy
-                                      ? null
-                                      : () {
-                                          setState(
-                                            () => _comparing = !_comparing,
-                                          );
-                                          _adjust();
-                                        },
-                                  icon: Icon(
-                                    _comparing
-                                        ? Icons.auto_awesome
-                                        : Icons.compare,
-                                  ),
-                                ),
-                              ],
                             ),
                           ),
-                        if (_ready)
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _floatingButton(
+                              'Switch camera',
+                              Icons.flip_camera_ios_outlined,
+                              enabled && !_recording ? _flip : null,
+                            ),
+                            if (!_recording) ...[
+                              const SizedBox(height: 8),
+                              _floatingButton(
+                                'Adjust lens',
+                                Icons.tune_rounded,
+                                enabled && _selected != 0
+                                    ? () => setState(
+                                        () => _showAdjustments =
+                                            !_showAdjustments,
+                                      )
+                                    : null,
+                                selected: _showAdjustments,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (_showAdjustments && !_recording)
+                Positioned(
+                  top: MediaQuery.paddingOf(context).top + 120,
+                  left: 24,
+                  right: 24,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: .65),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          '${(_strength * 100).round()}%',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        Expanded(
+                          child: Slider(
+                            value: _strength,
+                            label: '${(_strength * 100).round()}%',
+                            semanticFormatterCallback: (value) =>
+                                'Lens strength ${(value * 100).round()} percent',
+                            onChanged: enabled && !_comparing
+                                ? (value) {
+                                    setState(() => _strength = value);
+                                    _adjust();
+                                  }
+                                : null,
+                          ),
+                        ),
+                        _floatingButton(
+                          _comparing ? 'Show lens' : 'Compare original',
+                          Icons.compare_rounded,
+                          enabled
+                              ? () {
+                                  setState(() => _comparing = !_comparing);
+                                  _adjust();
+                                }
+                              : null,
+                          selected: _comparing,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 208,
+                      child: Stack(
+                        alignment: Alignment.bottomCenter,
+                        children: [
+                          if (!_recording && !_busy)
+                            Positioned(
+                              bottom: 126,
+                              left: 0,
+                              right: 0,
+                              child: IgnorePointer(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _comparing
+                                          ? 'Original'
+                                          : BeautyLens.all[_selected].name,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                        shadows: [
+                                          Shadow(
+                                            color: Colors.black87,
+                                            blurRadius: 8,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (_selected != 0 && !_face && _ready)
+                                      const Padding(
+                                        padding: EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          'Find your face',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.white70,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           Positioned(
-                            bottom: 12,
-                            left: 16,
-                            right: 16,
-                            child: Text(
-                              _recording
-                                  ? '● 00:${(_recordingMillis ~/ 1000).clamp(0, 30).toString().padLeft(2, '0')} / 00:30'
-                                  : widget.dareText,
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                shadows: [
-                                  Shadow(blurRadius: 5, color: Colors.black),
-                                ],
+                            bottom: 24,
+                            left: 0,
+                            right: 0,
+                            height: 84,
+                            child: IgnorePointer(
+                              ignoring: _busy || _recording,
+                              child: AnimatedOpacity(
+                                opacity: _recording ? 0 : 1,
+                                duration: const Duration(milliseconds: 150),
+                                child: PageView.builder(
+                                  controller: _carousel,
+                                  onPageChanged: (index) {
+                                    setState(() {
+                                      _selected = index % BeautyLens.all.length;
+                                      _comparing = false;
+                                      if (_selected == 0) {
+                                        _showAdjustments = false;
+                                      }
+                                    });
+                                    _adjust();
+                                    HapticFeedback.selectionClick();
+                                  },
+                                  itemBuilder: (context, index) {
+                                    final lens = index % BeautyLens.all.length;
+                                    return Center(
+                                      child: Semantics(
+                                        label:
+                                            '${BeautyLens.all[lens].name} lens',
+                                        button: true,
+                                        selected: lens == _selected,
+                                        child: GestureDetector(
+                                          onTap: () => _chooseLens(index),
+                                          child: AnimatedScale(
+                                            scale: lens == _selected ? 1 : .8,
+                                            duration: const Duration(
+                                              milliseconds: 150,
+                                            ),
+                                            child: SizedBox(
+                                              width: 64,
+                                              height: 64,
+                                              child: _lensDisc(lens),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
                             ),
                           ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 88,
-              child: PageView.builder(
-                controller: _carousel,
-                itemCount: BeautyLens.all.length,
-                physics: _busy ? const NeverScrollableScrollPhysics() : null,
-                onPageChanged: (index) {
-                  setState(() {
-                    _selected = index;
-                    _comparing = false;
-                  });
-                  _adjust();
-                  HapticFeedback.selectionClick();
-                },
-                itemBuilder: (context, index) => Semantics(
-                  label: '${BeautyLens.all[index].name} lens',
-                  selected: index == _selected,
-                  button: true,
-                  child: GestureDetector(
-                    onTap: _busy
-                        ? null
-                        : () => _carousel.animateToPage(
-                            index,
-                            duration: const Duration(milliseconds: 200),
-                            curve: Curves.easeOut,
-                          ),
-                    child: Column(
-                      children: [
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          width: 58,
-                          height: 58,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [
-                                const Color(0xFF655298).withValues(
-                                  alpha: index == _selected ? 1 : .4,
-                                ),
-                                const Color(0xFF293A50),
-                              ],
-                            ),
-                            border: Border.all(
-                              color: index == _selected
-                                  ? const Color(0xFFC6B4FF)
-                                  : Colors.white24,
-                              width: index == _selected ? 3 : 1,
+                          // Only the shutter/lock have hit regions; the wheel remains scrollable beside them.
+                          CaptureShutter(
+                            enabled: enabled,
+                            recording: _recording,
+                            active: _active,
+                            elapsedMillis: _recordingMillis,
+                            lens: _lensDisc(_selected),
+                            onPhoto: _capture,
+                            onStart: _beginVideo,
+                            onStop: _finishVideo,
+                            onSwipeLens: (delta) => _chooseLens(
+                              (_carousel.page ?? 3000).round() + delta,
                             ),
                           ),
-                          child: Icon(
-                            [
-                              Icons.block,
-                              Icons.blur_on,
-                              Icons.wb_sunny_outlined,
-                              Icons.visibility_outlined,
-                              Icons.face_retouching_natural,
-                              Icons.auto_awesome,
-                            ][index],
-                            size: 26,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          BeautyLens.all[index].name,
-                          maxLines: 1,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: index == _selected
-                                ? Colors.white
-                                : Colors.white60,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  const Text('Strength', style: TextStyle(fontSize: 12)),
-                  Expanded(
-                    child: Slider(
-                      value: _strength,
-                      label: '${(_strength * 100).round()}%',
-                      onChanged: _selected == 0 || _busy || _comparing
-                          ? null
-                          : (value) {
-                              setState(() => _strength = value);
-                              _adjust();
-                            },
-                    ),
-                  ),
-                  SizedBox(
-                    width: 35,
-                    child: Text(
-                      '${(_strength * 100).round()}%',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(
-                    value: false,
-                    label: Text('Photo'),
-                    icon: Icon(Icons.camera_alt_outlined),
-                  ),
-                  ButtonSegment(
-                    value: true,
-                    label: Text('Video'),
-                    icon: Icon(Icons.videocam_outlined),
-                  ),
-                ],
-                selected: {_videoMode},
-                onSelectionChanged: _busy || _recording
-                    ? null
-                    : (value) => _selectMode(value.first),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: IconButton.filled(
-                tooltip: _recording
-                    ? 'Stop live recording'
-                    : (_videoMode ? 'Record live video' : 'Capture live photo'),
-                onPressed:
-                    _ready &&
-                        !_busy &&
-                        _error == null &&
-                        (!_recording || _recordingMillis >= 1000)
-                    ? (_videoMode
-                          ? (_recording ? _finishVideo : _beginVideo)
-                          : _capture)
-                    : null,
-                style: IconButton.styleFrom(
-                  backgroundColor: _videoMode ? Colors.redAccent : Colors.white,
-                  foregroundColor: Colors.black,
-                  fixedSize: const Size(72, 72),
-                ),
-                icon: _busy
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(),
-                      )
-                    : Icon(
-                        _recording
-                            ? Icons.stop
-                            : (_videoMode
-                                  ? Icons.videocam_outlined
-                                  : Icons.camera_alt_outlined),
-                        size: 32,
+                        ],
                       ),
+                    ),
+                  ),
+                ),
               ),
-            ),
-            Padding(
-              padding: EdgeInsets.only(bottom: 12),
-              child: Text(
-                _videoMode
-                    ? 'Live video with audio · up to 30 seconds'
-                    : 'Live photo · swipe to choose a lens',
-                style: const TextStyle(fontSize: 12, color: Colors.white60),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

@@ -44,7 +44,8 @@ class LiveBeautyPlugin(
     private val main = Handler(Looper.getMainLooper())
     private var session: Session? = null
     @Volatile private var pendingVideo: String? = null
-    private var microphoneResult: MethodChannel.Result? = null
+    private var permissionResult: MethodChannel.Result? = null
+    private var permissionRequest = 0
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
@@ -68,14 +69,18 @@ class LiveBeautyPlugin(
                     finally { extractor.release() }
                 }.start()
             }
-            "requestMicrophone" -> {
-                if (ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            "requestMicrophone", "requestCamera" -> {
+                val permission = if (call.method == "requestCamera") Manifest.permission.CAMERA else Manifest.permission.RECORD_AUDIO
+                if (ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED) {
                     result.success(true)
-                } else if (microphoneResult != null) {
+                } else if (call.argument<Boolean>("prompt") == false) {
+                    result.success(false)
+                } else if (permissionResult != null) {
                     result.error("busy", "A permission request is already open.", null)
                 } else {
-                    microphoneResult = result
-                    ActivityCompat.requestPermissions(activity, arrayOf(Manifest.permission.RECORD_AUDIO), 7426)
+                    permissionResult = result
+                    permissionRequest = if (call.method == "requestCamera") 7425 else 7426
+                    ActivityCompat.requestPermissions(activity, arrayOf(permission), permissionRequest)
                 }
             }
             "takePendingVideo" -> { val path = pendingVideo; pendingVideo = null; result.success(path) }
@@ -136,16 +141,17 @@ class LiveBeautyPlugin(
     }
 
     fun onPermissionResult(requestCode: Int, grantResults: IntArray) {
-        if (requestCode != 7426) return
-        microphoneResult?.success(grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED)
-        microphoneResult = null
+        if (requestCode != permissionRequest) return
+        permissionResult?.success(grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED)
+        permissionResult = null
+        permissionRequest = 0
     }
 
     // Native lifecycle protection stops the microphone even if Dart is paused.
     fun onPause() { session?.interruptRecording() }
 
     fun close() {
-        microphoneResult?.success(false); microphoneResult = null
+        permissionResult?.success(false); permissionResult = null
         val old = session; session = null; old?.close {}
     }
 
@@ -364,9 +370,10 @@ class LiveBeautyPlugin(
                 var candidate: LiveBeautyRecorder? = null
                 try {
                     check(!closed && ready && recorder == null && pendingVideo == null)
-                    val scale = min(1.0, min(1280.0 / max(width, height), 720.0 / min(width, height)))
-                    val w = (width * scale / 2).toInt() * 2
-                    val h = (height * scale / 2).toInt() * 2
+                    val crop = renderer!!.captureSize()
+                    val scale = min(1.0, min(1280.0 / max(crop.first, crop.second), 720.0 / min(crop.first, crop.second)))
+                    val w = (crop.first * scale / 2).toInt() * 2
+                    val h = (crop.second * scale / 2).toInt() * 2
                     candidate = LiveBeautyRecorder(activity, File(activity.cacheDir, "mooddare-live-${UUID.randomUUID()}.mp4"), w, h) {
                         handler.post { if (recorder === candidate) finishRecording() }
                     }
@@ -418,6 +425,9 @@ class LiveBeautyPlugin(
                         eyeSize = (call.argument<Number>("eyeSize")?.toFloat() ?: 0f).coerceIn(0f, 1f)
                         faceSlim = (call.argument<Number>("faceSlim")?.toFloat() ?: 0f).coerceIn(0f, 1f)
                         original = call.argument<Boolean>("original") ?: false
+                        if (call.hasArgument("aspectRatio") && !recording) {
+                            outputAspect = call.argument<Number>("aspectRatio")?.toFloat()?.coerceIn(.3f, 3f)
+                        }
                         draw()
                     }
                     main.post { result.success(null) }

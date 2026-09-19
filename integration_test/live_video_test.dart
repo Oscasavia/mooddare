@@ -69,10 +69,10 @@ void main() {
         ),
       );
       await waitForState(tester, (state) => state['faceDetected'] == true);
-      await channel.invokeMethod<void>(
-        'setLook',
-        BeautyLens.all.first.settings(0),
-      );
+      await channel.invokeMethod<void>('setLook', {
+        ...BeautyLens.all.first.settings(0),
+        'aspectRatio': 9 / 16,
+      });
       final original = await capture();
       await channel.invokeMethod<void>(
         'setLook',
@@ -193,12 +193,12 @@ void main() {
     );
     await waitForState(tester, (state) => state['ready'] == true);
     await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.text('Video'));
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.byTooltip('Record live video'));
+    final shutter = find.byKey(const ValueKey('capture_shutter'));
+    final finger = await tester.startGesture(tester.getCenter(shutter));
+    await tester.pump(const Duration(milliseconds: 600));
     await waitForState(tester, (state) => state['recording'] == true);
     await tester.pump(const Duration(seconds: 2));
-    await tester.tap(find.byTooltip('Stop live recording'));
+    await finger.up();
     for (
       var i = 0;
       i < 100 && find.byType(VideoPlayer).evaluate().isEmpty;
@@ -211,9 +211,19 @@ void main() {
     await tester.pageBack();
     await waitForState(tester, (state) => state['ready'] == true);
     await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.byTooltip('Record live video'));
+    final lockedFinger = await tester.startGesture(tester.getCenter(shutter));
+    await tester.pump(const Duration(milliseconds: 600));
     await waitForState(tester, (state) => state['recording'] == true);
     await tester.pump(const Duration(seconds: 2));
+    await lockedFinger.moveBy(const Offset(0, -118));
+    await tester.pump(const Duration(milliseconds: 100));
+    await lockedFinger.up();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(
+      (await channel.invokeMapMethod<String, dynamic>('status'))!['recording'],
+      isTrue,
+    );
+    expect(find.text('Tap to stop'), findsOneWidget);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     for (
@@ -227,6 +237,24 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pageBack();
     await waitForState(tester, (state) => state['ready'] == true);
+    await tester.pump(const Duration(milliseconds: 500));
+    final finalFinger = await tester.startGesture(tester.getCenter(shutter));
+    await tester.pump(const Duration(milliseconds: 600));
+    await waitForState(tester, (state) => state['recording'] == true);
+    await finalFinger.moveBy(const Offset(0, -118));
+    await finalFinger.up();
+    await tester.pump(const Duration(seconds: 2));
+    await tester.tap(shutter);
+    for (
+      var i = 0;
+      i < 100 && find.byType(VideoPlayer).evaluate().isEmpty;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 150));
+    }
+    expect(find.byType(VideoPlayer), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pageBack();
     await tester.pumpWidget(const MaterialApp(home: SizedBox()));
     await tester.pump(const Duration(seconds: 1));
     await channel.invokeMethod<void>('stop');

@@ -9,7 +9,7 @@ import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:mooddare/core/app_theme.dart';
 import 'package:mooddare/features/camera/domain/beauty_lens.dart';
-import 'package:mooddare/features/camera/presentation/live_beauty_screen.dart';
+import 'package:mooddare/features/feed/presentation/screens/camera_screen.dart';
 import 'face_fixture.dart';
 
 const channel = MethodChannel('mooddare/live_beauty');
@@ -80,6 +80,34 @@ void main() {
           lessThan(6),
           reason: 'RGBA color order and upright output must match the input',
         );
+
+        await channel.invokeMethod<void>('setLook', {
+          ...BeautyLens.all.first.settings(0),
+          'aspectRatio': 9 / 16,
+        });
+        final cropped = await capture();
+        final cropWidth = (source.height * 9 / 16).toInt();
+        expect(cropped.width, cropWidth);
+        expect(cropped.height, source.height);
+        expect(
+          difference(
+            cropped,
+            img.copyCrop(
+              source,
+              x: (source.width - cropWidth) ~/ 2,
+              y: 0,
+              width: cropWidth,
+              height: source.height,
+            ),
+          ),
+          lessThan(6),
+          reason:
+              'The saved photo must match the centered full-screen preview crop',
+        );
+        await channel.invokeMethod<void>('setLook', {
+          ...BeautyLens.all.first.settings(0),
+          'aspectRatio': null,
+        });
 
         await channel.invokeMethod<void>(
           'setLook',
@@ -189,8 +217,7 @@ void main() {
   testWidgets(
     'live camera streams, switches lens, captures and resumes for retake',
     (tester) async {
-      // Match the app's entry path: the standard camera requests permission
-      // before handing camera ownership to the live native pipeline.
+      // Grant emulator permission before exercising the default camera route.
       final permissionCamera = CameraController(
         (await availableCameras()).first,
         ResolutionPreset.low,
@@ -201,7 +228,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.build(),
-          home: const LiveBeautyScreen(dareText: 'Live lens test'),
+          home: const CameraScreen(dareText: 'Live lens test'),
         ),
       );
       final first = await waitForState(
@@ -223,10 +250,14 @@ void main() {
       debugPrint(
         'Live camera: ${later['width']}x${later['height']}, ${later['fps']} fps',
       );
-      await tester.drag(find.byType(PageView), const Offset(-210, 0));
+      await tester.dragFrom(
+        tester.getCenter(find.byType(PageView)) + const Offset(103, 0),
+        const Offset(-103, 0),
+      );
       await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Original'), findsNothing);
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byTooltip('Capture live photo'));
+      await tester.tap(find.byKey(const ValueKey('capture_shutter')));
       for (
         var i = 0;
         i < 100 && find.textContaining('· Photo studio').evaluate().isEmpty;
@@ -241,7 +272,7 @@ void main() {
         tester,
         (state) => state['ready'] == true && (state['frames'] as num) > 2,
       );
-      await tester.tap(find.byTooltip('Switch live camera'));
+      await tester.tap(find.byTooltip('Switch camera'));
       await waitForState(
         tester,
         (state) => state['ready'] == true && (state['frames'] as num) > 2,
