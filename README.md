@@ -18,9 +18,13 @@ If the debugger connection hangs on the splash screen on this Mac, the verified 
 
 ## Mood collections
 
-Discover has a searchable mood grid with All, Free, Gold, Diamond and Seasonal filters. The original Daring and Epic mood names are restored as Gold and Diamond previews. Tapping a premium mood shows **Coming soon**, including for legacy premium documents marked unlocked. Subscriptions, checkout and paid access are not implemented. Free moods still open the selected-dare screen and camera.
+Discover has a searchable mood grid with All, Free, Daring, Epic and Seasonal filters. Daring and Epic are locked premium previews. Tapping a premium mood shows **Coming soon**, including for legacy premium documents marked unlocked. Subscriptions, checkout and paid access are not implemented. Free moods still open the selected-dare screen and camera.
 
-Christmas and New Year start the Seasonal collection with three free themed dares each. These are available year-round for now; there is no automatic holiday calendar. A mood's optional `season` metadata is separate from its tier, so future holidays can have free or premium moods. The optional Firestore `tier` field accepts `basic`/`free`, `gold`, or `diamond`; legacy `pack` values remain supported. Remote entries take precedence over local defaults by ID or normalized name. Empty, failed or timed-out catalogs keep local free moods available; Retry refreshes without clearing search or the selected collection. This does not write or seed Firestore.
+Christmas and New Year start the Seasonal collection with three free themed dares each. These are available year-round for now; there is no automatic holiday calendar. A mood's optional `season` metadata is separate from its tier, so future holidays can have free or premium moods. The optional Firestore `tier` field accepts `basic`/`free`, `daring`, or `epic`; older `gold`/`diamond` aliases and legacy `pack` values remain supported. Remote entries take precedence over local defaults by ID or normalized name. Empty, failed or timed-out catalogs keep local free moods available; Retry refreshes without clearing search or the selected collection. This does not write or seed Firestore.
+
+The grid keeps two columns on regular and narrow phones, including at enlarged text sizes; wider layouts can show more. Cards and filter pills use filled surfaces without outline strokes. Inputs use a different fill when focused.
+
+The app requests portrait-up before its first Flutter frame, and Android/iOS launch configuration also allows portrait only. iPad full-screen mode is enabled for orientation locking. The OS may still override orientation on large displays or multi-window configurations; responsive layout checks remain necessary, especially when upgrading the Android target SDK. iOS device behavior has not been validated.
 
 Premium previews are presentation only, not a paid-content security boundary. See [release gates](docs/RELEASE.md) before adding subscriptions or publishing paid dares.
 

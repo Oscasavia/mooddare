@@ -40,10 +40,10 @@ void main() {
       await tester.enterText(find.byType(TextField), 'Brave');
       await tester.testTextInput.receiveAction(TextInputAction.search);
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('mood_preview-gold-brave')));
+      await tester.tap(find.byKey(const ValueKey('mood_preview-daring-brave')));
       await tester.pumpAndSettle();
       expect(find.byType(MoodPreviewContent), findsOneWidget);
-      expect(find.text('Gold · Coming soon'), findsOneWidget);
+      expect(find.text('Daring · Coming soon'), findsOneWidget);
       expect(find.text('Open camera'), findsNothing);
       await tester.tap(find.text('Back to moods'));
       await tester.pumpAndSettle();

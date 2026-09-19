@@ -7,8 +7,9 @@ import 'package:mooddare/core/widgets/app_empty_state.dart';
 import 'package:mooddare/features/auth/presentation/auth_gate.dart';
 import 'firebase_options.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

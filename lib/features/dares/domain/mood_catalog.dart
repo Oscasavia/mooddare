@@ -3,8 +3,8 @@ import '../../../models/mood_model.dart';
 enum MoodCollection {
   all('All'),
   free('Free'),
-  gold('Gold'),
-  diamond('Diamond'),
+  daring('Daring'),
+  epic('Epic'),
   seasonal('Seasonal');
 
   final String label;
@@ -24,8 +24,8 @@ class MoodCatalog {
           final matchesCollection = switch (collection) {
             MoodCollection.all => true,
             MoodCollection.free => mood.tier == MoodTier.basic,
-            MoodCollection.gold => mood.tier == MoodTier.gold,
-            MoodCollection.diamond => mood.tier == MoodTier.diamond,
+            MoodCollection.daring => mood.tier == MoodTier.daring,
+            MoodCollection.epic => mood.tier == MoodTier.epic,
             MoodCollection.seasonal => mood.isSeasonal,
           };
           return matchesCollection &&

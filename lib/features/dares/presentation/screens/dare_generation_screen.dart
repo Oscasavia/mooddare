@@ -148,11 +148,6 @@ class _DareDisplayScreenState extends State<DareDisplayScreen> {
                                           mood.color.withValues(alpha: .06),
                                         ],
                                       ),
-                                      border: Border.all(
-                                        color: mood.color.withValues(
-                                          alpha: .22,
-                                        ),
-                                      ),
                                     ),
                                     child: Text(
                                       mood.icon,
@@ -184,9 +179,6 @@ class _DareDisplayScreenState extends State<DareDisplayScreen> {
                                 decoration: BoxDecoration(
                                   color: Colors.white.withValues(alpha: .045),
                                   borderRadius: BorderRadius.circular(28),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: .08),
-                                  ),
                                 ),
                                 child: Column(
                                   crossAxisAlignment:

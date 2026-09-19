@@ -71,8 +71,8 @@ class _DaresScreenState extends State<DaresScreen> {
           final moods =
               catalog?.filter(_collection, _search.text) ?? <MoodModel>[];
           final premium =
-              _collection == MoodCollection.gold ||
-              _collection == MoodCollection.diamond;
+              _collection == MoodCollection.daring ||
+              _collection == MoodCollection.epic;
           return RefreshIndicator(
             onRefresh: _refresh,
             child: CustomScrollView(
@@ -197,8 +197,9 @@ class _DaresScreenState extends State<DaresScreen> {
                                 switch (_collection) {
                                   MoodCollection.all => 'Pick your energy',
                                   MoodCollection.free => 'Yours to explore',
-                                  MoodCollection.gold => 'A little more daring',
-                                  MoodCollection.diamond => 'Make it memorable',
+                                  MoodCollection.daring =>
+                                    'A little more daring',
+                                  MoodCollection.epic => 'Make it memorable',
                                   MoodCollection.seasonal => 'Seasonal moments',
                                 },
                                 style: const TextStyle(
@@ -267,11 +268,11 @@ class _DaresScreenState extends State<DaresScreen> {
                       builder: (context, constraints) {
                         final scale =
                             MediaQuery.textScalerOf(context).scale(20) / 20;
-                        final columns =
-                            (constraints.crossAxisExtent /
-                                    (scale > 1.2 ? 240 : 170))
-                                .floor()
-                                .clamp(1, 4);
+                        // Keep two cards on narrow phones, including cover screens.
+                        // Larger text grows the cards vertically instead of dropping a column.
+                        final columns = (constraints.crossAxisExtent / 220)
+                            .floor()
+                            .clamp(2, 4);
                         return SliverGrid(
                           gridDelegate:
                               SliverGridDelegateWithFixedCrossAxisCount(

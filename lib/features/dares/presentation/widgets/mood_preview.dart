@@ -96,7 +96,7 @@ Future<void> showMoodCollections(
           ),
           const SizedBox(height: 12),
           const Text(
-            'Free moods are ready now. Gold and Diamond are previews of future collections.',
+            'Free moods are ready now. Daring and Epic are previews of future collections.',
             style: TextStyle(color: Colors.white70, height: 1.5),
           ),
           const SizedBox(height: 20),
@@ -105,8 +105,8 @@ Future<void> showMoodCollections(
               contentPadding: EdgeInsets.zero,
               leading: Icon(switch (tier) {
                 MoodTier.basic => Icons.favorite_border,
-                MoodTier.gold => Icons.workspace_premium_outlined,
-                MoodTier.diamond => Icons.diamond_outlined,
+                MoodTier.daring => Icons.local_fire_department_outlined,
+                MoodTier.epic => Icons.auto_awesome_outlined,
               }),
               title: Text(tier.label),
               subtitle: Text(

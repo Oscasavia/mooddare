@@ -52,7 +52,11 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: surface,
+        fillColor: WidgetStateColor.resolveWith(
+          (states) => states.contains(WidgetState.focused)
+              ? const Color(0xFF292536)
+              : surface,
+        ),
         contentPadding: const EdgeInsets.all(18),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -60,11 +64,31 @@ class AppTheme {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Colors.white10),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: accent),
+          borderSide: BorderSide.none,
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      chipTheme: const ChipThemeData(
+        side: BorderSide.none,
+        shape: StadiumBorder(),
+        backgroundColor: surface,
+        selectedColor: Color(0xFF403750),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          side: BorderSide.none,
+          backgroundColor: surface,
         ),
       ),
       snackBarTheme: SnackBarThemeData(

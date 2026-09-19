@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 
 enum MoodTier {
   basic('Free'),
-  gold('Gold'),
-  diamond('Diamond');
+  daring('Daring'),
+  epic('Epic');
 
   final String label;
   const MoodTier(this.label);
 
   static MoodTier fromPack(String pack, {bool locked = false}) =>
       switch (pack.trim().toLowerCase()) {
-        'gold' || 'daring' || 'premium' => MoodTier.gold,
-        'diamond' || 'epic' => MoodTier.diamond,
-        _ => locked ? MoodTier.gold : MoodTier.basic,
+        'gold' || 'daring' || 'premium' => MoodTier.daring,
+        'diamond' || 'epic' => MoodTier.epic,
+        _ => locked ? MoodTier.daring : MoodTier.basic,
       };
 }
 
@@ -64,8 +64,8 @@ class MoodModel {
         ? MoodTier.fromPack(pack, locked: locked)
         : switch (rawTier is String ? rawTier.trim().toLowerCase() : '') {
             'basic' || 'free' => MoodTier.basic,
-            'diamond' || 'epic' => MoodTier.diamond,
-            _ => MoodTier.gold,
+            'diamond' || 'epic' => MoodTier.epic,
+            _ => MoodTier.daring,
           };
     var hex = text(data['colorHex'], '').replaceAll('#', '');
     if (hex.length == 6) hex = 'FF$hex';

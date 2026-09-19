@@ -39,14 +39,13 @@ class MoodCard extends StatelessWidget {
                   const Color(0xFF191B25),
                 ],
               ),
-              border: Border.all(color: mood.color.withValues(alpha: .16)),
             ),
             child: InkWell(
               onTap: onTap,
               splashFactory: NoSplash.splashFactory,
               highlightColor: Colors.transparent,
               child: Padding(
-                padding: const EdgeInsets.all(18),
+                padding: const EdgeInsets.all(14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -55,7 +54,7 @@ class MoodCard extends StatelessWidget {
                         Text(
                           mood.icon,
                           textScaler: TextScaler.noScaling,
-                          style: const TextStyle(fontSize: 36),
+                          style: const TextStyle(fontSize: 32),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -97,10 +96,11 @@ class MoodCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             status,
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 12,
+                              height: 1.25,
                               color: Colors.white60,
                             ),
                           ),

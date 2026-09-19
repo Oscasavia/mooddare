@@ -78,10 +78,10 @@ class DaresRepository {
       ('Flirty', '😉'),
     ])
       MoodModel(
-        id: 'preview-gold-${entry.$1.toLowerCase()}',
+        id: 'preview-daring-${entry.$1.toLowerCase()}',
         name: entry.$1,
         icon: entry.$2,
-        pack: 'gold',
+        pack: 'daring',
         color: const Color(0xFFE8C47B),
         isLocked: true,
         dareList: [],
@@ -97,10 +97,10 @@ class DaresRepository {
       ('Nostalgic', '📼'),
     ])
       MoodModel(
-        id: 'preview-diamond-${entry.$1.toLowerCase()}',
+        id: 'preview-epic-${entry.$1.toLowerCase()}',
         name: entry.$1,
         icon: entry.$2,
-        pack: 'diamond',
+        pack: 'epic',
         color: const Color(0xFFA7C9F5),
         isLocked: true,
         dareList: [],

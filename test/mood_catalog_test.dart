@@ -27,11 +27,11 @@ void main() {
   test('legacy packs map to tiers and never unlock premium dares', () {
     for (final entry in {
       'basic': MoodTier.basic,
-      'Daring': MoodTier.gold,
-      'premium': MoodTier.gold,
-      'gold': MoodTier.gold,
-      ' Epic ': MoodTier.diamond,
-      'diamond': MoodTier.diamond,
+      'Daring': MoodTier.daring,
+      'premium': MoodTier.daring,
+      'gold': MoodTier.daring,
+      ' Epic ': MoodTier.epic,
+      'diamond': MoodTier.epic,
     }.entries) {
       final parsed = MoodModel.fromFirestore({
         'pack': entry.key,
@@ -48,10 +48,12 @@ void main() {
   test('explicit tiers override packs and unknown tiers fail closed', () {
     for (final entry in <Object, MoodTier>{
       'free': MoodTier.basic,
-      'diamond': MoodTier.diamond,
-      'gold': MoodTier.gold,
-      'future-tier': MoodTier.gold,
-      42: MoodTier.gold,
+      'daring': MoodTier.daring,
+      'epic': MoodTier.epic,
+      'diamond': MoodTier.epic,
+      'gold': MoodTier.daring,
+      'future-tier': MoodTier.daring,
+      42: MoodTier.daring,
     }.entries) {
       final parsed = MoodModel.fromFirestore({
         'pack': 'daring',
@@ -128,8 +130,8 @@ void main() {
       expect(catalog.moods.where((m) => m.id == 'server-free'), hasLength(1));
       expect(catalog.moods.any((m) => m.id == 'empty'), isFalse);
       expect(catalog.moods.any((m) => m.id == 'creative'), isFalse);
-      expect(catalog.filter(MoodCollection.gold, ''), hasLength(8));
-      expect(catalog.filter(MoodCollection.diamond, ''), hasLength(7));
+      expect(catalog.filter(MoodCollection.daring, ''), hasLength(8));
+      expect(catalog.filter(MoodCollection.epic, ''), hasLength(7));
       expect(remoteBrave.isAvailable, isFalse);
     },
   );
@@ -196,10 +198,10 @@ void main() {
     () {
       final catalog = DaresRepository.assemble([]);
       expect(
-        catalog.filter(MoodCollection.gold, ' bRaVe ').single.name,
+        catalog.filter(MoodCollection.daring, ' bRaVe ').single.name,
         'Brave',
       );
-      expect(catalog.filter(MoodCollection.diamond, 'brave'), isEmpty);
+      expect(catalog.filter(MoodCollection.epic, 'brave'), isEmpty);
       expect(
         catalog.filter(MoodCollection.free, 'festive').single.name,
         'Christmas',

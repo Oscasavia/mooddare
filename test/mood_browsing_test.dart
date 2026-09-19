@@ -57,6 +57,79 @@ Future<void> choose(WidgetTester tester, String collection) async {
 }
 
 void main() {
+  for (final width in [320.0, 344.0, 390.0]) {
+    for (final scale in [1.0, 1.5, 2.0]) {
+      testWidgets(
+        'phone width $width keeps two playable columns at text scale $scale',
+        (tester) async {
+          await openCatalog(tester, size: Size(width, 800), scale: scale);
+          final first = find.byKey(const ValueKey('mood_chill'));
+          final second = find.byKey(const ValueKey('mood_creative'));
+          await tester.scrollUntilVisible(
+            first,
+            160,
+            scrollable: find
+                .descendant(
+                  of: find.byType(CustomScrollView),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          );
+          await tester.pumpAndSettle();
+          final left = tester.getRect(first);
+          final right = tester.getRect(second);
+          expect(left.top, right.top);
+          expect(left.right, lessThan(right.left));
+          expect(right.right, lessThanOrEqualTo(width));
+          expect(left.width, right.width);
+          expect(tester.takeException(), isNull);
+          await tester.tap(second);
+          await tester.pumpAndSettle();
+          expect(find.byType(DareDisplayScreen), findsOneWidget);
+          expect(find.text('Creative'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  testWidgets(
+    'renamed packs use borderless pills and fields retain a visible focus fill',
+    (tester) async {
+      await openCatalog(tester);
+      expect(find.text('Daring'), findsOneWidget);
+      expect(find.text('Epic'), findsOneWidget);
+      expect(find.text('Gold'), findsNothing);
+      expect(find.text('Diamond'), findsNothing);
+      final theme = Theme.of(tester.element(find.byType(TextField)));
+      final decoration = theme.inputDecorationTheme;
+      expect(decoration.enabledBorder!.borderSide, BorderSide.none);
+      expect(decoration.focusedBorder!.borderSide, BorderSide.none);
+      expect(
+        WidgetStateProperty.resolveAs(decoration.fillColor!, {
+          WidgetState.focused,
+        }),
+        isNot(WidgetStateProperty.resolveAs(decoration.fillColor!, {})),
+      );
+      expect(theme.chipTheme.side, BorderSide.none);
+      await choose(tester, 'daring');
+      expect(
+        tester
+            .widget<ChoiceChip>(find.byKey(const ValueKey('collection_daring')))
+            .selected,
+        isTrue,
+      );
+      await choose(tester, 'epic');
+      expect(
+        tester
+            .widget<ChoiceChip>(find.byKey(const ValueKey('collection_epic')))
+            .selected,
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('initial loading resolves to a browsable catalog', (
     tester,
   ) async {
@@ -105,7 +178,7 @@ void main() {
         dares: ['Never display this paid dare.'],
       );
       await openCatalog(tester, load: () async => [premium]);
-      await choose(tester, pack == 'daring' ? 'gold' : 'diamond');
+      await choose(tester, pack == 'daring' ? 'daring' : 'epic');
       await tester.enterText(find.byType(TextField), 'Exclusive');
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('mood_remote-paid')));
@@ -159,7 +232,7 @@ void main() {
     tester,
   ) async {
     await openCatalog(tester);
-    await choose(tester, 'gold');
+    await choose(tester, 'daring');
     await tester.enterText(find.byType(TextField), 'nothing matches');
     await tester.pumpAndSettle();
     expect(find.text('No matching moods'), findsOneWidget);
@@ -204,14 +277,14 @@ void main() {
         find.text('Couldn’t refresh. Starter moods are ready.'),
         findsOneWidget,
       );
-      await choose(tester, 'gold');
+      await choose(tester, 'daring');
       await tester.enterText(find.byType(TextField), 'brave');
       await tester.pumpAndSettle();
       await tester.tap(find.text('Retry'));
       await tester.pump();
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('mood_preview-gold-brave')),
+        find.byKey(const ValueKey('mood_preview-daring-brave')),
         findsOneWidget,
       );
       retry.complete([mood('server-brave', name: 'Brave', pack: 'gold')]);
@@ -219,7 +292,7 @@ void main() {
       expect(find.text('Retry'), findsNothing);
       expect(find.byKey(const ValueKey('mood_server-brave')), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('mood_preview-gold-brave')),
+        find.byKey(const ValueKey('mood_preview-daring-brave')),
         findsNothing,
       );
       expect(
@@ -228,7 +301,7 @@ void main() {
       );
       expect(
         tester
-            .widget<ChoiceChip>(find.byKey(const ValueKey('collection_gold')))
+            .widget<ChoiceChip>(find.byKey(const ValueKey('collection_daring')))
             .selected,
         isTrue,
       );
@@ -241,12 +314,12 @@ void main() {
       tester,
     ) async {
       await openCatalog(tester, size: size, scale: 1.5);
-      await choose(tester, 'diamond');
+      await choose(tester, 'epic');
       await tester.enterText(find.byType(TextField), 'Main Character');
       tester.testTextInput.hide();
       await tester.pumpAndSettle();
       final card = find.byKey(
-        const ValueKey('mood_preview-diamond-main character'),
+        const ValueKey('mood_preview-epic-main character'),
       );
       await tester.scrollUntilVisible(
         card,
@@ -260,7 +333,7 @@ void main() {
       );
       await tester.tap(card);
       await tester.pumpAndSettle();
-      expect(find.text('Diamond · Coming soon'), findsOneWidget);
+      expect(find.text('Epic · Coming soon'), findsOneWidget);
       await tester.ensureVisible(find.text('Back to moods'));
       await tester.tap(find.text('Back to moods'));
       await tester.pumpAndSettle();
