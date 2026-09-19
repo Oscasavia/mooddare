@@ -9,6 +9,7 @@ import 'package:video_player/video_player.dart';
 import '../../../camera/data/photo_editor.dart';
 import '../../../camera/domain/photo_processing.dart';
 import '../../../camera/presentation/photo_adjustments_panel.dart';
+import '../../../camera/presentation/photo_review_frame.dart';
 import '../../data/repositories/post_repository.dart';
 
 class PreviewScreen extends StatefulWidget {
@@ -250,11 +251,23 @@ class _PreviewScreenState extends State<PreviewScreen>
       );
     }
     if (_isPhoto) {
-      return Image.memory(
-        _original ? _editor!.original : _rendered!,
-        key: const ValueKey('capture_preview'),
-        fit: BoxFit.contain,
-        gaplessPlayback: true,
+      return PhotoReviewFrame(
+        photo: Image.memory(
+          _original ? _editor!.original : _rendered!,
+          key: const ValueKey('capture_preview'),
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+        ),
+        controls: _showAdjustments
+            ? PhotoAdjustmentsPanel(
+                settings: _settings,
+                faceDetected: _editor!.faceDetected,
+                notice: _editor!.notice,
+                enabled: !_busy,
+                onChanged: _adjust,
+                onReset: _reset,
+              )
+            : null,
       );
     }
     final video = _video;
@@ -411,15 +424,6 @@ class _PreviewScreenState extends State<PreviewScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (canAdjust && _showAdjustments)
-                        PhotoAdjustmentsPanel(
-                          settings: _settings,
-                          faceDetected: _editor!.faceDetected,
-                          notice: _editor!.notice,
-                          enabled: !_busy,
-                          onChanged: _adjust,
-                          onReset: _reset,
-                        ),
                       TextButton(
                         onPressed: _busy ? null : _showDare,
                         style: TextButton.styleFrom(
@@ -453,6 +457,8 @@ class _PreviewScreenState extends State<PreviewScreen>
                                   : 'Adjust photo',
                               isSelected: _showAdjustments,
                               style: IconButton.styleFrom(
+                                splashFactory: NoSplash.splashFactory,
+                                highlightColor: Colors.transparent,
                                 minimumSize: const Size(56, 52),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),

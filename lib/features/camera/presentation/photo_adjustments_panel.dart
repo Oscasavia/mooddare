@@ -134,6 +134,8 @@ class _PhotoAdjustmentsPanelState extends State<PhotoAdjustmentsPanel> {
                             message: 'Select ${tool.label}',
                             excludeFromSemantics: true,
                             child: InkResponse(
+                              splashFactory: NoSplash.splashFactory,
+                              highlightColor: Colors.transparent,
                               excludeFromSemantics: true,
                               onTap: widget.enabled
                                   ? () => _select(page)

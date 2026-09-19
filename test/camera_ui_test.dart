@@ -8,12 +8,26 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('mooddare/live_beauty');
   double? sentAspect;
+  var captures = 0;
+  final lightRequests = <bool>[];
   setUp(() {
     sentAspect = null;
+    captures = 0;
+    lightRequests.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           if (call.method == 'setLook') {
             sentAspect = (call.arguments['aspectRatio'] as num).toDouble();
+          }
+          if (call.method == 'setCaptureLight') {
+            lightRequests.add(call.arguments['enabled'] as bool);
+          }
+          if (call.method == 'capture') {
+            captures++;
+            throw PlatformException(
+              code: 'capture',
+              message: 'Capture interrupted',
+            );
           }
           return switch (call.method) {
             'requestCamera' => true,
@@ -32,6 +46,50 @@ void main() {
     () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null),
   );
+
+  for (final interrupt in [false, true]) {
+    testWidgets(
+      'screen flash is cleared after ${interrupt ? 'backgrounding' : 'capture failure'}',
+      (tester) async {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.build(),
+            home: const LiveBeautyScreen(dareText: 'Flash test'),
+          ),
+        );
+        for (var i = 0; i < 6; i++) {
+          await tester.pump(const Duration(milliseconds: 250));
+        }
+        await tester.tap(find.byTooltip('Screen flash off'));
+        await tester.pump();
+        expect(find.byTooltip('Screen flash on'), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('capture_shutter')));
+        await tester.pump();
+        await tester.pump();
+        expect(find.byKey(const ValueKey('screen_flash')), findsOneWidget);
+        expect(lightRequests, [true]);
+        if (interrupt) {
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.inactive,
+          );
+          await tester.pump();
+        }
+        await tester.pump(const Duration(milliseconds: 700));
+        await tester.pump();
+        expect(lightRequests, [true, false]);
+        expect(captures, interrupt ? 0 : 1);
+        expect(find.byKey(const ValueKey('screen_flash')), findsNothing);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+      },
+    );
+  }
 
   for (final size in [const Size(320, 640), const Size(768, 1024)]) {
     testWidgets(

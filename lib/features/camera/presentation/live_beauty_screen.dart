@@ -37,6 +37,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   bool _busy = false, _comparing = false, _active = true, _inPreview = false;
   bool _recording = false, _showAdjustments = false;
   bool _askedForCamera = false;
+  bool _flash = false, _hasFlash = false, _screenFlash = false;
   _CameraFrame _framing = _CameraFrame.story;
   double _viewportAspect = .5625;
   int _recordingMillis = 0;
@@ -143,6 +144,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
           setState(() {
             _ready = state['ready'] == true;
             _face = state['faceDetected'] == true;
+            _hasFlash = state['hasFlash'] == true;
             _recording = state['recording'] == true;
             _recordingMillis = (state['recordingMillis'] as num?)?.toInt() ?? 0;
             if (w > 0 && h > 0) _aspect = w / h;
@@ -189,6 +191,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
         _texture = null;
         _ready = false;
         _recording = false;
+        _screenFlash = false;
       });
       removed = WidgetsBinding.instance.endOfFrame;
     }
@@ -223,13 +226,45 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
 
   Future<void> _capture() async {
     if (!_ready || _busy) return;
+    final generation = _generation;
+    final useFlash = _flash && (_front || _hasFlash);
     setState(() => _busy = true);
     HapticFeedback.lightImpact();
     File? captured;
     try {
       _lookDebounce?.cancel();
       await _sendLook();
-      captured = File((await _channel.invokeMethod<String>('capture'))!);
+      try {
+        if (useFlash) {
+          if (_front && mounted) {
+            setState(() => _screenFlash = true);
+            await WidgetsBinding.instance.endOfFrame;
+          }
+          if (!mounted || !_active || generation != _generation) return;
+          await _channel.invokeMethod<void>('setCaptureLight', {
+            'enabled': true,
+          });
+          // Let exposure settle and fresh illuminated frames reach the GPU.
+          await Future<void>.delayed(const Duration(milliseconds: 650));
+        }
+        if (!mounted || !_active || generation != _generation) return;
+        captured = File(
+          (await _channel.invokeMethod<String>('capture', {
+            'flash': useFlash,
+          }))!,
+        );
+      } finally {
+        if (useFlash) {
+          try {
+            await _channel.invokeMethod<void>('setCaptureLight', {
+              'enabled': false,
+            });
+          } on PlatformException {
+            // Native pause/close and the timeout independently restore the light.
+          }
+          if (mounted) setState(() => _screenFlash = false);
+        }
+      }
       if (!mounted || !_active) return;
       await _review(captured, 'image');
       captured = null;
@@ -680,6 +715,25 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                               ),
                               const SizedBox(height: 8),
                               _floatingButton(
+                                !_front && !_hasFlash
+                                    ? 'Flash unavailable'
+                                    : _front
+                                    ? (_flash
+                                          ? 'Screen flash on'
+                                          : 'Screen flash off')
+                                    : (_flash
+                                          ? 'Photo flash on'
+                                          : 'Photo flash off'),
+                                _flash && (_front || _hasFlash)
+                                    ? Icons.flash_on_rounded
+                                    : Icons.flash_off_rounded,
+                                enabled && (_front || _hasFlash)
+                                    ? () => setState(() => _flash = !_flash)
+                                    : null,
+                                selected: _flash && (_front || _hasFlash),
+                              ),
+                              const SizedBox(height: 8),
+                              _floatingButton(
                                 'Adjust lens',
                                 Icons.tune_rounded,
                                 enabled && _selected != 0
@@ -700,7 +754,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
               ),
               if (_showAdjustments && !_recording)
                 Positioned(
-                  top: MediaQuery.paddingOf(context).top + 176,
+                  top: MediaQuery.paddingOf(context).top + 232,
                   left: 24,
                   right: 24,
                   child: Container(
@@ -870,6 +924,16 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                   ),
                 ),
               ),
+              if (_screenFlash)
+                const Positioned.fill(
+                  child: AbsorbPointer(
+                    child: ColoredBox(
+                      key: ValueKey('screen_flash'),
+                      // Slight transparency keeps the camera texture consuming frames.
+                      color: Color(0xF5FFFFFF),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

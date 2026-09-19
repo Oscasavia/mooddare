@@ -14,6 +14,7 @@ import android.os.SystemClock
 import android.util.Size
 import android.view.Surface
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.Camera
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -106,7 +107,8 @@ class LiveBeautyPlugin(
                 session = current
                 current.start(fixture, result)
             }
-            "status" -> result.success(session?.status() ?: mapOf("ready" to false))
+            "status" -> result.success((session?.status() ?: mapOf("ready" to false)) +
+                mapOf("screenBrightness" to activity.window.attributes.screenBrightness))
             "setLook" -> {
                 val current = session
                 if (current == null) result.error("closed", "Camera is closed.", null)
@@ -115,7 +117,14 @@ class LiveBeautyPlugin(
             "capture" -> {
                 val current = session
                 if (current == null) result.error("closed", "Camera is closed.", null)
-                else current.capture(result)
+                else current.capture(result, call.argument<Boolean>("flash") ?: false)
+            }
+            "setCaptureLight" -> {
+                val current = session
+                if (current == null) {
+                    if (call.argument<Boolean>("enabled") == true) result.error("closed", "Camera is closed.", null)
+                    else result.success(null)
+                } else current.setCaptureLight(call.argument<Boolean>("enabled") ?: false, result)
             }
             "startRecording" -> {
                 val current = session
@@ -148,7 +157,7 @@ class LiveBeautyPlugin(
     }
 
     // Native lifecycle protection stops the microphone even if Dart is paused.
-    fun onPause() { session?.interruptRecording() }
+    fun onPause() { session?.clearCaptureLight(); session?.interruptRecording() }
 
     fun close() {
         permissionResult?.success(false); permissionResult = null
@@ -165,6 +174,12 @@ class LiveBeautyPlugin(
             .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
             .enableTracking().setMinFaceSize(.15f).build())
         private var provider: ProcessCameraProvider? = null
+        private var camera: Camera? = null
+        private var savedBrightness: Float? = null
+        private var lightResult: MethodChannel.Result? = null
+        @Volatile private var captureLight = false
+        @Volatile private var lightFrame = 0L
+        private val lightTimeout = Runnable { clearCaptureLight() }
         private var analysis: ImageAnalysis? = null
         private var renderer: LiveBeautyRenderer? = null
         private var pixels: ByteBuffer? = null
@@ -248,7 +263,7 @@ class LiveBeautyPlugin(
                         .build()
                     analysis = useCase
                     useCase.setAnalyzer(executor) { image -> render(image) }
-                    provider!!.bindToLifecycle(activity, selector, useCase)
+                    camera = provider!!.bindToLifecycle(activity, selector, useCase)
                     finishStart()
                 } catch (e: Exception) {
                     error = "Could not start this camera. Return to Photo and try again."
@@ -360,16 +375,68 @@ class LiveBeautyPlugin(
         }
 
         fun status(): Map<String, Any?> = mapOf("ready" to ready, "width" to width, "height" to height,
+            "hasFlash" to (camera?.cameraInfo?.hasFlashUnit() ?: false), "captureLight" to captureLight,
             "faceDetected" to faceVisible, "fps" to fps, "frames" to frames,
             "detections" to detections, "error" to error,
             "recording" to recording, "recordingMillis" to if (recording) SystemClock.elapsedRealtime() - recordingStarted else 0L,
             "videoReady" to (pendingVideo != null), "recordingError" to recordingError)
 
+        // Main-thread ownership keeps brightness and torch cleanup independent of Dart.
+        fun setCaptureLight(enabled: Boolean, result: MethodChannel.Result) {
+            if (!enabled) { clearCaptureLight(); result.success(null); return }
+            if (closed || !ready || recording || captureLight) {
+                result.error("flash", "Photo flash is not ready. Try again.", null); return
+            }
+            if (!front && camera?.cameraInfo?.hasFlashUnit() != true) {
+                result.error("flash", "This camera has no flash.", null); return
+            }
+            captureLight = true
+            lightFrame = frames
+            lightResult = result
+            // Fail-safe for interruptions, stalled captures, or a disconnected Dart client.
+            main.postDelayed(lightTimeout, 3000)
+            try {
+                if (front) {
+                    savedBrightness = activity.window.attributes.screenBrightness
+                    activity.window.attributes = activity.window.attributes.apply { screenBrightness = 1f }
+                    lightResult = null
+                    result.success(null)
+                } else {
+                    val future = camera!!.cameraControl.enableTorch(true)
+                    future.addListener({
+                        // Clearing the light already completes a pending result.
+                        if (lightResult !== result) return@addListener
+                        try {
+                            future.get()
+                            lightFrame = frames
+                            lightResult = null
+                            result.success(null)
+                        } catch (_: Exception) { clearCaptureLight() }
+                    }, ContextCompat.getMainExecutor(activity))
+                }
+            } catch (_: Exception) { clearCaptureLight() }
+        }
+
+        fun clearCaptureLight() {
+            main.removeCallbacks(lightTimeout)
+            val wasOn = captureLight
+            captureLight = false
+            savedBrightness?.let { brightness ->
+                activity.window.attributes = activity.window.attributes.apply { screenBrightness = brightness }
+            }
+            savedBrightness = null
+            if (wasOn && !front) {
+                try { camera?.cameraControl?.enableTorch(false) } catch (_: Exception) { }
+            }
+            val pending = lightResult; lightResult = null
+            pending?.error("flash", "Photo flash was interrupted. Please try again.", null)
+        }
+
         fun startRecording(result: MethodChannel.Result) {
             handler.post {
                 var candidate: LiveBeautyRecorder? = null
                 try {
-                    check(!closed && ready && recorder == null && pendingVideo == null)
+                    check(!closed && ready && recorder == null && pendingVideo == null && !captureLight)
                     val crop = renderer!!.captureSize()
                     val scale = min(1.0, min(1280.0 / max(crop.first, crop.second), 720.0 / min(crop.first, crop.second)))
                     val w = (crop.first * scale / 2).toInt() * 2
@@ -435,10 +502,11 @@ class LiveBeautyPlugin(
             }
         }
 
-        fun capture(result: MethodChannel.Result) {
+        fun capture(result: MethodChannel.Result, flash: Boolean = false) {
             handler.post {
                 try {
                     check(!closed && ready) { "Camera is not ready" }
+                    check(!flash || (captureLight && frames > lightFrame + 2)) { "Wait for an illuminated frame" }
                     val file = File(activity.cacheDir, "mooddare-live-${UUID.randomUUID()}.jpg")
                     renderer!!.capture(file)
                     main.post { result.success(file.path) }
@@ -449,6 +517,7 @@ class LiveBeautyPlugin(
         fun close(done: () -> Unit) {
             if (closed) { done(); return }
             closed = true; ready = false
+            clearCaptureLight()
             finishStartError("closed", "Camera was closed.")
             analysis?.let { it.clearAnalyzer(); provider?.unbind(it) }
             handler.post {

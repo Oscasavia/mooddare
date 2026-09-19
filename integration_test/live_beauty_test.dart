@@ -259,7 +259,15 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       expect(find.text('Original'), findsNothing);
       expect(tester.takeException(), isNull);
+      final brightness = later['screenBrightness'];
+      await tester.tap(find.byTooltip('Screen flash off'));
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('capture_shutter')));
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(find.byKey(const ValueKey('screen_flash')), findsOneWidget);
+      final lit = (await channel.invokeMapMethod<String, dynamic>('status'))!;
+      expect(lit['captureLight'], isTrue);
+      expect(lit['screenBrightness'], 1.0);
       for (
         var i = 0;
         i < 100 &&
@@ -269,17 +277,50 @@ void main() {
         await tester.pump(const Duration(milliseconds: 200));
       }
       expect(find.byKey(const ValueKey('capture_preview')), findsOneWidget);
+      expect(find.byKey(const ValueKey('screen_flash')), findsNothing);
+      expect(
+        (await channel.invokeMapMethod<String, dynamic>(
+          'status',
+        ))!['screenBrightness'],
+        brightness,
+      );
       expect(tester.takeException(), isNull);
       await tester.pageBack();
       await waitForState(
         tester,
         (state) => state['ready'] == true && (state['frames'] as num) > 2,
       );
+      // A native stop restores brightness even without a Dart cleanup request.
+      await channel.invokeMethod<void>('setCaptureLight', {'enabled': true});
+      expect(
+        (await channel.invokeMapMethod<String, dynamic>(
+          'status',
+        ))!['captureLight'],
+        isTrue,
+      );
       await tester.tap(find.byTooltip('Switch camera'));
       await waitForState(
         tester,
         (state) => state['ready'] == true && (state['frames'] as num) > 2,
       );
+      final rear = (await channel.invokeMapMethod<String, dynamic>('status'))!;
+      expect(rear['captureLight'], isFalse);
+      expect(rear['screenBrightness'], brightness);
+      if (rear['hasFlash'] == true) {
+        await channel.invokeMethod<void>('setCaptureLight', {'enabled': true});
+        await channel.invokeMethod<void>('setCaptureLight', {'enabled': false});
+        expect(
+          (await channel.invokeMapMethod<String, dynamic>(
+            'status',
+          ))!['captureLight'],
+          isFalse,
+        );
+      } else {
+        await expectLater(
+          channel.invokeMethod<void>('setCaptureLight', {'enabled': true}),
+          throwsA(isA<PlatformException>()),
+        );
+      }
       expect(tester.takeException(), isNull);
       // Rapid background/resume must not allow an old stop to close a new camera.
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);

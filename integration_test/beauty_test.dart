@@ -53,6 +53,13 @@ void main() {
         }
         expect(find.byKey(const ValueKey('capture_preview')), findsOneWidget);
         expect(find.byType(Slider), findsNothing);
+        await tester.pumpAndSettle();
+        final photo = find.byKey(const ValueKey('capture_preview'));
+        final frame = find.byKey(const ValueKey('photo_review_frame'));
+        final photoBounds = tester.getRect(photo);
+        final postBounds = tester.getRect(find.text('Post dare'));
+        expect(photoBounds.size.isEmpty, isFalse);
+        expect(tester.getRect(frame), photoBounds);
         final before =
             (tester
                         .widget<Image>(
@@ -64,6 +71,14 @@ void main() {
         await tester.tap(find.byTooltip('Adjust photo'));
         await tester.pump();
         expect(find.byType(Slider), findsOneWidget);
+        expect(tester.getRect(photo), photoBounds);
+        expect(tester.getRect(frame), photoBounds);
+        expect(tester.getRect(find.text('Post dare')), postBounds);
+        expect(
+          photoBounds.contains(tester.getCenter(find.byType(Slider))),
+          isTrue,
+          reason: 'Adjustments float inside the photo without resizing it',
+        );
         expect(find.text('Smooth'), findsOneWidget);
         await tester.drag(
           find.byKey(const ValueKey('photo_adjustment_wheel')),
@@ -71,6 +86,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('Light'), findsOneWidget);
+        expect(tester.getRect(photo), photoBounds);
         await tester.drag(find.byType(Slider), const Offset(50, 0));
         for (var i = 0; i < 60; i++) {
           await tester.pump(const Duration(milliseconds: 250));
@@ -108,6 +124,8 @@ void main() {
         await tester.tap(find.byTooltip('Done adjusting'));
         await tester.pump();
         expect(find.byType(Slider), findsNothing);
+        expect(tester.getRect(photo), photoBounds);
+        expect(tester.getRect(frame), photoBounds);
         await tester.tap(find.byTooltip('Save or share'));
         await tester.pumpAndSettle();
         expect(find.text('Save to photos'), findsOneWidget);
