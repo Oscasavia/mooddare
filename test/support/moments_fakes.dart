@@ -41,7 +41,10 @@ class MemoryPosts implements PostRepository {
   bool failComments = false,
       failSending = false,
       failEdit = false,
+      failDelete = false,
       failCommentLike = false;
+  int deletions = 0;
+  Future<void>? deleteGate;
   int? commentCount;
   int commentLikes = 0;
   bool failLikers = false;
@@ -136,6 +139,9 @@ class MemoryPosts implements PostRepository {
 
   @override
   Future<void> deleteComment(String postId, String commentId) async {
+    deletions++;
+    await deleteGate;
+    if (failDelete) throw StateError('Offline');
     comments.removeWhere((c) => c.id == commentId);
     commentChanges.add(List.of(comments));
   }

@@ -88,10 +88,14 @@ class _ProfileScreenState extends State<ProfileScreen>
                 IconButton(
                   icon: const Icon(Icons.settings_outlined),
                   tooltip: 'Settings',
-                  onPressed: () {
-                    Navigator.of(context).push(
+                  onPressed: () async {
+                    await Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const SettingsScreen()),
                     );
+                    if (mounted) {
+                      _refreshProfileData();
+                      widget.onProfileUpdated?.call();
+                    }
                   },
                 ),
               ]

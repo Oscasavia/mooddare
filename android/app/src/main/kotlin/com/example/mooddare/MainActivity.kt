@@ -17,6 +17,8 @@ class MainActivity : FlutterActivity() {
     }
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mooddare/settings")
+            .setMethodCallHandler(SettingsPlugin(this))
         beauty = BeautyPlugin(applicationContext)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mooddare/beauty")
             .setMethodCallHandler(beauty)
@@ -33,6 +35,8 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler(null)
         beauty?.close()
         beauty = null
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mooddare/settings")
+            .setMethodCallHandler(null)
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }

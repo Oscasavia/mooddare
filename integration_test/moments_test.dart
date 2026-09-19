@@ -164,6 +164,13 @@ void main() {
         expect(find.text('Edited native comment'), findsOneWidget);
         expect(find.text('Edited'), findsOneWidget);
         expect(find.byTooltip('Unlike comment'), findsOneWidget);
+        await tester.tap(find.byTooltip('Comment options'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Delete comment'));
+        await tester.pumpAndSettle();
+        expect(find.text('Edited native comment'), findsNothing);
+        expect(find.text('Start the conversation ✨'), findsOneWidget);
+        expect(repository.comments, isEmpty);
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
         await waitForPlayer(tester);

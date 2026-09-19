@@ -38,6 +38,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
   final _scroll = ScrollController();
   final _focus = FocusNode();
   final _liking = <String>{};
+  final _deleting = <String>{};
   CommentModel? _editing;
   String _draft = "";
   final _authors = <String, Future<UserModel?>>{};
@@ -78,7 +79,12 @@ class _CommentsSheetState extends State<CommentsSheet> {
 
   Future<void> _send() async {
     final text = _text.text.trim();
-    if (_sending || text.isEmpty || text.length > 500) return;
+    if (_sending ||
+        _deleting.contains(_editing?.id) ||
+        text.isEmpty ||
+        text.length > 500) {
+      return;
+    }
     FocusScope.of(context).unfocus();
     setState(() {
       _sending = true;
@@ -113,7 +119,11 @@ class _CommentsSheetState extends State<CommentsSheet> {
   }
 
   void _edit(CommentModel comment) {
-    if (_sending || comment.authorId != widget.repository.currentUserId) return;
+    if (_sending ||
+        _deleting.contains(comment.id) ||
+        comment.authorId != widget.repository.currentUserId) {
+      return;
+    }
     if (_editing == null) _draft = _text.text;
     setState(() {
       _editing = comment;
@@ -135,6 +145,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
 
   Future<void> _like(CommentModel comment) async {
     if (_liking.contains(comment.id) ||
+        _deleting.contains(comment.id) ||
         widget.repository.currentUserId == null) {
       return;
     }
@@ -154,6 +165,11 @@ class _CommentsSheetState extends State<CommentsSheet> {
   }
 
   Future<void> _delete(CommentModel comment) async {
+    if (_sending || _deleting.contains(comment.id)) return;
+    setState(() {
+      _deleting.add(comment.id);
+      _error = null;
+    });
     try {
       await widget.repository.deleteComment(widget.post.id, comment.id);
       if (mounted && _editing?.id == comment.id) _cancelEdit();
@@ -161,6 +177,8 @@ class _CommentsSheetState extends State<CommentsSheet> {
       if (mounted) {
         setState(() => _error = 'Could not delete this comment. Try again.');
       }
+    } finally {
+      if (mounted) setState(() => _deleting.remove(comment.id));
     }
   }
 
@@ -294,6 +312,9 @@ class _CommentsSheetState extends State<CommentsSheet> {
                                             (uid == comment.authorId ||
                                                 uid == widget.post.authorId))
                                           PopupMenuButton<String>(
+                                            enabled:
+                                                !_sending &&
+                                                !_deleting.contains(comment.id),
                                             key: ValueKey(
                                               'comment_menu_${comment.id}',
                                             ),
@@ -343,6 +364,9 @@ class _CommentsSheetState extends State<CommentsSheet> {
                                             ),
                                             onPressed:
                                                 uid == null ||
+                                                    _deleting.contains(
+                                                      comment.id,
+                                                    ) ||
                                                     _liking.contains(comment.id)
                                                 ? null
                                                 : () => _like(comment),
@@ -432,7 +456,10 @@ class _CommentsSheetState extends State<CommentsSheet> {
                             tooltip: _editing == null
                                 ? 'Post comment'
                                 : 'Save comment',
-                            onPressed: _sending || _text.text.trim().isEmpty
+                            onPressed:
+                                _sending ||
+                                    _deleting.contains(_editing?.id) ||
+                                    _text.text.trim().isEmpty
                                 ? null
                                 : _send,
                             icon: _sending

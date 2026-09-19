@@ -37,12 +37,12 @@ class AuthRepository {
   }
 
   Future<void> signOut() async {
-    // A provider failure must not leave the Firebase session signed in.
+    // Firebase owns the app session. A provider cleanup failure must neither
+    // prevent signing out nor report failure after Firebase has signed out.
     try {
       await _googleSignIn.signOut();
-    } finally {
-      await _firebaseAuth.signOut();
-    }
+    } catch (_) {}
+    await _firebaseAuth.signOut();
   }
 
   Future<UserCredential> signUpWithEmailAndPassword(

@@ -16,6 +16,16 @@ Use your own Java 17 path on other machines. Flutter may otherwise choose Androi
 
 If the debugger connection hangs on the splash screen on this Mac, the verified fallback is `flutter run -d sdk --no-hot --no-resident`. It installs and opens the app without a hot-reload session. The standalone debug APK also launches normally.
 
+## Settings
+
+Settings groups account details, privacy/preferences, help and app information into borderless cards. Sign out and Delete account are the final two rows and both require confirmation; pending operations prevent repeated requests and Back navigation. Google provider cleanup failures no longer report a failed sign-out after the Firebase session has already ended.
+
+Email/password accounts can change their password after reauthenticating with the current password, or explicitly request a reset email. Google accounts open Google account security instead. Guest accounts receive sign-in guidance. This follows [Firebase’s user-management flow](https://firebase.google.com/docs/auth/flutter/manage-users).
+
+Help & FAQ explains capture, lenses, moments, comments, premium previews and privacy. Contact us prepares an email to `oscasavia@gmail.com` with a topic, the user's message and app version; it never sends automatically. A copyable draft is available if no email app can open. Share MoodDare opens the native share chooser and labels `https://mooddare.example` as a preview link with downloads coming soon. Replace these defaults at build time with `--dart-define=SUPPORT_EMAIL=...` and `--dart-define=APP_SHARE_URL=https://...` when public launch details are ready.
+
+Notifications opens the app's OS settings. Push delivery, tokens, channels, server triggers and per-category preferences are not implemented; the screen explicitly states that alerts are coming later. About & licenses reads version/build from the installed application. Android and iOS platform handoffs use the small `mooddare/settings` channel.
+
 ## Moments
 
 The Moments header uses **mooddare** branding. Photos and videos fill their rounded feed cards with a centered crop, preserving proportions. A single tap on the media or caption opens the same full-screen viewer used by profile dares; that viewer contains the full image/video without the feed crop. Tap a video in the viewer to pause or resume. Double-tapping media still likes the post, and action buttons and vertical feed swipes retain their own behavior.

@@ -110,8 +110,10 @@ for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
     await assertSucceeds(getDocs(query(collection(db('charlie'), 'posts/one/comments'), orderBy('createdAt', 'desc'))));
     await assertFails(getDocs(collection(env.unauthenticatedContext().firestore(), 'posts/one/comments')));
     await assertFails(updateDoc(doc(bob, 'posts/one/comments/c'), {text: 'Changed'}));
+    await assertFails(deleteDoc(doc(env.unauthenticatedContext().firestore(), 'posts/one/comments/c')));
     await assertFails(deleteDoc(doc(db('charlie'), 'posts/one/comments/c')));
     await assertSucceeds(deleteDoc(doc(db('alice'), 'posts/one/comments/c')));
+    if ((await getDoc(doc(bob, 'posts/one/comments/c'))).exists()) throw new Error('Deleted comment remains');
     await setDoc(doc(bob, 'posts/one/comments/c'), comment());
     await assertSucceeds(deleteDoc(doc(bob, 'posts/one/comments/c')));
     await assertFails(deleteDoc(doc(bob, 'posts/one')));
