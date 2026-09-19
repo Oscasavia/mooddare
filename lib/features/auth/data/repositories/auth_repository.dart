@@ -30,12 +30,6 @@ class AuthRepository {
     return result;
   }
 
-  Future<UserCredential> signInAnonymously() async {
-    final result = await _firebaseAuth.signInAnonymously();
-    await _userRepository.upsertUser(result.user!);
-    return result;
-  }
-
   Future<void> signOut() async {
     // Firebase owns the app session. A provider cleanup failure must neither
     // prevent signing out nor report failure after Firebase has signed out.
