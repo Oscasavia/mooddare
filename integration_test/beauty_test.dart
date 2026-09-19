@@ -65,8 +65,12 @@ void main() {
         await tester.pump();
         expect(find.byType(Slider), findsOneWidget);
         expect(find.text('Smooth'), findsOneWidget);
-        await tester.tap(find.widgetWithText(ChoiceChip, 'Light'));
-        await tester.pump();
+        await tester.drag(
+          find.byKey(const ValueKey('photo_adjustment_wheel')),
+          const Offset(-100, 0),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Light'), findsOneWidget);
         await tester.drag(find.byType(Slider), const Offset(50, 0));
         for (var i = 0; i < 60; i++) {
           await tester.pump(const Duration(milliseconds: 250));

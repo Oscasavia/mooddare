@@ -37,22 +37,32 @@ void main() {
       await tester.pump();
       final smooth = settings.smoothing;
       expect(smooth, greaterThan(0));
-      await tester.tap(find.text('Light'));
-      await tester.pump();
+      final wheel = find.byKey(const ValueKey('photo_adjustment_wheel'));
+      await tester.drag(wheel, const Offset(-100, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Light'), findsOneWidget);
       expect(tester.widget<Slider>(find.byType(Slider)).min, -1);
       await tester.drag(find.byType(Slider), const Offset(-40, 0));
       await tester.pump();
       final brightness = settings.brightness;
       expect(brightness, lessThan(0));
       expect(settings.smoothing, smooth);
-      await tester.ensureVisible(find.text('Warmth'));
-      await tester.tap(find.text('Warmth'));
-      await tester.pump();
+      await tester.tap(find.byTooltip('Select Warmth').hitTestable());
+      await tester.pumpAndSettle();
+      expect(find.text('Warmth'), findsOneWidget);
       await tester.drag(find.byType(Slider), const Offset(40, 0));
       await tester.pump();
       expect(settings.warmth, greaterThan(0));
       expect(settings.brightness, brightness);
       expect(settings.smoothing, smooth);
+      await tester.drag(wheel, const Offset(-100, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Smooth'), findsOneWidget);
+      expect(tester.widget<Slider>(find.byType(Slider)).value, smooth);
+      expect(
+        tester.getCenter(find.byTooltip('Select Smooth').hitTestable()).dx,
+        closeTo(tester.getCenter(wheel).dx, .1),
+      );
       await tester.tap(find.byTooltip('Reset adjustments'));
       await tester.pump();
       expect(settings.smoothing, 0);
@@ -81,12 +91,12 @@ void main() {
       ),
     );
     expect(tester.widget<Slider>(find.byType(Slider)).onChanged, isNotNull);
-    await tester.tap(find.text('Smooth'));
-    await tester.pump();
+    await tester.tap(find.byTooltip('Select Smooth').hitTestable());
+    await tester.pumpAndSettle();
     expect(tester.widget<Slider>(find.byType(Slider)).onChanged, isNull);
     expect(find.text('No front-facing face found.'), findsOneWidget);
-    await tester.tap(find.text('Warmth'));
-    await tester.pump();
+    await tester.tap(find.byTooltip('Select Warmth').hitTestable());
+    await tester.pumpAndSettle();
     expect(tester.widget<Slider>(find.byType(Slider)).onChanged, isNotNull);
     expect(find.text('No front-facing face found.'), findsNothing);
   });

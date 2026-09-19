@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../domain/photo_processing.dart';
 
 enum _PhotoTool {
@@ -35,9 +36,31 @@ class PhotoAdjustmentsPanel extends StatefulWidget {
 }
 
 class _PhotoAdjustmentsPanelState extends State<PhotoAdjustmentsPanel> {
-  late _PhotoTool _tool = widget.faceDetected
-      ? _PhotoTool.smooth
-      : _PhotoTool.light;
+  late int _page;
+  late final PageController _wheel;
+  _PhotoTool get _tool => _PhotoTool.values[_page % _PhotoTool.values.length];
+
+  @override
+  void initState() {
+    super.initState();
+    _page = 3000 + (widget.faceDetected ? 0 : 1);
+    _wheel = PageController(initialPage: _page, viewportFraction: 1 / 3);
+  }
+
+  @override
+  void dispose() {
+    _wheel.dispose();
+    super.dispose();
+  }
+
+  void _select(int page) {
+    if (!widget.enabled) return;
+    _wheel.animateToPage(
+      page,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,25 +74,101 @@ class _PhotoAdjustmentsPanelState extends State<PhotoAdjustmentsPanel> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: _PhotoTool.values
-                .map(
-                  (tool) => Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: ChoiceChip(
-                      showCheckmark: false,
-                      avatar: Icon(tool.icon, size: 18),
-                      label: Text(tool.label),
-                      selected: _tool == tool,
-                      onSelected: widget.enabled
-                          ? (_) => setState(() => _tool = tool)
-                          : null,
+        Semantics(
+          liveRegion: true,
+          child: Text(
+            _tool.label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 300),
+            child: SizedBox(
+              height: 72,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  const IgnorePointer(
+                    child: SizedBox(
+                      width: 66,
+                      height: 66,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.fromBorderSide(
+                            BorderSide(color: Colors.white70, width: 1.5),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                )
-                .toList(),
+                  PageView.builder(
+                    key: const ValueKey('photo_adjustment_wheel'),
+                    controller: _wheel,
+                    physics: widget.enabled
+                        ? const PageScrollPhysics()
+                        : const NeverScrollableScrollPhysics(),
+                    onPageChanged: (page) {
+                      setState(() => _page = page);
+                      HapticFeedback.selectionClick();
+                    },
+                    itemBuilder: (context, page) {
+                      final tool =
+                          _PhotoTool.values[page % _PhotoTool.values.length];
+                      final selected = page == _page;
+                      final available =
+                          tool != _PhotoTool.smooth || widget.faceDetected;
+                      return Center(
+                        child: Semantics(
+                          button: true,
+                          selected: selected,
+                          label: 'Select ${tool.label}',
+                          onTap: widget.enabled ? () => _select(page) : null,
+                          enabled: widget.enabled,
+                          child: Tooltip(
+                            message: 'Select ${tool.label}',
+                            excludeFromSemantics: true,
+                            child: InkResponse(
+                              excludeFromSemantics: true,
+                              onTap: widget.enabled
+                                  ? () => _select(page)
+                                  : null,
+                              radius: 30,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 160),
+                                width: selected ? 56 : 48,
+                                height: selected ? 56 : 48,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: selected
+                                      ? Theme.of(context).colorScheme.primary
+                                            .withValues(alpha: .25)
+                                      : Colors.white.withValues(alpha: .07),
+                                ),
+                                child: Icon(
+                                  tool.icon,
+                                  size: selected ? 26 : 22,
+                                  color: !widget.enabled || !available
+                                      ? Colors.white38
+                                      : selected
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Colors.white70,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
         Row(
