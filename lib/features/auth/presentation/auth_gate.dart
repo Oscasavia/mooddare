@@ -134,7 +134,10 @@ class _ProfileGateState extends State<_ProfileGate> {
           if (username == null || username.isEmpty) {
             return const UsernameScreen(isGuest: false);
           }
-          return const MainScreen(isGuest: false);
+          return MainScreen(
+            isGuest: false,
+            profilePhotoUrl: snapshot.data!.data()?['photoUrl'] as String?,
+          );
         },
       );
 }
