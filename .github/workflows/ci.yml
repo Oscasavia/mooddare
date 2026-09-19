@@ -20,6 +20,8 @@ jobs:
       - run: flutter analyze
       - run: flutter test
       - run: flutter build apk --debug --target-platform android-arm64
+      - run: ./gradlew :app:testDebugUnitTest -Ptarget-platform=android-arm64
+        working-directory: android
   firebase-rules:
     runs-on: ubuntu-latest
     steps:

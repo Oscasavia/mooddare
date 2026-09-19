@@ -34,6 +34,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
     var original = false
     var outputAspect: Float? = null
     var face: FloatArray? = null
+    var faceStrength = 1f
 
     init {
         check(EGL14.eglInitialize(display, IntArray(2), 0, IntArray(2), 0))
@@ -119,7 +120,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
         GLES20.glUniform2f(uniform("stepSize"), 2f / width, 2f / height)
         val f = face
         GLES20.glUniform4f(uniform("settings"), if (original) 0f else smooth,
-            if (original) 0f else light, if (original) 0f else warmth, if (f == null) 0f else 1f)
+            if (original) 0f else light, if (original) 0f else warmth, if (f == null) 0f else faceStrength)
         GLES20.glUniform2f(uniform("shape"), if (original) 0f else eyeSize, if (original) 0f else faceSlim)
         GLES20.glUniform4fv(uniform("face"), 1, f ?: FloatArray(12), 0)
         GLES20.glUniform4fv(uniform("eyes"), 1, f ?: FloatArray(12), 4)
@@ -222,27 +223,28 @@ internal class LiveBeautyRenderer(surface: Surface) {
             vec2 enlargeEye(vec2 p, vec2 center) {
                 float distance = ellipse(p, center, face.zw * vec2(0.23, 0.15));
                 float falloff = pow(1.0 - clamp(distance, 0.0, 1.0), 2.0);
-                return center + (p - center) * (1.0 - shape.x * 0.28 * falloff);
+                return center + (p - center) * (1.0 - shape.x * settings.w * 0.20 * falloff);
             }
             void main() {
                 vec2 cropped = (uv - 0.5) * crop + 0.5;
                 vec2 p = vec2(mix(cropped.x, 1.0 - cropped.x, mirror), cropped.y);
-                if (settings.w > 0.5) {
+                if (settings.w > 0.0) {
                     // Inverse texture warps remain local and feather to zero at the boundary.
-                    float d = ellipse(p, face.xy + face.zw * vec2(0.5, 0.63), face.zw * vec2(0.65, 0.6));
+                    float d = ellipse(p, face.xy + face.zw * vec2(0.5, 0.63), face.zw * vec2(0.53, 0.55));
                     float y = (p.y - face.y) / max(face.w, 0.0001);
                     float jaw = smoothstep(0.35, 0.65, y) * (1.0 - smoothstep(0.85, 1.18, y));
-                    p.x += (p.x - face.x - face.z * 0.5) * shape.y * 0.24 * jaw *
+                    p.x += (p.x - face.x - face.z * 0.5) * shape.y * settings.w * 0.18 * jaw *
                         pow(1.0 - clamp(d, 0.0, 1.0), 2.0);
                     p = enlargeEye(p, eyes.xy);
                     p = enlargeEye(p, eyes.zw);
                 }
                 vec3 color = texture2D(image, p).rgb;
-                if (settings.x > 0.0 && settings.w > 0.5) {
+                if (settings.x > 0.0 && settings.w > 0.0) {
                     float mask = clamp((1.0 - ellipse(p, face.xy + face.zw * vec2(0.5, 0.53),
                         face.zw * vec2(0.44, 0.43))) / 0.25, 0.0, 1.0);
-                    mask *= protect(p, eyes.xy, face.zw * vec2(0.19, 0.10));
-                    mask *= protect(p, eyes.zw, face.zw * vec2(0.19, 0.10));
+                    // Include brows and lashes in the protected eye region.
+                    mask *= protect(p, eyes.xy - face.zw * vec2(0.0, 0.035), face.zw * vec2(0.20, 0.14));
+                    mask *= protect(p, eyes.zw - face.zw * vec2(0.0, 0.035), face.zw * vec2(0.20, 0.14));
                     mask *= protect(p, features.xy, face.zw * vec2(0.29, 0.13));
                     mask *= protect(p, features.zw, face.zw * vec2(0.19, 0.10));
                     if (mask > 0.0) {
@@ -253,12 +255,13 @@ internal class LiveBeautyRenderer(surface: Surface) {
                                 vec2 offset = vec2(float(x), float(y));
                                 vec3 sampleColor = texture2D(image, p + offset * stepSize).rgb;
                                 vec3 diff = sampleColor - color;
-                                float weight = exp(-dot(offset, offset) / 5.0 - dot(diff, diff) * 36.125);
+                                float weight = exp(-dot(offset, offset) / 5.0 - dot(diff, diff) * 64.0);
                                 sum += sampleColor * weight;
                                 total += weight;
                             }
                         }
-                        color = mix(color, sum / total, settings.x * mask);
+                        // Keep at least 28% of the original texture at full strength.
+                        color = mix(color, sum / total, settings.x * settings.w * mask * 0.72);
                     }
                 }
                 color = color * exp2(settings.y * 0.6) + vec3(settings.z, 0.0, -settings.z) * (14.0 / 255.0);

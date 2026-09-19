@@ -69,6 +69,8 @@ For photos, the lightning button toggles flash (off by default). Selfies use a b
 
 On Android, swipe the lens wheel around the shutter: Original, Soft, Glow, Wide eyes, Sculpt, and Studio (a combined look). The wheel wraps in both directions. Select a beauty lens and tap **Adjust lens** (the sliders icon) to reveal strength and original-comparison controls. Tap the compact dare at the top to read it in full. Eye enlargement, lower-face slimming, smoothing and color adjustments run continuously. Original is selected initially. Face effects pause when no suitable face is tracked; global color adjustments remain active.
 
+Live tracking keeps the selected person while their tracking ID remains visible, even if another face becomes larger. Adaptive landmark filtering reduces small jitters while following larger movements more quickly; short interpolation spreads coordinate updates across preview frames. Effects fade in on acquisition and reduce toward the existing head-angle limits. Known face loss/missing landmarks disable them immediately; old detections fade out and expire after 260 ms. Smoothing retains some original texture and protects the eye/brow area, while eye enlargement and jaw slimming have gentler maximum displacement. This remains geometric single-face tracking, not a full face mesh or skin segmentation model.
+
 Live photos are captured from the same GPU-rendered frame as the preview, including selfie mirroring, then enter the existing save/share/post studio. The live look is baked into the capture: the studio's **Captured** comparison restores that capture, not the pre-lens camera frame. The viewfinder sits in the vertical and horizontal center of the screen. The preview uses a centered crop at the selected ratio; saved photos use that same framing. Dark space outside the viewfinder is not included in the capture. The 3:4 option preserves the full view of a 3:4 camera stream, while taller ratios crop the sides. Capture uses pixels from the preview stream (960 × 1280 before cropping on the tested emulator), not the full sensor resolution. This first live implementation is designed for portrait use.
 
 The live engine uses native CameraX upright RGBA frames, bundled ML Kit landmarks and OpenGL ES shaders. It drops old frames instead of building a processing backlog, checks for stale tracking, and keeps all frame pixels on Android; Flutter receives a texture and small status updates. It does not require a paid SDK or cloud face processing. The approximately 29.5 fps measured on the emulator is not a physical-device performance guarantee; test latency and thermal behavior on actual phones.
@@ -86,6 +88,7 @@ flutter analyze
 flutter test
 flutter test integration_test -d <android-emulator-id>
 flutter build apk --debug --target-platform android-arm64
+cd android && ./gradlew :app:testDebugUnitTest -Ptarget-platform=android-arm64 && cd ..
 npm ci --ignore-scripts --prefix tooling/rules-tests
 firebase emulators:exec --project demo-mooddare --only firestore,storage 'npm --prefix tooling/rules-tests test'
 ```

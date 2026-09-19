@@ -33,7 +33,6 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.Executor
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
@@ -185,9 +184,7 @@ class LiveBeautyPlugin(
         private var pixels: ByteBuffer? = null
         private var detecting = false
         private var lastDetection = 0L
-        private var faceTime = 0L
-        private var faceId: Int? = null
-        private var trackedFace: FloatArray? = null
+        private val faceTracker = FaceStabilizer()
         private var fixtureMode = false
         private var count = 0
         private var rateStart = SystemClock.elapsedRealtime()
@@ -286,7 +283,7 @@ class LiveBeautyPlugin(
             width = w; height = h
             entry.surfaceTexture().setDefaultBufferSize(w, h)
             pixels = ByteBuffer.allocateDirect(w * h * 4)
-            trackedFace = null; faceVisible = false
+            faceTracker.reset(); faceVisible = false
         }
 
         private fun render(image: ImageProxy) {
@@ -317,8 +314,7 @@ class LiveBeautyPlugin(
                     detect(small)
                 }
                 // Never leave a smoothing mask painted over a departed face.
-                faceVisible = trackedFace != null && now - faceTime < 350
-                renderer!!.face = if (faceVisible) trackedFace else null
+                updateTrackedFace(now)
                 renderer!!.upload(buffer, width, height)
                 renderer!!.draw(recordFrame = recording)
                 ready = true; frames++; count++
@@ -337,29 +333,45 @@ class LiveBeautyPlugin(
             detector.process(InputImage.fromBitmap(bitmap, 0))
                 .addOnSuccessListener(executor) { faces ->
                     if (!closed) {
-                        val face = faces.filter { abs(it.headEulerAngleX) < 25 && abs(it.headEulerAngleY) < 25 && abs(it.headEulerAngleZ) < 20 &&
-                            it.getLandmark(FaceLandmark.LEFT_EYE) != null &&
-                            it.getLandmark(FaceLandmark.RIGHT_EYE) != null &&
-                            it.getLandmark(FaceLandmark.MOUTH_BOTTOM) != null &&
-                            it.getLandmark(FaceLandmark.NOSE_BASE) != null }
-                            .maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
-                        val value = face?.let { coordinates(it, bitmap.width.toFloat(), bitmap.height.toFloat()) }
-                        val previous = trackedFace
-                        // Modest temporal smoothing; reset when the tracked person changes.
-                        trackedFace = if (value != null && previous != null && face.trackingId == faceId) {
-                            FloatArray(value.size) { previous[it] * .25f + value[it] * .75f }
-                        } else value
-                        faceId = face?.trackingId
-                        faceTime = submitted
-                        faceVisible = value != null && (fixtureMode || SystemClock.elapsedRealtime() - submitted < 350)
-                        if (fixtureMode) { renderer?.face = value; renderer?.draw() }
+                        val observations = faces.map { face ->
+                            val usable = face.getLandmark(FaceLandmark.LEFT_EYE) != null &&
+                                face.getLandmark(FaceLandmark.RIGHT_EYE) != null &&
+                                face.getLandmark(FaceLandmark.MOUTH_BOTTOM) != null &&
+                                face.getLandmark(FaceLandmark.NOSE_BASE) != null
+                            FaceObservation(face.trackingId,
+                                face.boundingBox.width().toFloat() * face.boundingBox.height(),
+                                if (usable) coordinates(face, bitmap.width.toFloat(), bitmap.height.toFloat()) else null,
+                                face.headEulerAngleX, face.headEulerAngleY, face.headEulerAngleZ)
+                        }
+                        val now = SystemClock.elapsedRealtime()
+                        if (fixtureMode) {
+                            // A still fixture has no timeline; evaluate its settled pose.
+                            val face = observations.maxByOrNull { it.area }
+                            val value = face?.points?.takeIf { FaceStabilizer.valid(it) }
+                            val strength = face?.let { FaceStabilizer.poseStrength(it.pitch, it.yaw, it.roll) } ?: 0f
+                            faceVisible = value != null && strength > 0f
+                            renderer?.face = if (faceVisible) value else null
+                            renderer?.faceStrength = strength
+                            renderer?.draw()
+                        } else {
+                            faceTracker.update(observations, submitted, now)
+                            updateTrackedFace(now)
+                        }
                     }
                 }.addOnFailureListener(executor) {
-                    trackedFace = null; faceVisible = false
+                    faceTracker.reset(); faceVisible = false
+                    renderer?.face = null
                 }.addOnCompleteListener(executor) {
                     bitmap.recycle(); detecting = false; detections++
                     if (closed) finishThread()
                 }
+        }
+
+        private fun updateTrackedFace(now: Long) {
+            val tracked = faceTracker.sample(now)
+            faceVisible = tracked != null && tracked.strength > .01f
+            renderer?.face = tracked?.points
+            renderer?.faceStrength = tracked?.strength ?: 0f
         }
 
         private fun coordinates(face: Face, w: Float, h: Float): FloatArray {
