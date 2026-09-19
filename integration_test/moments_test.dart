@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:mooddare/core/app_theme.dart';
 import 'package:mooddare/core/navigation.dart';
+import 'package:mooddare/models/user_model.dart';
 import 'package:mooddare/features/feed/presentation/video_sound.dart';
 import 'package:mooddare/features/feed/presentation/screens/feed_screen.dart';
 import 'package:mooddare/features/feed/presentation/screens/post_details_screen.dart';
@@ -60,11 +61,19 @@ void main() {
         await channel.invokeMethod<void>('stop');
         final photo = moment('photo', url: 'https://fixture.invalid/photo.jpg');
         final video = moment('video', type: 'video', url: clip.uri.toString());
+        final repository = MemoryPosts([photo, video])
+          ..likerIds = ['liked-user'];
+        repository.authors['liked-user'] = UserModel(
+          id: 'liked-user',
+          username: 'moodfriend',
+          createdAt: video.createdAt,
+        );
+        addTearDown(repository.commentChanges.close);
         await tester.pumpWidget(
           MaterialApp(
             theme: AppTheme.build(),
             navigatorObservers: [appRouteObserver],
-            home: FeedScreen(repository: MemoryPosts([photo, video])),
+            home: FeedScreen(repository: repository),
           ),
         );
         await tester.pumpAndSettle();
@@ -122,6 +131,14 @@ void main() {
         await tester.pumpAndSettle();
         expect(detailPlayer.value.volume, 0);
         expect(feedPlayer.value.volume, 0);
+        await tester.longPress(find.byTooltip('Like'));
+        await tester.pumpAndSettle();
+        expect(find.text('@moodfriend'), findsOneWidget);
+        expect(detailPlayer.value.isPlaying, isFalse);
+        expect(repository.likes, 0);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        await waitForPlayer(tester);
         await tester.tap(find.byTooltip('Comments'));
         await tester.pumpAndSettle();
         expect(detailPlayer.value.isPlaying, isFalse);
@@ -147,7 +164,7 @@ void main() {
         expect(find.text('Edited native comment'), findsOneWidget);
         expect(find.text('Edited'), findsOneWidget);
         expect(find.byTooltip('Unlike comment'), findsOneWidget);
-        await tester.tap(find.byTooltip('Close comments'));
+        await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
         await waitForPlayer(tester);
         expect(find.byType(PostDetailsScreen), findsOneWidget);
@@ -156,7 +173,10 @@ void main() {
         expect(detailPlayer.value.hasError, isFalse);
         expect(detailPlayer.value.position, isNot(position));
         await tester.tapAt(tester.getCenter(find.byType(VideoPlayer)));
-        await tester.pump(const Duration(milliseconds: 500));
+        // Wait for both the double-tap recognizer and the native pause reply.
+        for (var i = 0; i < 30 && detailPlayer.value.isPlaying; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
         expect(detailPlayer.value.isPlaying, isFalse);
         await tester.pageBack();
         await tester.pumpAndSettle();

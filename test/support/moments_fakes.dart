@@ -15,6 +15,7 @@ PostModel moment(
   bool expired = false,
   String? moodId,
   String? moodName,
+  List<String> likedBy = const [],
 }) => PostModel(
   id: id,
   moodId: moodId,
@@ -27,7 +28,7 @@ PostModel moment(
   expiresAt: Timestamp.fromDate(
     DateTime.now().add(Duration(hours: expired ? -1 : 24)),
   ),
-  likedBy: [],
+  likedBy: likedBy,
 );
 
 class MemoryPosts implements PostRepository {
@@ -43,13 +44,27 @@ class MemoryPosts implements PostRepository {
       failCommentLike = false;
   int? commentCount;
   int commentLikes = 0;
+  bool failLikers = false;
+  List<String>? likerIds;
+  final authors = <String, UserModel>{};
+  final authorReads = <String>[];
   String? uid = 'viewer';
   Set<String> blocked = {};
   MemoryPosts(this.posts);
   @override
   String? get currentUserId => uid;
   @override
-  Future<UserModel?> getAuthor(String uid) async => null;
+  Future<UserModel?> getAuthor(String uid) async {
+    authorReads.add(uid);
+    return authors[uid];
+  }
+
+  @override
+  Future<List<String>> getPostLikerIds(String postId) async {
+    if (failLikers) throw StateError('Offline');
+    return likerIds ?? posts.firstWhere((p) => p.id == postId).likedBy;
+  }
+
   @override
   Future<Map<String, String>> getMoodOptions() async => {};
   @override

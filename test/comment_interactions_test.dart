@@ -144,7 +144,7 @@ void main() {
       await tester.pump();
       await tester.tap(find.byTooltip('Post comment'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Close comments'));
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(
         tester
@@ -159,7 +159,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Delete comment'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Close comments'));
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(
         tester

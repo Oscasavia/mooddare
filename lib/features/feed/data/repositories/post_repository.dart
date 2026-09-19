@@ -27,6 +27,12 @@ class PostRepository {
     return doc.exists ? UserModel.fromFirestore(doc) : null;
   }
 
+  Future<List<String>> getPostLikerIds(String postId) async {
+    final doc = await _firestore.collection('posts').doc(postId).get();
+    if (!doc.exists) throw StateError('This moment is no longer available.');
+    return List<String>.from(doc.data()?['likedBy'] ?? []);
+  }
+
   Future<void> createPost({
     required String dareText,
     required File mediaFile,

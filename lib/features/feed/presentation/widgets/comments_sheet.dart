@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import 'package:mooddare/core/app_routes.dart';
+import 'author_identity.dart';
 import 'package:mooddare/core/compact_count.dart';
 import 'package:mooddare/models/comment_model.dart';
 import 'package:mooddare/models/post_model.dart';
@@ -185,17 +187,14 @@ class _CommentsSheetState extends State<CommentsSheet> {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
-                    IconButton(
-                      tooltip: _editing == null
-                          ? 'Close comments'
-                          : 'Cancel edit',
-                      onPressed: _editing == null
-                          ? () => Navigator.pop(context)
-                          : _sending
-                          ? null
-                          : _cancelEdit,
-                      icon: const Icon(Icons.close),
-                    ),
+                    if (_editing != null)
+                      TextButton(
+                        onPressed: _sending ? null : _cancelEdit,
+                        child: const Tooltip(
+                          message: 'Cancel edit',
+                          child: Text('Cancel'),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -251,107 +250,145 @@ class _CommentsSheetState extends State<CommentsSheet> {
                           return ListView.builder(
                             controller: _scroll,
                             reverse: true,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 8,
-                            ),
+                            padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
                             itemCount: comments.length,
                             itemBuilder: (context, index) {
                               final comment = comments[index];
                               return Padding(
-                                padding: const EdgeInsets.only(bottom: 18),
-                                child: Row(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Expanded(
-                                      child: FutureBuilder<UserModel?>(
-                                        future: _authors.putIfAbsent(
-                                          comment.authorId,
-                                          () => widget.repository.getAuthor(
-                                            comment.authorId,
-                                          ),
-                                        ),
-                                        builder: (context, snapshot) => Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              snapshot.data?.username == null
-                                                  ? 'MoodDare member'
-                                                  : '@${snapshot.data!.username}',
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.labelLarge,
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(comment.text),
-                                            if (comment.editedAt != null)
-                                              Text(
-                                                'Edited',
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .labelSmall
-                                                    ?.copyWith(
-                                                      color: Colors.white60,
-                                                    ),
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    Column(
+                                    Row(
                                       children: [
-                                        IconButton(
-                                          key: ValueKey(
-                                            'comment_like_${comment.id}',
-                                          ),
-                                          tooltip: comment.likedBy.contains(uid)
-                                              ? 'Unlike comment'
-                                              : 'Like comment',
-                                          onPressed:
-                                              uid == null ||
-                                                  _liking.contains(comment.id)
-                                              ? null
-                                              : () => _like(comment),
-                                          icon: Icon(
-                                            comment.likedBy.contains(uid)
-                                                ? Icons.favorite
-                                                : Icons.favorite_outline,
-                                            size: 22,
-                                            color: Colors.white,
+                                        Expanded(
+                                          child: FutureBuilder<UserModel?>(
+                                            future: _authors.putIfAbsent(
+                                              comment.authorId,
+                                              () => widget.repository.getAuthor(
+                                                comment.authorId,
+                                              ),
+                                            ),
+                                            builder: (context, snapshot) =>
+                                                AuthorIdentity(
+                                                  user: snapshot.data,
+                                                  avatarKey: ValueKey(
+                                                    'comment_avatar_${comment.id}',
+                                                  ),
+                                                  nameKey: ValueKey(
+                                                    'comment_author_${comment.id}',
+                                                  ),
+                                                  onPressed: () {
+                                                    _focus.unfocus();
+                                                    Navigator.pushNamed(
+                                                      context,
+                                                      profileRoute,
+                                                      arguments:
+                                                          comment.authorId,
+                                                    );
+                                                  },
+                                                ),
                                           ),
                                         ),
-                                        Text(
-                                          compactCount(comment.likedBy.length),
-                                          semanticsLabel:
-                                              '${comment.likedBy.length} likes',
-                                        ),
+                                        if (uid != null &&
+                                            (uid == comment.authorId ||
+                                                uid == widget.post.authorId))
+                                          PopupMenuButton<String>(
+                                            key: ValueKey(
+                                              'comment_menu_${comment.id}',
+                                            ),
+                                            tooltip: 'Comment options',
+                                            onSelected: (action) {
+                                              if (action == 'edit') {
+                                                _edit(comment);
+                                              } else {
+                                                _delete(comment);
+                                              }
+                                            },
+                                            itemBuilder: (_) => [
+                                              if (uid == comment.authorId)
+                                                const PopupMenuItem(
+                                                  value: 'edit',
+                                                  child: Text('Edit comment'),
+                                                ),
+                                              const PopupMenuItem(
+                                                value: 'delete',
+                                                child: Text('Delete comment'),
+                                              ),
+                                            ],
+                                          ),
                                       ],
                                     ),
-                                    if (uid != null &&
-                                        (uid == comment.authorId ||
-                                            uid == widget.post.authorId))
-                                      PopupMenuButton<String>(
-                                        tooltip: 'Comment options',
-                                        onSelected: (action) {
-                                          if (action == 'edit') {
-                                            _edit(comment);
-                                          } else {
-                                            _delete(comment);
-                                          }
-                                        },
-                                        itemBuilder: (_) => [
-                                          if (uid == comment.authorId)
-                                            const PopupMenuItem(
-                                              value: 'edit',
-                                              child: Text('Edit comment'),
-                                            ),
-                                          const PopupMenuItem(
-                                            value: 'delete',
-                                            child: Text('Delete comment'),
-                                          ),
-                                        ],
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        right: 12,
+                                        top: 4,
                                       ),
+                                      child: Text(
+                                        comment.text,
+                                        key: ValueKey(
+                                          'comment_text_${comment.id}',
+                                        ),
+                                      ),
+                                    ),
+                                    Row(
+                                      children: [
+                                        Tooltip(
+                                          message: comment.likedBy.contains(uid)
+                                              ? 'Unlike comment'
+                                              : 'Like comment',
+                                          child: TextButton.icon(
+                                            key: ValueKey(
+                                              'comment_like_${comment.id}',
+                                            ),
+                                            onPressed:
+                                                uid == null ||
+                                                    _liking.contains(comment.id)
+                                                ? null
+                                                : () => _like(comment),
+                                            style: TextButton.styleFrom(
+                                              foregroundColor: Colors.white,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                  ),
+                                              minimumSize: const Size(48, 48),
+                                            ),
+                                            icon: Icon(
+                                              comment.likedBy.contains(uid)
+                                                  ? Icons.favorite
+                                                  : Icons.favorite_outline,
+                                              size: 22,
+                                            ),
+                                            label: Text(
+                                              compactCount(
+                                                comment.likedBy.length,
+                                              ),
+                                              key: ValueKey(
+                                                'comment_count_${comment.id}',
+                                              ),
+                                              semanticsLabel:
+                                                  '${comment.likedBy.length} likes',
+                                            ),
+                                          ),
+                                        ),
+                                        if (comment.editedAt != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              left: 8,
+                                            ),
+                                            child: Text(
+                                              'Edited',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .labelSmall
+                                                  ?.copyWith(
+                                                    color: Colors.white60,
+                                                  ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
                                   ],
                                 ),
                               );

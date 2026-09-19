@@ -11,6 +11,8 @@ import 'package:mooddare/core/compact_count.dart';
 import '../screens/post_details_screen.dart';
 import '../video_sound.dart';
 import 'comments_sheet.dart';
+import 'author_identity.dart';
+import 'post_likes_sheet.dart';
 
 class DareProofCard extends StatefulWidget {
   final PostModel post;
@@ -45,7 +47,8 @@ class _DareProofCardState extends State<DareProofCard>
       _opening = false,
       _pausedByUser = false,
       _sharing = false,
-      _commenting = false;
+      _commenting = false,
+      _viewingLikes = false;
   int _likes = 0;
   String? get _uid => _repository.currentUserId;
   bool get _shouldPlay =>
@@ -55,6 +58,7 @@ class _DareProofCardState extends State<DareProofCard>
       !_opening &&
       !_sharing &&
       !_commenting &&
+      !_viewingLikes &&
       !_pausedByUser;
   @override
   void initState() {
@@ -133,6 +137,18 @@ class _DareProofCardState extends State<DareProofCard>
         _syncPlayback();
         _refreshCommentCount();
       }
+    }
+  }
+
+  Future<void> _showLikes() async {
+    if (_viewingLikes) return;
+    _viewingLikes = true;
+    _syncPlayback();
+    try {
+      await showPostLikes(context, widget.post.id, _repository);
+    } finally {
+      _viewingLikes = false;
+      if (mounted) _syncPlayback();
     }
   }
 
@@ -371,6 +387,8 @@ class _DareProofCardState extends State<DareProofCard>
               children: [
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
+                  // Resolve single and double media taps in the same detector.
+                  onTap: _openMoment,
                   onDoubleTap: () {
                     if (!_liked) _like();
                   },
@@ -478,52 +496,11 @@ class _DareProofCardState extends State<DareProofCard>
                         future: _author,
                         builder: (context, snapshot) {
                           final author = snapshot.data;
-                          return Row(
-                            children: [
-                              Semantics(
-                                button: true,
-                                label: 'View author profile',
-                                child: GestureDetector(
-                                  key: const ValueKey('moment_author_avatar'),
-                                  onTap: _openAuthor,
-                                  child: SizedBox(
-                                    width: 48,
-                                    height: 48,
-                                    child: Center(
-                                      child: CircleAvatar(
-                                        radius: 18,
-                                        backgroundImage:
-                                            author?.photoUrl != null
-                                            ? NetworkImage(author!.photoUrl!)
-                                            : null,
-                                        child: author?.photoUrl == null
-                                            ? const Icon(
-                                                Icons.person_outline,
-                                                size: 20,
-                                              )
-                                            : null,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: TextButton(
-                                  key: const ValueKey('moment_author_name'),
-                                  onPressed: _openAuthor,
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      author?.username == null
-                                          ? 'MoodDare member'
-                                          : '@${author!.username}',
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                          return AuthorIdentity(
+                            user: author,
+                            onPressed: _openAuthor,
+                            avatarKey: const ValueKey('moment_author_avatar'),
+                            nameKey: const ValueKey('moment_author_name'),
                           );
                         },
                       ),
@@ -538,6 +515,7 @@ class _DareProofCardState extends State<DareProofCard>
                               IconButton(
                                 tooltip: _liked ? 'Unlike' : 'Like',
                                 onPressed: _liking ? null : _like,
+                                onLongPress: _showLikes,
                                 icon: Icon(
                                   _liked
                                       ? Icons.favorite

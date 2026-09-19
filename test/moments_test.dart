@@ -123,7 +123,7 @@ void main() {
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
       isEmpty,
     );
-    await tester.tap(find.byTooltip('Close comments'));
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     await tapMedia(tester);
     await tester.tap(find.byTooltip('Comments'));
@@ -339,7 +339,7 @@ void main() {
     await tester.tap(find.byTooltip('Comments'));
     await tester.pumpAndSettle();
     expect(video.playing[detail], isFalse);
-    await tester.tap(find.byTooltip('Close comments'));
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(video.playing[detail], isTrue);
     await tester.pageBack();
