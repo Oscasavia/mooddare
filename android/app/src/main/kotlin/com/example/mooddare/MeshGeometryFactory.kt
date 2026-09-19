@@ -3,10 +3,12 @@ package com.example.mooddare
 import com.google.mlkit.vision.facemesh.FaceMesh
 
 internal object MeshGeometryFactory {
-    fun matching(meshes: List<FaceMesh>, face: FloatArray, width: Int, height: Int): FaceGeometry? =
+    fun matching(meshes: List<FaceMesh>, face: FloatArray, width: Int, height: Int,
+        region: FloatArray = floatArrayOf(0f, 0f, 1f, 1f)): FaceGeometry? =
         meshes.mapNotNull { mesh ->
             fun contour(type: Int) = mesh.getPoints(type).flatMap {
-                listOf(it.position.x / width, it.position.y / height)
+                listOf(region[0] + it.position.x / width * region[2],
+                    region[1] + it.position.y / height * region[3])
             }.toFloatArray()
             fun joined(a: Int, b: Int) = FaceGeometry.join(contour(a), contour(b))
             FaceGeometry.create(listOf(

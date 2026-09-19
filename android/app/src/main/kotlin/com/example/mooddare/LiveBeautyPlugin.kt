@@ -130,14 +130,14 @@ class LiveBeautyPlugin(
                 session?.inspectGeometry(result, call.argument<List<List<Number>>>("polygons"))
                     ?: result.error("closed", "Camera is closed.", null)
             }
-            "capture", "captureStillFixture" -> {
-                val fixture = call.method == "captureStillFixture"
+            "capture", "captureStillFixture", "captureDetectedStillFixture" -> {
+                val fixture = call.method != "capture"
                 if (fixture && activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) {
                     result.notImplemented(); return
                 }
                 val current = session
                 if (current == null) result.error("closed", "Camera is closed.", null)
-                else current.capture(result, call.argument<Boolean>("flash") ?: false, fixture)
+                else current.capture(result, call.argument<Boolean>("flash") ?: false, fixture, call.method == "captureDetectedStillFixture")
             }
             "setCaptureLight" -> {
                 val current = session
@@ -210,6 +210,7 @@ class LiveBeautyPlugin(
         private var stillCapture: ImageCapture? = null
         private var photoResult: MethodChannel.Result? = null
         private var photoDetecting = false
+        @Volatile private var photoDiagnostic: Map<String, Any?> = emptyMap()
         private var threadFinished = false
         private val photoTimeout = Runnable { finishPhoto(null, "Photo capture timed out. Please try again.") }
         private var renderer: LiveBeautyRenderer? = null
@@ -485,6 +486,7 @@ class LiveBeautyPlugin(
         fun status(): Map<String, Any?> = mapOf("ready" to ready, "width" to width, "height" to height,
             "front" to front,
             "highQualityPhotos" to (stillCapture != null),
+            "photoDetection" to photoDiagnostic,
             "hasFlash" to (camera?.cameraInfo?.hasFlashUnit() ?: false), "captureLight" to captureLight,
             "faceDetected" to faceVisible, "geometryDetected" to geometryVisible,
             "detectionMillis" to detectionMillis, "fps" to fps, "frames" to frames,
@@ -615,12 +617,16 @@ class LiveBeautyPlugin(
             }
         }
 
-        fun capture(result: MethodChannel.Result, flash: Boolean = false, highQualityFixture: Boolean = false) {
+        fun capture(result: MethodChannel.Result, flash: Boolean = false, highQualityFixture: Boolean = false, detectFixture: Boolean = false) {
             handler.post {
                 try {
                     check(!closed && ready) { "Camera is not ready" }
                     check(!recording && photoResult == null && !photoDetecting) { "Capture is busy" }
                     check(!flash || (captureLight && frames > lightFrame + 2)) { "Wait for an illuminated frame" }
+                    if (activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+                        val r = renderer!!
+                        android.util.Log.d("MoodDarePhoto", "Shutter makeup=${r.makeup}, original=${r.original}, face=${r.face != null}, mesh=${r.faceGeometry != null}, strength=${r.faceStrength}")
+                    }
                     val still = stillCapture
                     if (highQualityFixture) {
                         check(fixtureMode)
@@ -630,6 +636,12 @@ class LiveBeautyPlugin(
                         val bitmap = if (scale < 1f) Bitmap.createScaledBitmap(decoded,
                             (decoded.width * scale).toInt(), (decoded.height * scale).toInt(), true) else decoded
                         if (bitmap !== decoded) decoded.recycle()
+                        if (detectFixture) {
+                            photoResult = result
+                            handler.postDelayed(photoTimeout, 20_000)
+                            processPhoto(bitmap, renderer!!.face?.copyOf(), result)
+                            return@post
+                        }
                         val file = File(activity.cacheDir, "mooddare-still-fixture-${UUID.randomUUID()}.jpg")
                         try { renderer!!.captureStill(bitmap, file, renderer!!.face, renderer!!.faceStrength) }
                         finally { bitmap.recycle() }
@@ -678,6 +690,11 @@ class LiveBeautyPlugin(
                 finishPhoto(null, "Could not process this photo. Please try again.")
             } finally { image.close() }
             val photo = bitmap ?: return
+            processPhoto(photo, anchor, request)
+        }
+
+        // Both CameraX and the regression fixture use the actual still-image detectors.
+        private fun processPhoto(photo: Bitmap, anchor: FloatArray?, request: MethodChannel.Result) {
             if (closed || photoResult !== request) { photo.recycle(); return }
             val output = renderer!!
             if (output.original || (output.smooth == 0f && output.eyeSize == 0f && output.faceSlim == 0f && output.makeup == 0f)) {
@@ -686,46 +703,94 @@ class LiveBeautyPlugin(
             }
             photoDetecting = true
             try {
-                val input = InputImage.fromBitmap(photo, 0)
-                val facesTask = photoDetector.process(input)
-                val meshTask = try {
-                    if (output.smooth > 0f || output.makeup > 0f) photoMeshDetector.process(input)
-                    else Tasks.forResult(emptyList<FaceMesh>())
-                }
-                    catch (e: Exception) { Tasks.forException<List<FaceMesh>>(e) }
-                Tasks.whenAllComplete(facesTask, meshTask).addOnCompleteListener(executor) {
+                photoDetector.process(InputImage.fromBitmap(photo, 0)).addOnCompleteListener(executor) { task ->
+                    var handedToMesh = false
                     try {
-                        if (!closed && photoResult === request) {
-                            if (!facesTask.isSuccessful) {
-                                finishPhoto(null, "Could not apply this lens. Please try again.")
-                                return@addOnCompleteListener
-                            }
-                            val meshes = if (meshTask.isSuccessful) meshTask.result else emptyList()
-                            val candidates = facesTask.result.mapNotNull { face ->
-                                val types = listOf(FaceLandmark.LEFT_EYE, FaceLandmark.RIGHT_EYE, FaceLandmark.MOUTH_BOTTOM, FaceLandmark.NOSE_BASE)
-                                if (types.any { face.getLandmark(it) == null }) null else {
-                                    val points = coordinates(face, photo.width.toFloat(), photo.height.toFloat())
-                                    if (!FaceStabilizer.valid(points)) null else Pair(face, points)
-                                }
-                            }
-                            val picked = if (anchor == null) candidates.maxByOrNull { it.second[2] * it.second[3] }
-                                else candidates.minByOrNull { faceDistance(it.second, anchor) }
-                                    ?.takeIf { faceDistance(it.second, anchor) < 1f }
-                            val quality = picked?.first?.let { FaceStabilizer.poseStrength(it.headEulerAngleX, it.headEulerAngleY, it.headEulerAngleZ) } ?: 0f
-                            val geometry = picked?.second?.let { MeshGeometryFactory.matching(meshes, it, photo.width, photo.height) }
-                            renderStill(photo, picked?.second, quality, geometry)
+                        if (closed || photoResult !== request) return@addOnCompleteListener
+                        if (!task.isSuccessful) {
+                            finishPhoto(null, "Could not apply this lens. Please try again.")
+                            return@addOnCompleteListener
                         }
+                        val candidates = task.result.mapNotNull { face ->
+                            val types = listOf(FaceLandmark.LEFT_EYE, FaceLandmark.RIGHT_EYE, FaceLandmark.MOUTH_BOTTOM, FaceLandmark.NOSE_BASE)
+                            if (types.any { face.getLandmark(it) == null }) null else {
+                                val points = coordinates(face, photo.width.toFloat(), photo.height.toFloat())
+                                if (!FaceStabilizer.valid(points)) null else Pair(face, points)
+                            }
+                        }
+                        val picked = if (anchor == null) candidates.maxByOrNull { it.second[2] * it.second[3] }
+                            else candidates.minByOrNull { faceDistance(it.second, anchor) }
+                                ?.takeIf { faceDistance(it.second, anchor) < 1f }
+                        val quality = picked?.first?.let { FaceStabilizer.poseStrength(it.headEulerAngleX, it.headEulerAngleY, it.headEulerAngleZ) } ?: 0f
+                        photoDiagnostic = mapOf("width" to photo.width, "height" to photo.height,
+                            "faces" to task.result.size, "candidates" to candidates.size,
+                            "quality" to quality, "pitch" to picked?.first?.headEulerAngleX,
+                            "yaw" to picked?.first?.headEulerAngleY, "roll" to picked?.first?.headEulerAngleZ)
+                        if (picked != null && quality > 0f && (output.smooth > 0f || output.makeup > 0f)) {
+                            handedToMesh = true
+                            detectPhotoMesh(photo, picked.second, quality, request, 0)
+                        } else renderStill(photo, picked?.second, quality)
+                    } catch (_: Exception) {
+                        if (photoResult === request) finishPhoto(null, "Could not apply this lens. Please try again.")
+                    } finally { if (!handedToMesh) completePhotoDetection(photo) }
+                }
+            } catch (_: Exception) {
+                completePhotoDetection(photo)
+                finishPhoto(null, "Could not apply this lens. Please try again.")
+            }
+        }
+
+        /** Try live analysis size, then a padded face crop, then the original still.
+         * Every attempt reads this exposure, never cached preview mesh coordinates. */
+        private fun detectPhotoMesh(photo: Bitmap, face: FloatArray, quality: Float,
+            request: MethodChannel.Result, attempt: Int) {
+            var bitmap = photo
+            try {
+                if (closed || photoResult !== request) { completePhotoDetection(photo); return }
+                val region = if (attempt == 1) PhotoMeshRegion.around(face, photo.width, photo.height)
+                    else PhotoMeshRegion(0, 0, photo.width, photo.height)
+                if (attempt == 1) bitmap = Bitmap.createBitmap(photo, region.x, region.y, region.width, region.height)
+                val edge = if (attempt == 0) 480f else if (attempt == 1) 640f else 2048f
+                val scale = min(1f, edge / max(bitmap.width, bitmap.height))
+                if (scale < 1f) {
+                    val reduced = Bitmap.createScaledBitmap(bitmap,
+                        (bitmap.width * scale).toInt().coerceAtLeast(1),
+                        (bitmap.height * scale).toInt().coerceAtLeast(1), true)
+                    if (bitmap !== photo && bitmap !== reduced) bitmap.recycle()
+                    bitmap = reduced
+                }
+                photoMeshDetector.process(InputImage.fromBitmap(bitmap, 0)).addOnCompleteListener(executor) { task ->
+                    var retry = false
+                    try {
+                        if (closed || photoResult !== request) return@addOnCompleteListener
+                        val meshes = if (task.isSuccessful) task.result else emptyList()
+                        val geometry = MeshGeometryFactory.matching(meshes, face, bitmap.width, bitmap.height,
+                            region.normalized(photo.width, photo.height))
+                        photoDiagnostic = photoDiagnostic + mapOf("attempt" to attempt, "meshes" to meshes.size,
+                            "matched" to (geometry != null), "meshWidth" to bitmap.width, "meshHeight" to bitmap.height,
+                            "meshSucceeded" to task.isSuccessful)
+                        if (activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0)
+                            android.util.Log.d("MoodDarePhoto", photoDiagnostic.toString())
+                        if (geometry == null && attempt < 2) retry = true
+                        else renderStill(photo, face, quality, geometry)
                     } catch (_: Exception) {
                         if (photoResult === request) finishPhoto(null, "Could not apply this lens. Please try again.")
                     } finally {
-                        photo.recycle(); photoDetecting = false
-                        if (closed) maybeFinishThread()
+                        if (bitmap !== photo) bitmap.recycle()
+                        if (retry) detectPhotoMesh(photo, face, quality, request, attempt + 1)
+                        else completePhotoDetection(photo)
                     }
                 }
             } catch (_: Exception) {
-                photo.recycle(); photoDetecting = false
-                finishPhoto(null, "Could not apply this lens. Please try again.")
+                if (bitmap !== photo) bitmap.recycle()
+                completePhotoDetection(photo)
+                if (photoResult === request) finishPhoto(null, "Could not apply this lens. Please try again.")
             }
+        }
+
+        private fun completePhotoDetection(photo: Bitmap) {
+            photo.recycle(); photoDetecting = false
+            if (closed) maybeFinishThread()
         }
 
         private fun faceDistance(face: FloatArray, anchor: FloatArray): Float {
