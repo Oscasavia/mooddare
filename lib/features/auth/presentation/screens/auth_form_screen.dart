@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:mooddare/core/user_message.dart';
 import '../../data/repositories/auth_repository.dart';
 import 'forgot_password_screen.dart';
@@ -14,10 +15,19 @@ class AuthFormScreen extends StatefulWidget {
 class _AuthFormScreenState extends State<AuthFormScreen> {
   final _form = GlobalKey<FormState>();
   final _email = TextEditingController(), _password = TextEditingController();
+  final _accountLink = TapGestureRecognizer();
   late final _auth = widget.repository ?? AuthRepository();
   late bool _signUp = widget.signUp;
   bool _busy = false, _obscure = true;
   String? _error;
+  void _switchAccountMode() {
+    if (_busy) return;
+    setState(() {
+      _signUp = !_signUp;
+      _error = null;
+    });
+  }
+
   Future<void> _submit({bool google = false}) async {
     if (_busy || (!google && !_form.currentState!.validate())) return;
     FocusScope.of(context).unfocus();
@@ -51,6 +61,7 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
   void dispose() {
     _email.dispose();
     _password.dispose();
+    _accountLink.dispose();
     super.dispose();
   }
 
@@ -223,21 +234,31 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                           ],
                         ),
                       ),
-                      TextButton(
-                        style: TextButton.styleFrom(
-                          minimumSize: const Size.fromHeight(52),
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: _signUp
+                                  ? 'Already a member? '
+                                  : 'New here? ',
+                              style: const TextStyle(color: Colors.white60),
+                            ),
+                            TextSpan(
+                              text: _signUp ? 'Sign in' : 'Create an account',
+                              style: TextStyle(
+                                color: _busy
+                                    ? Colors.white38
+                                    : Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                                decoration: TextDecoration.underline,
+                              ),
+                              recognizer: _busy
+                                  ? null
+                                  : (_accountLink..onTap = _switchAccountMode),
+                            ),
+                          ],
                         ),
-                        onPressed: _busy
-                            ? null
-                            : () => setState(() {
-                                _signUp = !_signUp;
-                                _error = null;
-                              }),
-                        child: Text(
-                          _signUp
-                              ? 'Already a member? Sign in'
-                              : 'New here? Create an account',
-                        ),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
