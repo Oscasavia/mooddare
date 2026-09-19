@@ -250,7 +250,6 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                                     ? Colors.white38
                                     : Theme.of(context).colorScheme.primary,
                                 fontWeight: FontWeight.w600,
-                                decoration: TextDecoration.underline,
                               ),
                               recognizer: _busy
                                   ? null
