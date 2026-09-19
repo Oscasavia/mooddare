@@ -7,6 +7,14 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private var beauty: BeautyPlugin? = null
     private var liveBeauty: LiveBeautyPlugin? = null
+    override fun onPause() {
+        liveBeauty?.onPause()
+        super.onPause()
+    }
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        liveBeauty?.onPermissionResult(requestCode, grantResults)
+    }
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         beauty = BeautyPlugin(applicationContext)

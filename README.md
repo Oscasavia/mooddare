@@ -28,7 +28,11 @@ Live photos are captured from the same GPU-rendered frame as the preview, includ
 
 The live engine uses native CameraX upright RGBA frames, bundled ML Kit landmarks and OpenGL ES shaders. It drops old frames instead of building a processing backlog, checks for stale tracking, and keeps all frame pixels on Android; Flutter receives a texture and small status updates. It does not require a paid SDK or cloud face processing. The approximately 29.5 fps measured on the emulator is not a physical-device performance guarantee; test latency and thermal behavior on actual phones.
 
-Videos record without beauty effects, up to 30 seconds. iOS currently supports photo color adjustments and normal capture; face smoothing and live lenses need native iOS implementation and validation. Virtual makeup, AR masks/stickers, full face-mesh tracking and live effects in recorded video are future work.
+Choose **Video** inside Live beauty to record the selected lens with microphone audio, for up to 30 seconds. You can change lenses and strength while recording. The MP4 contains the same GPU effects and selfie mirroring as the preview and uses the existing playback/save/share/post flow. Recording stops when the app loses focus; returning to the camera opens the completed clip for review while the app process remains alive. An interrupted clip that is too short to encode may be discarded.
+
+Live video targets H.264 at 4 Mbps with mono AAC audio at 96 kbps. Dimensions preserve the camera aspect ratio, capped at a 720-pixel short edge and 1280-pixel long edge (720 × 960 for the tested portrait stream). The encoder targets 30 fps; actual frame delivery depends on the phone. Native duration/file limits bound recordings. The standard camera also remains available for video without live effects.
+
+iOS currently supports photo color adjustments and normal capture; face smoothing and live lenses need native iOS implementation and validation. Virtual makeup, AR masks/stickers and full face-mesh tracking are future work.
 
 ## Verification
 
@@ -41,7 +45,7 @@ npm ci --ignore-scripts --prefix tooling/rules-tests
 firebase emulators:exec --project demo-mooddare --only firestore,storage 'npm --prefix tooling/rules-tests test'
 ```
 
-The Android integration tests use a public-domain U.S. Navy portrait of Grace Hopper (James S. Davis; TensorFlow test crop). They verify detection, GPU pixel effects, no-face bypass, orientation/mirroring, export, editor UI, continuous frames, camera switching, capture/retake and rapid background/resume without posting to Firebase. Run these on a test emulator: Flutter's integration runner may uninstall the app afterward. Allow camera access when Android prompts. The test fixture is not part of the normal app bundle, and the native fixture entry point is disabled in release builds.
+The Android integration tests use a public-domain U.S. Navy portrait of Grace Hopper (James S. Davis; TensorFlow test crop). They cover detection, GPU pixel effects, no-face bypass, orientation/mirroring, export, editor UI, continuous frames, camera switching, capture/retake and rapid background/resume without posting to Firebase. Video tests check encoded effects against a GPU still, H.264/AAC tracks and duration, playback, the 30-second limit and interrupted-clip recovery. Run these on a test emulator: Flutter's integration runner may uninstall the app afterward. Allow camera and microphone access when Android prompts. The test fixture is not part of the normal app bundle, and native fixture/track-inspection entry points are disabled in release builds.
 
 ## Structure
 
@@ -50,7 +54,7 @@ The Android integration tests use a public-domain U.S. Navy portrait of Grace Ho
 - `lib/features/auth`, `user`, `profile`: account flow and profile management.
 - `lib/features/dares`: discovery and local starter dares if the remote catalog is empty or unavailable.
 - `android/.../BeautyPlugin.kt`: bundled native face detector.
-- `android/.../LiveBeautyPlugin.kt` and `LiveBeautyRenderer.kt`: native live camera, landmark tracking and GPU lens rendering/capture.
+- `android/.../LiveBeautyPlugin.kt`, `LiveBeautyRenderer.kt` and `LiveBeautyRecorder.kt`: native live camera, landmark tracking, GPU lens rendering/capture and MP4 recording with audio.
 - `firestore.rules`, `storage.rules`, `firestore.indexes.json`: versioned backend access policy, not automatically deployed.
 - `docs/RELEASE.md`: required migration and release work.
 

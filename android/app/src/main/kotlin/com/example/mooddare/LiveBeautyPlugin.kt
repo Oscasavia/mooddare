@@ -5,6 +5,8 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
@@ -16,6 +18,7 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
+import androidx.core.app.ActivityCompat
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
@@ -31,6 +34,7 @@ import java.util.UUID
 import java.util.concurrent.Executor
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 
 /** A single native session owns camera frames, face tracking, and GPU rendering. */
 class LiveBeautyPlugin(
@@ -39,9 +43,42 @@ class LiveBeautyPlugin(
 ) : MethodChannel.MethodCallHandler {
     private val main = Handler(Looper.getMainLooper())
     private var session: Session? = null
+    @Volatile private var pendingVideo: String? = null
+    private var microphoneResult: MethodChannel.Result? = null
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
+            "inspectVideo" -> {
+                if (activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) { result.notImplemented(); return }
+                val file = call.argument<String>("path")?.let { File(it).canonicalFile }
+                if (file == null || !file.path.startsWith(activity.cacheDir.canonicalPath + File.separator)) {
+                    result.error("invalid_input", "Video must be in the app cache.", null); return
+                }
+                Thread {
+                    val extractor = MediaExtractor()
+                    try {
+                        extractor.setDataSource(file.path)
+                        val tracks = (0 until extractor.trackCount).map { index ->
+                            val format = extractor.getTrackFormat(index)
+                            mapOf("mime" to format.getString(MediaFormat.KEY_MIME),
+                                "durationUs" to if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 0L)
+                        }
+                        main.post { result.success(tracks) }
+                    } catch (_: Exception) { main.post { result.error("video", "Could not inspect video.", null) } }
+                    finally { extractor.release() }
+                }.start()
+            }
+            "requestMicrophone" -> {
+                if (ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    result.success(true)
+                } else if (microphoneResult != null) {
+                    result.error("busy", "A permission request is already open.", null)
+                } else {
+                    microphoneResult = result
+                    ActivityCompat.requestPermissions(activity, arrayOf(Manifest.permission.RECORD_AUDIO), 7426)
+                }
+            }
+            "takePendingVideo" -> { val path = pendingVideo; pendingVideo = null; result.success(path) }
             "start", "startFixture" -> {
                 if (session != null) { result.error("busy", "Close the current camera first.", null); return }
                 val fixture = if (call.method == "startFixture") {
@@ -75,6 +112,20 @@ class LiveBeautyPlugin(
                 if (current == null) result.error("closed", "Camera is closed.", null)
                 else current.capture(result)
             }
+            "startRecording" -> {
+                val current = session
+                if (current == null) result.error("closed", "Camera is closed.", null)
+                else if (ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    result.error("microphone", "Allow microphone access to record video with audio.", null)
+                } else current.startRecording(result)
+            }
+            "stopRecording" -> {
+                val current = session
+                if (current == null) {
+                    val path = pendingVideo; pendingVideo = null
+                    if (path != null) result.success(path) else result.error("closed", "No video was recorded.", null)
+                } else current.stopRecording(result)
+            }
             "stop" -> {
                 val current = session
                 session = null
@@ -84,7 +135,19 @@ class LiveBeautyPlugin(
         }
     }
 
-    fun close() { val old = session; session = null; old?.close {} }
+    fun onPermissionResult(requestCode: Int, grantResults: IntArray) {
+        if (requestCode != 7426) return
+        microphoneResult?.success(grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED)
+        microphoneResult = null
+    }
+
+    // Native lifecycle protection stops the microphone even if Dart is paused.
+    fun onPause() { session?.interruptRecording() }
+
+    fun close() {
+        microphoneResult?.success(false); microphoneResult = null
+        val old = session; session = null; old?.close {}
+    }
 
     private inner class Session(val entry: TextureRegistry.SurfaceTextureEntry, val front: Boolean) {
         private val thread = HandlerThread("MoodDareLiveBeauty").apply { start() }
@@ -117,6 +180,19 @@ class LiveBeautyPlugin(
         @Volatile private var frames = 0L
         @Volatile private var detections = 0L
         private var startResult: MethodChannel.Result? = null
+        private var recorder: LiveBeautyRecorder? = null
+        @Volatile private var recording = false
+        @Volatile private var recordingStarted = 0L
+        @Volatile private var recordingError: String? = null
+        private val recordingLimit = Runnable { finishRecording() }
+        private val fixtureFrames = object : Runnable {
+            override fun run() {
+                if (closed || !recording) return
+                try { renderer?.draw(recordFrame = true); frames++ }
+                catch (_: Exception) { finishRecording() }
+                if (recording) handler.postDelayed(this, 33)
+            }
+        }
 
         fun start(fixture: File?, result: MethodChannel.Result) {
             startResult = result
@@ -223,13 +299,14 @@ class LiveBeautyPlugin(
                 faceVisible = trackedFace != null && now - faceTime < 350
                 renderer!!.face = if (faceVisible) trackedFace else null
                 renderer!!.upload(buffer, width, height)
-                renderer!!.draw()
+                renderer!!.draw(recordFrame = recording)
                 ready = true; frames++; count++
                 val elapsed = now - rateStart
                 if (elapsed >= 1000) { fps = count * 1000.0 / elapsed; count = 0; rateStart = now }
             } catch (e: Exception) {
                 ready = false
                 error = "Live preview stopped. Close and reopen the camera."
+                finishRecording()
             } finally { image.close() }
         }
 
@@ -278,7 +355,57 @@ class LiveBeautyPlugin(
 
         fun status(): Map<String, Any?> = mapOf("ready" to ready, "width" to width, "height" to height,
             "faceDetected" to faceVisible, "fps" to fps, "frames" to frames,
-            "detections" to detections, "error" to error)
+            "detections" to detections, "error" to error,
+            "recording" to recording, "recordingMillis" to if (recording) SystemClock.elapsedRealtime() - recordingStarted else 0L,
+            "videoReady" to (pendingVideo != null), "recordingError" to recordingError)
+
+        fun startRecording(result: MethodChannel.Result) {
+            handler.post {
+                var candidate: LiveBeautyRecorder? = null
+                try {
+                    check(!closed && ready && recorder == null && pendingVideo == null)
+                    val scale = min(1.0, min(1280.0 / max(width, height), 720.0 / min(width, height)))
+                    val w = (width * scale / 2).toInt() * 2
+                    val h = (height * scale / 2).toInt() * 2
+                    candidate = LiveBeautyRecorder(activity, File(activity.cacheDir, "mooddare-live-${UUID.randomUUID()}.mp4"), w, h) {
+                        handler.post { if (recorder === candidate) finishRecording() }
+                    }
+                    renderer!!.attachRecorder(candidate.surface, w, h)
+                    candidate.start()
+                    recorder = candidate
+                    recordingStarted = SystemClock.elapsedRealtime()
+                    recordingError = null; recording = true
+                    handler.postDelayed(recordingLimit, 30_000)
+                    if (fixtureMode) handler.post(fixtureFrames)
+                    main.post { result.success(null) }
+                } catch (e: Exception) {
+                    if (candidate != null) { renderer?.detachRecorder(); candidate.abort() }
+                    main.post { result.error("recording", "Could not start video. Check microphone access and try again.", null) }
+                }
+            }
+        }
+
+        private fun finishRecording() {
+            val current = recorder ?: return
+            recorder = null; recording = false
+            handler.removeCallbacks(recordingLimit); handler.removeCallbacks(fixtureFrames)
+            renderer?.detachRecorder()
+            try { pendingVideo = current.finish().path }
+            catch (_: Exception) { recordingError = "The clip was too short or interrupted. Please record again." }
+        }
+
+        fun stopRecording(result: MethodChannel.Result) {
+            handler.post {
+                finishRecording()
+                val path = pendingVideo; pendingVideo = null
+                main.post {
+                    if (path != null) result.success(path)
+                    else result.error("recording", recordingError ?: "No video was recorded.", null)
+                }
+            }
+        }
+
+        fun interruptRecording() { handler.post { finishRecording() } }
 
         fun setLook(call: MethodCall, result: MethodChannel.Result) {
             handler.post {
@@ -315,6 +442,7 @@ class LiveBeautyPlugin(
             finishStartError("closed", "Camera was closed.")
             analysis?.let { it.clearAnalyzer(); provider?.unbind(it) }
             handler.post {
+                finishRecording()
                 renderer?.close(); renderer = null
                 surface.release()
                 main.post { entry.release(); done() }

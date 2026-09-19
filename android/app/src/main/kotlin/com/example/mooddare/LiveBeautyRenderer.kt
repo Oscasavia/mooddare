@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.opengl.EGL14
 import android.opengl.GLES20
+import android.opengl.EGLExt
 import android.view.Surface
 import java.io.File
 import java.nio.ByteBuffer
@@ -14,6 +15,10 @@ internal class LiveBeautyRenderer(surface: Surface) {
     private val display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
     private val context: android.opengl.EGLContext
     private val window: android.opengl.EGLSurface
+    private val config: android.opengl.EGLConfig
+    private var videoWindow = EGL14.EGL_NO_SURFACE
+    private var videoWidth = 0
+    private var videoHeight = 0
     private val program: Int
     private val texture: Int
     private val vertices = ByteBuffer.allocateDirect(8 * 4).order(ByteOrder.nativeOrder())
@@ -36,12 +41,14 @@ internal class LiveBeautyRenderer(surface: Surface) {
         check(EGL14.eglChooseConfig(display, intArrayOf(
             EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
             EGL14.EGL_SURFACE_TYPE, EGL14.EGL_WINDOW_BIT,
+            0x3142, 1, // EGL_RECORDABLE_ANDROID
             EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8,
             EGL14.EGL_BLUE_SIZE, 8, EGL14.EGL_ALPHA_SIZE, 8, EGL14.EGL_NONE
         ), 0, configs, 0, 1, count, 0) && count[0] > 0)
-        context = EGL14.eglCreateContext(display, configs[0], EGL14.EGL_NO_CONTEXT,
+        config = configs[0]!!
+        context = EGL14.eglCreateContext(display, config, EGL14.EGL_NO_CONTEXT,
             intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL14.EGL_NONE), 0)
-        window = EGL14.eglCreateWindowSurface(display, configs[0], surface,
+        window = EGL14.eglCreateWindowSurface(display, config, surface,
             intArrayOf(EGL14.EGL_NONE), 0)
         check(EGL14.eglMakeCurrent(display, window, window, context))
         val vertex = shader(GLES20.GL_VERTEX_SHADER, VERTEX)
@@ -77,9 +84,23 @@ internal class LiveBeautyRenderer(surface: Surface) {
         }
     }
 
-    fun draw(present: Boolean = true) {
+    fun draw(present: Boolean = true, recordFrame: Boolean = false) {
         if (width == 0) return
-        GLES20.glViewport(0, 0, width, height)
+        drawPixels(width, height)
+        if (present) check(EGL14.eglSwapBuffers(display, window)) { "Preview surface lost" }
+        if (recordFrame && videoWindow != EGL14.EGL_NO_SURFACE) {
+            check(EGL14.eglMakeCurrent(display, videoWindow, videoWindow, context))
+            try {
+                drawPixels(videoWidth, videoHeight)
+                // Monotonic real-time timestamps let MediaRecorder synchronize AAC audio.
+                check(EGLExt.eglPresentationTimeANDROID(display, videoWindow, System.nanoTime()))
+                check(EGL14.eglSwapBuffers(display, videoWindow)) { "Video surface lost" }
+            } finally { check(EGL14.eglMakeCurrent(display, window, window, context)) }
+        }
+    }
+
+    private fun drawPixels(w: Int, h: Int) {
+        GLES20.glViewport(0, 0, w, h)
         GLES20.glUseProgram(program)
         val position = GLES20.glGetAttribLocation(program, "position")
         GLES20.glEnableVertexAttribArray(position)
@@ -99,7 +120,19 @@ internal class LiveBeautyRenderer(surface: Surface) {
         GLES20.glUniform4fv(uniform("features"), 1, f ?: FloatArray(12), 8)
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
         check(GLES20.glGetError() == GLES20.GL_NO_ERROR) { "GPU rendering failed" }
-        if (present) check(EGL14.eglSwapBuffers(display, window)) { "Preview surface lost" }
+    }
+
+    fun attachRecorder(surface: Surface, w: Int, h: Int) {
+        check(videoWindow == EGL14.EGL_NO_SURFACE)
+        videoWindow = EGL14.eglCreateWindowSurface(display, config, surface, intArrayOf(EGL14.EGL_NONE), 0)
+        check(videoWindow != EGL14.EGL_NO_SURFACE) { "Could not create video surface" }
+        videoWidth = w; videoHeight = h
+    }
+
+    fun detachRecorder() {
+        if (videoWindow == EGL14.EGL_NO_SURFACE) return
+        EGL14.eglDestroySurface(display, videoWindow)
+        videoWindow = EGL14.EGL_NO_SURFACE
     }
 
     /** Read the same shader output before swap; EGL back buffers are not preserved. */
@@ -124,6 +157,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
     }
 
     fun close() {
+        detachRecorder()
         GLES20.glDeleteTextures(1, intArrayOf(texture), 0)
         GLES20.glDeleteProgram(program)
         EGL14.eglMakeCurrent(display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)

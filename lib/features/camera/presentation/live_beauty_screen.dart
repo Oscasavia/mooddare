@@ -24,6 +24,10 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   double _strength = .65, _aspect = .75;
   bool _ready = false, _face = false, _front = true;
   bool _busy = false, _comparing = false, _active = true, _inPreview = false;
+  bool _videoMode = false, _recording = false;
+  int _recordingMillis = 0;
+  String? _lastRecordingError;
+  File? _interruptedClip;
   String? _error;
 
   @override
@@ -44,6 +48,12 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
 
   Future<void> _start() async {
     if (!mounted || !_active || _inPreview) return;
+    if (_interruptedClip != null) {
+      final file = _interruptedClip!;
+      _interruptedClip = null;
+      await _review(file, 'video');
+      return;
+    }
     final generation = ++_generation;
     _poll?.cancel();
     setState(() {
@@ -51,15 +61,42 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
       _texture = null;
       _error = null;
       _face = false;
+      _recording = false;
+      _recordingMillis = 0;
     });
     try {
       final value = await _enqueue(() async {
         await _channel.invokeMethod<void>('stop');
+        if (!mounted || generation != _generation) return null;
+        if (_interruptedClip == null) {
+          final pending = await _channel.invokeMethod<String>(
+            'takePendingVideo',
+          );
+          if (pending != null) {
+            final file = File(pending);
+            if (!mounted) {
+              if (await file.exists()) await file.delete();
+              return null;
+            }
+            // Retain ownership if another lifecycle event supersedes this start.
+            _interruptedClip = file;
+          }
+        }
+        if (_interruptedClip != null) {
+          return <String, dynamic>{'pendingVideo': true};
+        }
+        if (generation != _generation) return null;
         return _channel.invokeMapMethod<String, dynamic>('start', {
           'front': _front,
         });
       });
       if (!mounted || generation != _generation) return;
+      if (value?['pendingVideo'] != null) {
+        final file = _interruptedClip!;
+        _interruptedClip = null;
+        await _review(file, 'video');
+        return;
+      }
       await _sendLook();
       if (!mounted || generation != _generation) return;
       setState(() => _texture = (value!['textureId'] as num).toInt());
@@ -78,6 +115,8 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
           setState(() {
             _ready = state['ready'] == true;
             _face = state['faceDetected'] == true;
+            _recording = state['recording'] == true;
+            _recordingMillis = (state['recordingMillis'] as num?)?.toInt() ?? 0;
             if (w > 0 && h > 0) _aspect = w / h;
             _error = state['error'] as String?;
             if (!_ready && ++waitingTicks > 60 && _error == null) {
@@ -85,6 +124,16 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                   'The camera is taking too long to start. Please try again.';
             }
           });
+          final recordingError = state['recordingError'] as String?;
+          if (recordingError != null && recordingError != _lastRecordingError) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(recordingError)));
+          }
+          _lastRecordingError = recordingError;
+          if (state['videoReady'] == true && !_busy && _active && !_inPreview) {
+            unawaited(_finishVideo());
+          }
         } on PlatformException {
           if (mounted && generation == _generation) {
             setState(() => _error = 'Camera disconnected. Please try again.');
@@ -111,6 +160,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
       setState(() {
         _texture = null;
         _ready = false;
+        _recording = false;
       });
       removed = WidgetsBinding.instance.endOfFrame;
     }
@@ -153,26 +203,8 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
       await _sendLook();
       captured = File((await _channel.invokeMethod<String>('capture'))!);
       if (!mounted || !_active) return;
-      _inPreview = true;
-      await _stop();
-      if (!mounted) return;
-      final posted = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => PreviewScreen(
-            mediaFile: captured!,
-            mediaType: 'image',
-            dareText: widget.dareText,
-            liveLens: _comparing ? 'Original' : BeautyLens.all[_selected].name,
-          ),
-        ),
-      );
-      _inPreview = false;
-      if (!mounted) return;
-      if (posted == true) {
-        Navigator.of(context).pop(true);
-        return;
-      }
-      await _start();
+      await _review(captured, 'image');
+      captured = null;
     } on PlatformException catch (error) {
       _inPreview = false;
       if (mounted) {
@@ -189,8 +221,130 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     }
   }
 
-  Future<void> _flip() async {
+  Future<void> _review(File file, String type) async {
+    if (!mounted) {
+      if (await file.exists()) await file.delete();
+      return;
+    }
+    if (!_active && type == 'video') {
+      _interruptedClip = file;
+      return;
+    }
+    _inPreview = true;
+    setState(() => _busy = true);
+    try {
+      await _stop();
+      if (!mounted) return;
+      final posted = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => PreviewScreen(
+            mediaFile: file,
+            mediaType: type,
+            dareText: widget.dareText,
+            liveLens: _comparing ? 'Original' : BeautyLens.all[_selected].name,
+          ),
+        ),
+      );
+      _inPreview = false;
+      if (!mounted) return;
+      if (posted == true) {
+        Navigator.of(context).pop(true);
+        return;
+      }
+      await _start();
+    } finally {
+      _inPreview = false;
+      if (await file.exists()) await file.delete();
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _selectMode(bool video) async {
+    if (_busy || _recording || video == _videoMode) return;
+    if (!video) {
+      setState(() => _videoMode = false);
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final allowed =
+          await _channel.invokeMethod<bool>('requestMicrophone') ?? false;
+      if (!mounted) return;
+      if (allowed) {
+        setState(() => _videoMode = true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Allow microphone access in phone settings to record video with audio.',
+            ),
+          ),
+        );
+      }
+    } on PlatformException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not request microphone access. Please try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _beginVideo() async {
+    if (!_ready || _busy) return;
+    setState(() => _busy = true);
+    try {
+      _lookDebounce?.cancel();
+      await _sendLook();
+      await _channel.invokeMethod<void>('startRecording');
+      if (mounted && _active) {
+        setState(() {
+          _recording = true;
+          _recordingMillis = 0;
+        });
+      }
+    } on PlatformException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.message ?? 'Could not start recording.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _finishVideo() async {
     if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final path = await _channel.invokeMethod<String>('stopRecording');
+      if (mounted) setState(() => _recording = false);
+      if (path != null) await _review(File(path), 'video');
+    } on PlatformException catch (error) {
+      if (mounted) {
+        setState(() => _recording = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.message ?? 'Could not finish this video.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _flip() async {
+    if (_busy || _recording) return;
     setState(() {
       _busy = true;
       _front = !_front;
@@ -217,13 +371,17 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     _poll?.cancel();
     _lookDebounce?.cancel();
     _carousel.dispose();
+    final abandoned = _interruptedClip;
+    if (abandoned != null) {
+      unawaited(abandoned.delete().catchError((_) => abandoned));
+    }
     unawaited(_enqueue(() => _channel.invokeMethod<void>('stop')));
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => PopScope(
-    canPop: !_busy,
+    canPop: !_busy && !_recording,
     child: Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
@@ -235,7 +393,9 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                 children: [
                   IconButton(
                     tooltip: 'Close live camera',
-                    onPressed: _busy ? null : () => Navigator.pop(context),
+                    onPressed: _busy || _recording
+                        ? null
+                        : () => Navigator.pop(context),
                     icon: const Icon(Icons.close),
                   ),
                   const Expanded(
@@ -247,7 +407,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                   ),
                   IconButton(
                     tooltip: 'Switch live camera',
-                    onPressed: _busy ? null : _flip,
+                    onPressed: _busy || _recording ? null : _flip,
                     icon: const Icon(Icons.flip_camera_ios_outlined),
                   ),
                 ],
@@ -351,7 +511,9 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                             left: 16,
                             right: 16,
                             child: Text(
-                              widget.dareText,
+                              _recording
+                                  ? '● 00:${(_recordingMillis ~/ 1000).clamp(0, 30).toString().padLeft(2, '0')} / 00:30'
+                                  : widget.dareText,
                               textAlign: TextAlign.center,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
@@ -476,11 +638,42 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
             ),
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
+              child: SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(
+                    value: false,
+                    label: Text('Photo'),
+                    icon: Icon(Icons.camera_alt_outlined),
+                  ),
+                  ButtonSegment(
+                    value: true,
+                    label: Text('Video'),
+                    icon: Icon(Icons.videocam_outlined),
+                  ),
+                ],
+                selected: {_videoMode},
+                onSelectionChanged: _busy || _recording
+                    ? null
+                    : (value) => _selectMode(value.first),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
               child: IconButton.filled(
-                tooltip: 'Capture live photo',
-                onPressed: _ready && !_busy && _error == null ? _capture : null,
+                tooltip: _recording
+                    ? 'Stop live recording'
+                    : (_videoMode ? 'Record live video' : 'Capture live photo'),
+                onPressed:
+                    _ready &&
+                        !_busy &&
+                        _error == null &&
+                        (!_recording || _recordingMillis >= 1000)
+                    ? (_videoMode
+                          ? (_recording ? _finishVideo : _beginVideo)
+                          : _capture)
+                    : null,
                 style: IconButton.styleFrom(
-                  backgroundColor: Colors.white,
+                  backgroundColor: _videoMode ? Colors.redAccent : Colors.white,
                   foregroundColor: Colors.black,
                   fixedSize: const Size(72, 72),
                 ),
@@ -490,14 +683,23 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                         height: 24,
                         child: CircularProgressIndicator(),
                       )
-                    : const Icon(Icons.camera_alt_outlined, size: 32),
+                    : Icon(
+                        _recording
+                            ? Icons.stop
+                            : (_videoMode
+                                  ? Icons.videocam_outlined
+                                  : Icons.camera_alt_outlined),
+                        size: 32,
+                      ),
               ),
             ),
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(bottom: 12),
               child: Text(
-                'Live photo · swipe to choose a lens',
-                style: TextStyle(fontSize: 12, color: Colors.white60),
+                _videoMode
+                    ? 'Live video with audio · up to 30 seconds'
+                    : 'Live photo · swipe to choose a lens',
+                style: const TextStyle(fontSize: 12, color: Colors.white60),
               ),
             ),
           ],
