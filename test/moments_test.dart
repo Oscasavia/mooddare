@@ -22,6 +22,7 @@ Future<void> openFeed(
   MemoryVideo? video,
   Size size = const Size(390, 844),
   double textScale = 1,
+  RouteFactory? onGenerateRoute,
 }) async {
   final previous = VideoPlayerPlatform.instance;
   VideoPlayerPlatform.instance = video ?? MemoryVideo();
@@ -70,6 +71,7 @@ Future<void> openFeed(
         child: child!,
       ),
       navigatorObservers: [appRouteObserver],
+      onGenerateRoute: onGenerateRoute,
       home: FeedScreen(repository: repository),
     ),
   );

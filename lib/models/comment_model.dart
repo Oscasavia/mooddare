@@ -2,12 +2,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CommentModel {
   final String id, authorId, text;
-  final DateTime? createdAt;
+  final DateTime? createdAt, editedAt;
+  final List<String> likedBy;
   const CommentModel({
     required this.id,
     required this.authorId,
     required this.text,
     this.createdAt,
+    this.editedAt,
+    this.likedBy = const [],
   });
 
   factory CommentModel.fromFirestore(
@@ -19,6 +22,8 @@ class CommentModel {
       authorId: data['authorId'] as String,
       text: data['text'] as String,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      editedAt: (data['editedAt'] as Timestamp?)?.toDate(),
+      likedBy: List<String>.from(data['likedBy'] ?? []),
     );
   }
 }

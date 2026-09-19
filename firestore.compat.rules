@@ -40,14 +40,31 @@ service cloud.firestore {
         && resource.data.likedBy.toSet().difference(request.resource.data.likedBy.toSet()).hasOnly([request.auth.uid]);
       allow delete: if owner(resource.data.authorId);
       match /comments/{commentId} {
+        function validText() {
+          return request.resource.data.text is string
+            && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 500
+            && request.resource.data.text.matches('(?s).*[^\\s].*');
+        }
+        function ownLikeOnly() {
+          let before = resource.data.get('likedBy', []);
+          let after = request.resource.data.likedBy;
+          return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy'])
+            && after is list && after.size() <= 10000
+            && after.size() == after.toSet().size()
+            && after.toSet().difference(before.toSet()).hasOnly([request.auth.uid])
+            && before.toSet().difference(after.toSet()).hasOnly([request.auth.uid]);
+        }
         allow read: if signedIn() && exists(/databases/$(database)/documents/posts/$(id));
         allow create: if signedIn() && exists(/databases/$(database)/documents/posts/$(id))
-          && request.resource.data.keys().hasOnly(['authorId', 'text', 'createdAt'])
-          && request.resource.data.authorId == request.auth.uid
-          && request.resource.data.text is string
-          && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 500
-          && request.resource.data.text.matches('(?s).*[^\\s].*')
+          && request.resource.data.keys().hasOnly(['authorId', 'text', 'createdAt', 'likedBy'])
+          && request.resource.data.authorId == request.auth.uid && validText()
+          && request.resource.data.get('likedBy', []) == []
           && request.resource.data.createdAt == request.time;
+        allow update: if signedIn() && exists(/databases/$(database)/documents/posts/$(id))
+          && ((owner(resource.data.authorId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
+            && validText() && request.resource.data.editedAt == request.time)
+            || ownLikeOnly());
         allow delete: if signedIn() && (resource.data.authorId == request.auth.uid
           || get(/databases/$(database)/documents/posts/$(id)).data.authorId == request.auth.uid);
       }

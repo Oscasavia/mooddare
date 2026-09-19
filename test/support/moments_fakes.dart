@@ -37,7 +37,12 @@ class MemoryPosts implements PostRepository {
   final commentChanges = StreamController<List<CommentModel>>.broadcast();
   final submissions = <String>[];
   String? selectedMood;
-  bool failComments = false, failSending = false;
+  bool failComments = false,
+      failSending = false,
+      failEdit = false,
+      failCommentLike = false;
+  int? commentCount;
+  int commentLikes = 0;
   String? uid = 'viewer';
   Set<String> blocked = {};
   MemoryPosts(this.posts);
@@ -68,6 +73,49 @@ class MemoryPosts implements PostRepository {
     submissions.add(commentId);
     if (failSending) throw StateError('Offline');
     comments.insert(0, CommentModel(id: commentId, authorId: uid!, text: text));
+    commentChanges.add(List.of(comments));
+  }
+
+  @override
+  Future<int> getCommentCount(String id) async =>
+      commentCount ?? comments.length;
+
+  @override
+  Future<void> editComment(String postId, String commentId, String text) async {
+    if (failEdit) throw StateError('Offline');
+    final index = comments.indexWhere((c) => c.id == commentId);
+    final old = comments[index];
+    comments[index] = CommentModel(
+      id: old.id,
+      authorId: old.authorId,
+      text: text,
+      createdAt: old.createdAt,
+      editedAt: DateTime.now(),
+      likedBy: old.likedBy,
+    );
+    commentChanges.add(List.of(comments));
+  }
+
+  @override
+  Future<void> toggleCommentLike(String postId, String commentId) async {
+    commentLikes++;
+    if (failCommentLike) throw StateError('Offline');
+    final index = comments.indexWhere((c) => c.id == commentId);
+    final old = comments[index];
+    final likes = List<String>.of(old.likedBy);
+    if (likes.contains(uid)) {
+      likes.remove(uid);
+    } else {
+      likes.add(uid!);
+    }
+    comments[index] = CommentModel(
+      id: old.id,
+      authorId: old.authorId,
+      text: old.text,
+      createdAt: old.createdAt,
+      editedAt: old.editedAt,
+      likedBy: likes,
+    );
     commentChanges.add(List.of(comments));
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'core/app_routes.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:mooddare/core/app_theme.dart';
@@ -30,6 +31,7 @@ class MoodDareApp extends StatelessWidget {
     theme: AppTheme.build(),
     debugShowCheckedModeBanner: false,
     navigatorObservers: [appRouteObserver],
+    onGenerateRoute: appRouteFactory,
     home: const _Startup(),
   );
 }

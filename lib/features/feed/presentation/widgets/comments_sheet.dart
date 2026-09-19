@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import 'package:mooddare/core/compact_count.dart';
 import 'package:mooddare/models/comment_model.dart';
 import 'package:mooddare/models/post_model.dart';
 import 'package:mooddare/models/user_model.dart';
@@ -33,6 +34,10 @@ class CommentsSheet extends StatefulWidget {
 class _CommentsSheetState extends State<CommentsSheet> {
   final _text = TextEditingController();
   final _scroll = ScrollController();
+  final _focus = FocusNode();
+  final _liking = <String>{};
+  CommentModel? _editing;
+  String _draft = "";
   final _authors = <String, Future<UserModel?>>{};
   late Stream<List<CommentModel>> _comments;
   StreamSubscription<Set<String>>? _blocks;
@@ -63,6 +68,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
   @override
   void dispose() {
     _blocks?.cancel();
+    _focus.dispose();
     _text.dispose();
     _scroll.dispose();
     super.dispose();
@@ -77,16 +83,26 @@ class _CommentsSheetState extends State<CommentsSheet> {
       _error = null;
     });
     try {
-      await widget.repository.addComment(widget.post.id, _commentId, text);
+      final editing = _editing;
+      if (editing == null) {
+        await widget.repository.addComment(widget.post.id, _commentId, text);
+      } else {
+        await widget.repository.editComment(widget.post.id, editing.id, text);
+      }
       if (!mounted) return;
-      _text.clear();
-      _commentId = const Uuid().v4();
+      if (_editing != null) {
+        _cancelEdit();
+      } else {
+        _text.clear();
+        _commentId = const Uuid().v4();
+      }
       if (_scroll.hasClients) _scroll.jumpTo(0);
     } catch (_) {
       if (mounted) {
         setState(
-          () => _error =
-              'Could not post your comment. Your draft is saved here—try again.',
+          () => _error = _editing == null
+              ? 'Could not post your comment. Your draft is saved here—try again.'
+              : 'Could not save changes. Your edit is kept here—try again.',
         );
       }
     } finally {
@@ -94,9 +110,51 @@ class _CommentsSheetState extends State<CommentsSheet> {
     }
   }
 
+  void _edit(CommentModel comment) {
+    if (_sending || comment.authorId != widget.repository.currentUserId) return;
+    if (_editing == null) _draft = _text.text;
+    setState(() {
+      _editing = comment;
+      _error = null;
+      _text.text = comment.text;
+      _text.selection = TextSelection.collapsed(offset: _text.text.length);
+    });
+    _focus.requestFocus();
+  }
+
+  void _cancelEdit() {
+    setState(() {
+      _editing = null;
+      _text.text = _draft;
+      _draft = '';
+      _error = null;
+    });
+  }
+
+  Future<void> _like(CommentModel comment) async {
+    if (_liking.contains(comment.id) ||
+        widget.repository.currentUserId == null) {
+      return;
+    }
+    setState(() {
+      _liking.add(comment.id);
+      _error = null;
+    });
+    try {
+      await widget.repository.toggleCommentLike(widget.post.id, comment.id);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not update your like. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _liking.remove(comment.id));
+    }
+  }
+
   Future<void> _delete(CommentModel comment) async {
     try {
       await widget.repository.deleteComment(widget.post.id, comment.id);
+      if (mounted && _editing?.id == comment.id) _cancelEdit();
     } catch (_) {
       if (mounted) {
         setState(() => _error = 'Could not delete this comment. Try again.');
@@ -121,13 +179,21 @@ class _CommentsSheetState extends State<CommentsSheet> {
                   children: [
                     Expanded(
                       child: Text(
-                        'Comments',
+                        _editing == null ? 'Comments' : 'Edit comment',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Close comments',
-                      onPressed: () => Navigator.pop(context),
+                      tooltip: _editing == null
+                          ? 'Close comments'
+                          : 'Cancel edit',
+                      onPressed: _editing == null
+                          ? () => Navigator.pop(context)
+                          : _sending
+                          ? null
+                          : _cancelEdit,
                       icon: const Icon(Icons.close),
                     ),
                   ],
@@ -219,17 +285,67 @@ class _CommentsSheetState extends State<CommentsSheet> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(comment.text),
+                                            if (comment.editedAt != null)
+                                              Text(
+                                                'Edited',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .labelSmall
+                                                    ?.copyWith(
+                                                      color: Colors.white60,
+                                                    ),
+                                              ),
                                           ],
                                         ),
                                       ),
+                                    ),
+                                    Column(
+                                      children: [
+                                        IconButton(
+                                          key: ValueKey(
+                                            'comment_like_${comment.id}',
+                                          ),
+                                          tooltip: comment.likedBy.contains(uid)
+                                              ? 'Unlike comment'
+                                              : 'Like comment',
+                                          onPressed:
+                                              uid == null ||
+                                                  _liking.contains(comment.id)
+                                              ? null
+                                              : () => _like(comment),
+                                          icon: Icon(
+                                            comment.likedBy.contains(uid)
+                                                ? Icons.favorite
+                                                : Icons.favorite_outline,
+                                            size: 22,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        Text(
+                                          compactCount(comment.likedBy.length),
+                                          semanticsLabel:
+                                              '${comment.likedBy.length} likes',
+                                        ),
+                                      ],
                                     ),
                                     if (uid != null &&
                                         (uid == comment.authorId ||
                                             uid == widget.post.authorId))
                                       PopupMenuButton<String>(
                                         tooltip: 'Comment options',
-                                        onSelected: (_) => _delete(comment),
+                                        onSelected: (action) {
+                                          if (action == 'edit') {
+                                            _edit(comment);
+                                          } else {
+                                            _delete(comment);
+                                          }
+                                        },
                                         itemBuilder: (_) => [
+                                          if (uid == comment.authorId)
+                                            const PopupMenuItem(
+                                              value: 'edit',
+                                              child: Text('Edit comment'),
+                                            ),
                                           const PopupMenuItem(
                                             value: 'delete',
                                             child: Text('Delete comment'),
@@ -257,6 +373,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                           Expanded(
                             child: TextField(
                               controller: _text,
+                              focusNode: _focus,
                               enabled: !_sending,
                               minLines: 1,
                               maxLines: 3,
@@ -266,14 +383,18 @@ class _CommentsSheetState extends State<CommentsSheet> {
                                 hintText: 'Add a comment…',
                                 counterText: '',
                               ),
-                              onChanged: (_) => setState(
-                                () => _commentId = const Uuid().v4(),
-                              ),
+                              onChanged: (_) => setState(() {
+                                if (_editing == null) {
+                                  _commentId = const Uuid().v4();
+                                }
+                              }),
                             ),
                           ),
                           const SizedBox(width: 6),
                           IconButton.filled(
-                            tooltip: 'Post comment',
+                            tooltip: _editing == null
+                                ? 'Post comment'
+                                : 'Save comment',
                             onPressed: _sending || _text.text.trim().isEmpty
                                 ? null
                                 : _send,
@@ -285,7 +406,11 @@ class _CommentsSheetState extends State<CommentsSheet> {
                                       strokeWidth: 2,
                                     ),
                                   )
-                                : const Icon(Icons.arrow_upward),
+                                : Icon(
+                                    _editing == null
+                                        ? Icons.arrow_upward
+                                        : Icons.check,
+                                  ),
                           ),
                         ],
                       ),

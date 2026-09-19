@@ -109,6 +109,15 @@ void main() {
         expect(identical(feedPlayer, detailPlayer), isFalse);
         expect(feedPlayer.value.isPlaying, isFalse);
         expect(detailPlayer.value.volume, 1);
+        final backY = tester.getCenter(find.byType(BackButton)).dy;
+        expect(
+          tester.getCenter(find.byTooltip('Mute video')).dy,
+          closeTo(backY, .1),
+        );
+        expect(
+          tester.getCenter(find.byTooltip('Moment options')).dy,
+          closeTo(backY, .1),
+        );
         await tester.tap(find.byTooltip('Mute video'));
         await tester.pumpAndSettle();
         expect(detailPlayer.value.volume, 0);
@@ -124,6 +133,20 @@ void main() {
         await tester.tap(find.byTooltip('Post comment'));
         await tester.pumpAndSettle();
         expect(find.text('A native playback test'), findsOneWidget);
+        await tester.tap(find.byTooltip('Like comment'));
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('Unlike comment'), findsOneWidget);
+        await tester.tap(find.byTooltip('Comment options'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Edit comment'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Edited native comment');
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Save comment'));
+        await tester.pumpAndSettle();
+        expect(find.text('Edited native comment'), findsOneWidget);
+        expect(find.text('Edited'), findsOneWidget);
+        expect(find.byTooltip('Unlike comment'), findsOneWidget);
         await tester.tap(find.byTooltip('Close comments'));
         await tester.pumpAndSettle();
         await waitForPlayer(tester);

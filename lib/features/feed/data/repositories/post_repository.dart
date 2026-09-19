@@ -135,6 +135,58 @@ class PostRepository {
         (snapshot) => snapshot.docs.map(CommentModel.fromFirestore).toList(),
       );
 
+  // Aggregate over every comment, not just the latest 100 shown in the sheet.
+  Future<int> getCommentCount(String postId) async =>
+      (await _firestore
+              .collection('posts')
+              .doc(postId)
+              .collection('comments')
+              .count()
+              .get())
+          .count ??
+      0;
+
+  Future<void> editComment(String postId, String commentId, String text) async {
+    final uid = currentUserId;
+    if (uid == null) throw StateError('Sign in to edit your comment.');
+    text = text.trim();
+    if (text.isEmpty || text.length > 500) {
+      throw const FormatException('Write a comment of 1–500 characters.');
+    }
+    final ref = _firestore
+        .collection('posts')
+        .doc(postId)
+        .collection('comments')
+        .doc(commentId);
+    await _firestore.runTransaction((tx) async {
+      final doc = await tx.get(ref);
+      if (!doc.exists || doc.data()?['authorId'] != uid) {
+        throw StateError('You can only edit your own comments.');
+      }
+      tx.update(ref, {'text': text, 'editedAt': FieldValue.serverTimestamp()});
+    });
+  }
+
+  Future<void> toggleCommentLike(String postId, String commentId) async {
+    final uid = currentUserId;
+    if (uid == null) throw StateError('Sign in to like a comment.');
+    final ref = _firestore
+        .collection('posts')
+        .doc(postId)
+        .collection('comments')
+        .doc(commentId);
+    await _firestore.runTransaction((tx) async {
+      final doc = await tx.get(ref);
+      if (!doc.exists) throw StateError('This comment is no longer available.');
+      final likes = List<String>.from(doc.data()?['likedBy'] ?? []);
+      tx.update(ref, {
+        'likedBy': likes.contains(uid)
+            ? FieldValue.arrayRemove([uid])
+            : FieldValue.arrayUnion([uid]),
+      });
+    });
+  }
+
   Future<void> addComment(String postId, String commentId, String text) async {
     final uid = currentUserId;
     if (uid == null) throw StateError('Sign in to comment.');

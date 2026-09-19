@@ -6,7 +6,8 @@ import 'package:mooddare/core/navigation.dart';
 import 'package:mooddare/models/post_model.dart';
 import 'package:mooddare/models/user_model.dart';
 import 'package:mooddare/features/feed/data/repositories/post_repository.dart';
-import 'package:mooddare/features/profile/presentation/screens/profile_screen.dart';
+import 'package:mooddare/core/app_routes.dart';
+import 'package:mooddare/core/compact_count.dart';
 import '../screens/post_details_screen.dart';
 import '../video_sound.dart';
 import 'comments_sheet.dart';
@@ -32,6 +33,7 @@ class _DareProofCardState extends State<DareProofCard>
     with WidgetsBindingObserver, RouteAware {
   late final PostRepository _repository;
   late Future<UserModel?> _author;
+  late Future<int> _commentCount;
   VideoPlayerController? _video;
   Timer? _timer;
   PageRoute<dynamic>? _route;
@@ -61,10 +63,14 @@ class _DareProofCardState extends State<DareProofCard>
     videoMuted.addListener(_soundChanged);
     _repository = widget.repository ?? PostRepository();
     _author = _repository.getAuthor(widget.post.authorId);
+    _commentCount = _repository.getCommentCount(widget.post.id);
     _liked = widget.post.likedBy.contains(_uid);
     _likes = widget.post.likedBy.length;
     _timer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+        if (widget.isActive && !_covered && _foreground) _refreshCommentCount();
+      }
     });
     if (widget.post.mediaType == 'video') _loadVideo();
   }
@@ -97,6 +103,20 @@ class _DareProofCardState extends State<DareProofCard>
     }
   }
 
+  void _refreshCommentCount() {
+    if (mounted) {
+      setState(() {
+        _commentCount = _repository.getCommentCount(widget.post.id);
+      });
+    }
+  }
+
+  void _openAuthor() => Navigator.pushNamed(
+    context,
+    profileRoute,
+    arguments: widget.post.authorId,
+  );
+
   void _soundChanged() {
     _video?.setVolume(videoMuted.value ? 0 : 1);
   }
@@ -109,7 +129,10 @@ class _DareProofCardState extends State<DareProofCard>
       await showComments(context, widget.post, _repository);
     } finally {
       _commenting = false;
-      if (mounted) _syncPlayback();
+      if (mounted) {
+        _syncPlayback();
+        _refreshCommentCount();
+      }
     }
   }
 
@@ -138,6 +161,7 @@ class _DareProofCardState extends State<DareProofCard>
   void didPopNext() {
     _covered = false;
     _syncPlayback();
+    _refreshCommentCount();
   }
 
   @override
@@ -364,54 +388,72 @@ class _DareProofCardState extends State<DareProofCard>
                     ),
                   ),
                 ),
-                if (widget.post.mediaType == 'video')
-                  Positioned(
-                    top: widget.isFullScreen
-                        ? MediaQuery.paddingOf(context).top + 8
-                        : 8,
-                    right: 56,
-                    child: ValueListenableBuilder<bool>(
-                      valueListenable: videoMuted,
-                      builder: (_, muted, _) => IconButton.filledTonal(
-                        tooltip: muted ? 'Unmute video' : 'Mute video',
-                        onPressed: () => videoMuted.value = !muted,
-                        icon: Icon(
-                          muted
-                              ? Icons.volume_off_rounded
-                              : Icons.volume_up_rounded,
-                        ),
+                Positioned(
+                  top: widget.isFullScreen ? 0 : 8,
+                  left: widget.isFullScreen ? 0 : null,
+                  right: widget.isFullScreen ? 0 : 8,
+                  child: SafeArea(
+                    top: widget.isFullScreen,
+                    bottom: false,
+                    child: SizedBox(
+                      height: widget.isFullScreen ? kToolbarHeight : 48,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (widget.isFullScreen) ...[
+                            const BackButton(color: Colors.white),
+                            const Spacer(),
+                          ],
+                          if (widget.post.mediaType == 'video')
+                            ValueListenableBuilder<bool>(
+                              valueListenable: videoMuted,
+                              builder: (_, muted, _) => IconButton(
+                                tooltip: muted ? 'Unmute video' : 'Mute video',
+                                onPressed: () => videoMuted.value = !muted,
+                                icon: Icon(
+                                  muted
+                                      ? Icons.volume_off_rounded
+                                      : Icons.volume_up_rounded,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                              ),
+                            ),
+                          PopupMenuButton<String>(
+                            tooltip: 'Moment options',
+                            icon: const Icon(
+                              Icons.more_vert,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                            onSelected: _action,
+                            itemBuilder: (_) => [
+                              if (widget.post.authorId == _uid)
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('Delete moment'),
+                                ),
+                              if (widget.post.authorId != _uid) ...[
+                                const PopupMenuItem(
+                                  value: 'report',
+                                  child: Text('Report moment'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'block',
+                                  child: Text('Block account'),
+                                ),
+                              ],
+                              if (widget.onHidden != null)
+                                const PopupMenuItem(
+                                  value: 'hide',
+                                  child: Text('Hide for now'),
+                                ),
+                            ],
+                          ),
+                          if (widget.isFullScreen) const SizedBox(width: 4),
+                        ],
                       ),
                     ),
-                  ),
-                Positioned(
-                  top: widget.isFullScreen
-                      ? MediaQuery.paddingOf(context).top + 8
-                      : 8,
-                  right: 8,
-                  child: PopupMenuButton<String>(
-                    onSelected: _action,
-                    itemBuilder: (_) => [
-                      if (widget.post.authorId == _uid)
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Text('Delete moment'),
-                        ),
-                      if (widget.post.authorId != _uid)
-                        const PopupMenuItem(
-                          value: 'report',
-                          child: Text('Report moment'),
-                        ),
-                      if (widget.post.authorId != _uid)
-                        const PopupMenuItem(
-                          value: 'block',
-                          child: Text('Block account'),
-                        ),
-                      if (widget.onHidden != null)
-                        const PopupMenuItem(
-                          value: 'hide',
-                          child: Text('Hide for now'),
-                        ),
-                    ],
                   ),
                 ),
                 Positioned(
@@ -438,29 +480,38 @@ class _DareProofCardState extends State<DareProofCard>
                           final author = snapshot.data;
                           return Row(
                             children: [
-                              CircleAvatar(
-                                radius: 18,
-                                backgroundImage: author?.photoUrl != null
-                                    ? NetworkImage(author!.photoUrl!)
-                                    : null,
-                                child: author?.photoUrl == null
-                                    ? const Icon(Icons.person_outline, size: 20)
-                                    : null,
+                              Semantics(
+                                button: true,
+                                label: 'View author profile',
+                                child: GestureDetector(
+                                  key: const ValueKey('moment_author_avatar'),
+                                  onTap: _openAuthor,
+                                  child: SizedBox(
+                                    width: 48,
+                                    height: 48,
+                                    child: Center(
+                                      child: CircleAvatar(
+                                        radius: 18,
+                                        backgroundImage:
+                                            author?.photoUrl != null
+                                            ? NetworkImage(author!.photoUrl!)
+                                            : null,
+                                        child: author?.photoUrl == null
+                                            ? const Icon(
+                                                Icons.person_outline,
+                                                size: 20,
+                                              )
+                                            : null,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: TextButton(
-                                  onPressed: author == null
-                                      ? null
-                                      : () => Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => ProfileScreen(
-                                              isGuest: false,
-                                              userId: author.id,
-                                            ),
-                                          ),
-                                        ),
+                                  key: const ValueKey('moment_author_name'),
+                                  onPressed: _openAuthor,
                                   child: Align(
                                     alignment: Alignment.centerLeft,
                                     child: Text(
@@ -477,44 +528,78 @@ class _DareProofCardState extends State<DareProofCard>
                         },
                       ),
                       const SizedBox(height: 8),
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          Expanded(
-                            child: Text(
-                              remaining.isNegative
-                                  ? 'Archived moment'
-                                  : remaining.inHours > 0
-                                  ? '${remaining.inHours}h left in the feed'
-                                  : '${remaining.inMinutes}m left in the feed',
-                              style: const TextStyle(
-                                color: Colors.white60,
-                                fontSize: 12,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: _liked ? 'Unlike' : 'Like',
+                                onPressed: _liking ? null : _like,
+                                icon: Icon(
+                                  _liked
+                                      ? Icons.favorite
+                                      : Icons.favorite_outline,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
                               ),
-                            ),
+                              Text(
+                                compactCount(_likes),
+                                semanticsLabel: '$_likes likes',
+                              ),
+                            ],
                           ),
-                          IconButton(
-                            tooltip: _liked ? 'Unlike' : 'Like',
-                            onPressed: _liking ? null : _like,
-                            icon: Icon(
-                              _liked ? Icons.favorite : Icons.favorite_outline,
-                              color: _liked ? Colors.pinkAccent : Colors.white,
-                            ),
-                          ),
-                          Text('$_likes'),
-                          IconButton(
-                            tooltip: 'Comments',
-                            onPressed: _comments,
-                            icon: const Icon(
-                              Icons.chat_bubble_outline,
-                              size: 22,
-                            ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Comments',
+                                onPressed: _comments,
+                                icon: const Icon(
+                                  Icons.chat_bubble_outline,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                              ),
+                              FutureBuilder<int>(
+                                future: _commentCount,
+                                builder: (_, snapshot) => Text(
+                                  snapshot.hasData
+                                      ? compactCount(snapshot.data!)
+                                      : '—',
+                                  key: const ValueKey('moment_comment_count'),
+                                  semanticsLabel: snapshot.hasData
+                                      ? '${snapshot.data} comments'
+                                      : 'Comment count unavailable',
+                                ),
+                              ),
+                            ],
                           ),
                           IconButton(
                             tooltip: 'Share moment',
                             onPressed: _share,
-                            icon: const Icon(Icons.ios_share, size: 22),
+                            icon: const Icon(
+                              Icons.send_outlined,
+                              color: Colors.white,
+                              size: 22,
+                            ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        remaining.isNegative
+                            ? 'Archived moment'
+                            : remaining.inHours > 0
+                            ? '${remaining.inHours}h left in the feed'
+                            : '${remaining.inMinutes}m left in the feed',
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),

@@ -18,8 +18,6 @@ class PostDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true, // This makes the body go behind the app bar
-      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
       body: DareProofCard(
         post: post,
         repository: repository,

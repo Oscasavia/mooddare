@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { before, after, beforeEach, test } from 'node:test';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, setDoc, getDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, Timestamp, collection, collectionGroup, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, Timestamp, collection, collectionGroup, query, where, orderBy, getDocs, getCountFromServer } from 'firebase/firestore';
 import { ref, uploadBytes, deleteObject, listAll } from 'firebase/storage';
 let env;
 before(async () => {
@@ -116,6 +116,57 @@ for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
     await assertSucceeds(deleteDoc(doc(bob, 'posts/one/comments/c')));
     await assertFails(deleteDoc(doc(bob, 'posts/one')));
     await assertFails(updateDoc(doc(bob, 'posts/one'), {authorId: 'bob'}));
+  });
+  test(`${policy}: comment edits preserve identity, creation time and likes`, async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({projectId: 'demo-mooddare',
+      firestore: {rules: await readFile(new URL(`../../${policy}`, import.meta.url), 'utf8')},
+      storage: {rules: await readFile(new URL('../../storage.rules', import.meta.url), 'utf8')},
+    });
+    await setDoc(doc(db('alice'), 'posts/one'), post());
+    const bob = doc(db('bob'), 'posts/one/comments/c');
+    await setDoc(bob, comment());
+    await assertSucceeds(updateDoc(bob, {text: 'Corrected text', editedAt: serverTimestamp()}));
+    await assertFails(updateDoc(doc(db('alice'), 'posts/one/comments/c'), {text: 'Post owner edit', editedAt: serverTimestamp()}));
+    await assertFails(updateDoc(doc(db('charlie'), 'posts/one/comments/c'), {text: 'Someone else', editedAt: serverTimestamp()}));
+    for (const text of ['', '   ', 'x'.repeat(501)]) {
+      await assertFails(updateDoc(bob, {text, editedAt: serverTimestamp()}));
+    }
+    await assertFails(updateDoc(bob, {text: 'No timestamp'}));
+    await assertFails(updateDoc(bob, {text: 'Forged date', editedAt: Timestamp.fromMillis(1)}));
+    await assertFails(updateDoc(bob, {authorId: 'alice', editedAt: serverTimestamp()}));
+    await assertFails(updateDoc(bob, {text: 'Creation changed', createdAt: serverTimestamp(), editedAt: serverTimestamp()}));
+    await assertFails(updateDoc(bob, {text: 'Pre-liked', likedBy: ['bob'], editedAt: serverTimestamp()}));
+    await assertSucceeds(getCountFromServer(collection(db('alice'), 'posts/one/comments')));
+    {
+      const count = await getCountFromServer(collection(db('bob'), 'posts/one/comments'));
+      if (count.data().count !== 1) throw new Error('Expected every comment to be counted');
+    }
+  });
+  test(`${policy}: comment likes are unique, caller-only and work on older comments`, async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({projectId: 'demo-mooddare',
+      firestore: {rules: await readFile(new URL(`../../${policy}`, import.meta.url), 'utf8')},
+      storage: {rules: await readFile(new URL('../../storage.rules', import.meta.url), 'utf8')},
+    });
+    await setDoc(doc(db('alice'), 'posts/one'), post());
+    const bob = doc(db('bob'), 'posts/one/comments/c');
+    await assertFails(setDoc(bob, {...comment(), likedBy: ['bob']}));
+    await setDoc(bob, comment()); // Existing comments have no likedBy field.
+    const alice = doc(db('alice'), 'posts/one/comments/c');
+    await assertSucceeds(updateDoc(alice, {likedBy: ['alice']}));
+    await assertFails(updateDoc(bob, {likedBy: ['alice', 'charlie']}));
+    await assertFails(updateDoc(bob, {likedBy: ['alice', 'bob', 'bob']}));
+    await assertSucceeds(updateDoc(bob, {likedBy: ['alice', 'bob']}));
+    await assertFails(updateDoc(alice, {likedBy: []}));
+    await assertSucceeds(updateDoc(alice, {likedBy: ['bob']}));
+    await assertSucceeds(updateDoc(bob, {text: 'Edited after likes', editedAt: serverTimestamp()}));
+    const data = (await getDoc(bob)).data();
+    if (data.likedBy.join(',') !== 'bob') throw new Error('Editing must retain likes');
+    await assertFails(updateDoc(doc(env.unauthenticatedContext().firestore(), 'posts/one/comments/c'), {likedBy: []}));
+    await deleteDoc(doc(db('alice'), 'posts/one'));
+    await assertFails(updateDoc(bob, {likedBy: []}));
+    await assertFails(updateDoc(bob, {text: 'Orphan edit', editedAt: serverTimestamp()}));
   });
   test(`${policy}: mood metadata stays paired and immutable; legacy posts still work`, async () => {
     await env.cleanup();
