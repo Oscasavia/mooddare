@@ -156,9 +156,23 @@ void main() {
         );
       }
 
+      const custom = CustomBeautyLook(smooth: .7, eyes: .55, face: .8);
+      await channel.invokeMethod<void>('setLook', custom.settings());
+      final customPhoto = await capture();
+      expect(difference(original, customPhoto), greaterThan(.15));
       await channel.invokeMethod<void>(
         'setLook',
-        BeautyLens.all.last.settings(1, original: true),
+        custom.settings(original: true),
+      );
+      expect(difference(original, await capture()), lessThan(.1));
+      await channel.invokeMethod<void>('setLook', custom.settings());
+      expect(difference(customPhoto, await capture()), lessThan(.1));
+
+      await channel.invokeMethod<void>(
+        'setLook',
+        BeautyLens.all
+            .firstWhere((lens) => lens.name == 'Studio')
+            .settings(1, original: true),
       );
       expect(
         difference(original, await capture()),

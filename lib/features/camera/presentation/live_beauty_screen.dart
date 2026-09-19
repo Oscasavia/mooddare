@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../../feed/presentation/screens/preview_screen.dart';
 import '../domain/beauty_lens.dart';
 import 'capture_shutter.dart';
+import 'custom_beauty_panel.dart';
 
 enum _CameraFrame {
   story('9:16', 9 / 16),
@@ -33,12 +34,19 @@ class LiveBeautyScreen extends StatefulWidget {
 class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     with WidgetsBindingObserver {
   static const _channel = MethodChannel('mooddare/live_beauty');
-  final _carousel = PageController(initialPage: 3000, viewportFraction: .23);
+  static final _initialPage = 500 * BeautyLens.all.length;
+  final _carousel = PageController(
+    initialPage: _initialPage,
+    viewportFraction: .23,
+  );
   Future<void> _operations = Future<void>.value();
   Timer? _poll, _lookDebounce;
   int? _texture;
   int _generation = 0, _selected = 0;
   double _strength = .65, _aspect = .75;
+  CustomBeautyLook _customLook = const CustomBeautyLook();
+  BeautyAdjustment _customAdjustment = BeautyAdjustment.smooth;
+  bool get _isCustom => BeautyLens.all[_selected] == BeautyLens.custom;
   bool _ready = false, _face = false, _front = true;
   bool _busy = false, _comparing = false, _active = true, _inPreview = false;
   bool _recording = false, _showAdjustments = false;
@@ -210,7 +218,9 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   }
 
   Future<void> _sendLook() => _channel.invokeMethod<void>('setLook', {
-    ...BeautyLens.all[_selected].settings(_strength, original: _comparing),
+    ...(_isCustom
+        ? _customLook.settings(original: _comparing)
+        : BeautyLens.all[_selected].settings(_strength, original: _comparing)),
     'aspectRatio': _viewportAspect,
   });
 
@@ -443,6 +453,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     Icons.visibility_outlined,
     Icons.face_retouching_natural,
     Icons.auto_awesome,
+    Icons.tune_rounded,
   ];
   static const _lensColors = [
     [Color(0xFFE5E0D8), Color(0xFF8B8580)],
@@ -451,6 +462,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     [Color(0xFFB6DCEE), Color(0xFF697FBD)],
     [Color(0xFFCDC3F1), Color(0xFF8774B3)],
     [Color(0xFFF2CEEA), Color(0xFFA583CB)],
+    [Color(0xFFA9E5D8), Color(0xFF548EAA)],
   ];
 
   Widget _lensDisc(int index) => DecoratedBox(
@@ -774,39 +786,70 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                       color: Colors.black.withValues(alpha: .65),
                       borderRadius: BorderRadius.circular(24),
                     ),
-                    child: Row(
-                      children: [
-                        Text(
-                          '${(_strength * 100).round()}%',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        Expanded(
-                          child: Slider(
-                            value: _strength,
-                            label: '${(_strength * 100).round()}%',
-                            semanticFormatterCallback: (value) =>
-                                'Lens strength ${(value * 100).round()} percent',
-                            onChanged: enabled && !_comparing
-                                ? (value) {
-                                    setState(() => _strength = value);
-                                    _adjust();
-                                  }
-                                : null,
+                    child: _isCustom
+                        ? CustomBeautyPanel(
+                            look: _customLook,
+                            selected: _customAdjustment,
+                            enabled: enabled,
+                            comparing: _comparing,
+                            onSelect: (value) =>
+                                setState(() => _customAdjustment = value),
+                            onChanged: (value) {
+                              setState(
+                                () => _customLook = _customLook.withAmount(
+                                  _customAdjustment,
+                                  value,
+                                ),
+                              );
+                              _adjust();
+                            },
+                            onReset: () {
+                              setState(() {
+                                _customLook = const CustomBeautyLook();
+                                _comparing = false;
+                              });
+                              _adjust();
+                            },
+                            onCompare: () {
+                              setState(() => _comparing = !_comparing);
+                              _adjust();
+                            },
+                          )
+                        : Row(
+                            children: [
+                              Text(
+                                '${(_strength * 100).round()}%',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              Expanded(
+                                child: Slider(
+                                  value: _strength,
+                                  label: '${(_strength * 100).round()}%',
+                                  semanticFormatterCallback: (value) =>
+                                      'Lens strength ${(value * 100).round()} percent',
+                                  onChanged: enabled && !_comparing
+                                      ? (value) {
+                                          setState(() => _strength = value);
+                                          _adjust();
+                                        }
+                                      : null,
+                                ),
+                              ),
+                              _floatingButton(
+                                _comparing ? 'Show lens' : 'Compare original',
+                                Icons.compare_rounded,
+                                enabled
+                                    ? () {
+                                        setState(
+                                          () => _comparing = !_comparing,
+                                        );
+                                        _adjust();
+                                      }
+                                    : null,
+                                selected: _comparing,
+                              ),
+                            ],
                           ),
-                        ),
-                        _floatingButton(
-                          _comparing ? 'Show lens' : 'Compare original',
-                          Icons.compare_rounded,
-                          enabled
-                              ? () {
-                                  setState(() => _comparing = !_comparing);
-                                  _adjust();
-                                }
-                              : null,
-                          selected: _comparing,
-                        ),
-                      ],
-                    ),
                   ),
                 ),
               Align(
@@ -878,6 +921,8 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                                       _comparing = false;
                                       if (_selected == 0) {
                                         _showAdjustments = false;
+                                      } else if (_isCustom) {
+                                        _showAdjustments = true;
                                       }
                                     });
                                     _adjust();
@@ -923,7 +968,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                             onStart: _beginVideo,
                             onStop: _finishVideo,
                             onSwipeLens: (delta) => _chooseLens(
-                              (_carousel.page ?? 3000).round() + delta,
+                              (_carousel.page ?? _initialPage).round() + delta,
                             ),
                           ),
                         ],

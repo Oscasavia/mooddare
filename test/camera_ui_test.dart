@@ -10,27 +10,43 @@ void main() {
   double? sentAspect;
   var captures = 0;
   final lightRequests = <bool>[];
+  final looks = <Map<String, dynamic>>[];
+  Map<String, dynamic>? captureLook;
+  Map<String, dynamic>? videoLook;
   setUp(() {
     sentAspect = null;
     captures = 0;
     lightRequests.clear();
+    looks.clear();
+    captureLook = null;
+    videoLook = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           if (call.method == 'setLook') {
             sentAspect = (call.arguments['aspectRatio'] as num).toDouble();
+            looks.add(Map<String, dynamic>.from(call.arguments as Map));
           }
           if (call.method == 'setCaptureLight') {
             lightRequests.add(call.arguments['enabled'] as bool);
           }
           if (call.method == 'capture') {
+            captureLook = looks.last;
             captures++;
             throw PlatformException(
               code: 'capture',
               message: 'Capture interrupted',
             );
           }
+          if (call.method == 'startRecording') {
+            videoLook = looks.last;
+            throw PlatformException(
+              code: 'recording',
+              message: 'Recording interrupted',
+            );
+          }
           return switch (call.method) {
             'requestCamera' => true,
+            'requestMicrophone' => true,
             'start' => {'textureId': 1},
             'status' => {
               'ready': true,
@@ -46,6 +62,132 @@ void main() {
     () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null),
   );
+
+  for (final size in [const Size(320, 640), const Size(768, 1024)]) {
+    testWidgets(
+      'custom look retains independent amounts, compares and resets at $size',
+      (tester) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.build(),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(2)),
+              child: child!,
+            ),
+            home: const LiveBeautyScreen(dareText: 'Your own look'),
+          ),
+        );
+        for (var i = 0; i < 6; i++) {
+          await tester.pump(const Duration(milliseconds: 250));
+        }
+        expect(find.text('Original'), findsOneWidget);
+        final frame = tester.getRect(
+          find.byKey(const ValueKey('camera_frame')),
+        );
+        // My look is immediately to the left of Original in the repeating wheel.
+        await tester.drag(
+          find.byKey(const ValueKey('capture_shutter')),
+          const Offset(90, 0),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('My look'), findsOneWidget);
+        expect(find.byType(Slider), findsOneWidget);
+        final slider = find.byKey(const ValueKey('custom_beauty_slider'));
+        Future<void> adjust(String name, double value) async {
+          final tab = find.byKey(ValueKey('beauty_$name'));
+          await tester.ensureVisible(tab);
+          await tester.tap(tab);
+          await tester.pump();
+          tester.widget<Slider>(slider).onChanged!(value);
+          await tester.pump(const Duration(milliseconds: 60));
+        }
+
+        await adjust('smooth', .8);
+        await adjust('eyes', .35);
+        await adjust('face', .6);
+        expect(looks.last, containsPair('smooth', .8));
+        expect(looks.last, containsPair('eyeSize', .35));
+        expect(looks.last, containsPair('faceSlim', .6));
+        expect(
+          tester.getRect(find.byKey(const ValueKey('camera_frame'))),
+          frame,
+        );
+
+        await tester.tap(find.byTooltip('Compare original'));
+        await tester.pump(const Duration(milliseconds: 60));
+        expect(looks.last['original'], isTrue);
+        expect(tester.widget<Slider>(slider).onChanged, isNull);
+        await tester.tap(find.byTooltip('Show my look'));
+        await tester.pump(const Duration(milliseconds: 60));
+        expect(looks.last['original'], isFalse);
+        expect(tester.widget<Slider>(slider).value, .6);
+
+        // Switching through Original and a preset must not overwrite custom amounts.
+        for (var i = 0; i < 2; i++) {
+          await tester.drag(
+            find.byKey(const ValueKey('capture_shutter')),
+            const Offset(-90, 0),
+          );
+          await tester.pumpAndSettle();
+        }
+        expect(find.text('Soft'), findsOneWidget);
+        expect(looks.last['eyeSize'], 0);
+        for (var i = 0; i < 2; i++) {
+          await tester.drag(
+            find.byKey(const ValueKey('capture_shutter')),
+            const Offset(90, 0),
+          );
+          await tester.pumpAndSettle();
+        }
+        expect(looks.last['eyeSize'], .35);
+        expect(looks.last['smooth'], .8);
+        await tester.tap(find.byTooltip('Switch camera'));
+        for (var i = 0; i < 6; i++) {
+          await tester.pump(const Duration(milliseconds: 250));
+        }
+        expect(looks.last['faceSlim'], .6);
+
+        // Capture uses custom amounts and retains them after a native failure.
+        await adjust('eyes', .45);
+        await tester.tap(find.byKey(const ValueKey('capture_shutter')));
+        await tester.pumpAndSettle();
+        expect(captureLook?['eyeSize'], .45);
+        expect(captureLook?['smooth'], .8);
+        for (var i = 0; i < 6; i++) {
+          await tester.pump(const Duration(milliseconds: 250));
+        }
+        // Let the failure message leave the shutter's hit area before recording.
+        await tester.pump(const Duration(seconds: 4));
+        await tester.pumpAndSettle();
+        final hold = await tester.startGesture(
+          tester.getCenter(find.byKey(const ValueKey('capture_shutter'))),
+        );
+        await tester.pump(const Duration(milliseconds: 600));
+        await tester.pump();
+        await hold.up();
+        await tester.pumpAndSettle();
+        expect(videoLook?['eyeSize'], .45);
+        expect(videoLook?['faceSlim'], .6);
+        await tester.tap(find.byTooltip('Adjust lens'));
+        await tester.pump();
+        await tester.tap(find.byTooltip('Reset my look'));
+        await tester.pump(const Duration(milliseconds: 60));
+        expect(looks.last['smooth'], 0);
+        expect(looks.last['eyeSize'], 0);
+        expect(looks.last['faceSlim'], 0);
+        expect(tester.widget<Slider>(slider).value, 0);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+      },
+    );
+  }
 
   for (final interrupt in [false, true]) {
     testWidgets(

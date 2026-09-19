@@ -165,7 +165,9 @@ void main() {
       }
 
       await channel.invokeMethod<void>('setLook', {
-        ...BeautyLens.all.last.settings(1),
+        ...BeautyLens.all
+            .firstWhere((lens) => lens.name == 'Studio')
+            .settings(1),
         'aspectRatio': 3 / 4,
       });
       await channel.invokeMethod<void>('startRecording');
@@ -206,9 +208,21 @@ void main() {
     await waitForState(tester, (state) => state['ready'] == true);
     await tester.pump(const Duration(milliseconds: 500));
     final shutter = find.byKey(const ValueKey('capture_shutter'));
+    await tester.drag(shutter, const Offset(90, 0));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('My look'), findsOneWidget);
+    final customSlider = find.byKey(const ValueKey('custom_beauty_slider'));
+    for (final name in ['smooth', 'eyes', 'face']) {
+      await tester.tap(find.byKey(ValueKey('beauty_$name')));
+      await tester.pump();
+      await tester.tapAt(tester.getCenter(customSlider));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.widget<Slider>(customSlider).value, greaterThan(.3));
+    }
     final finger = await tester.startGesture(tester.getCenter(shutter));
     await tester.pump(const Duration(milliseconds: 600));
     await waitForState(tester, (state) => state['recording'] == true);
+    expect(find.byKey(const ValueKey('custom_beauty_slider')), findsNothing);
     await tester.pump(const Duration(seconds: 2));
     await finger.up();
     for (
@@ -229,6 +243,10 @@ void main() {
     await tester.pageBack();
     await waitForState(tester, (state) => state['ready'] == true);
     await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('My look'), findsOneWidget);
+    await tester.tap(find.byTooltip('Adjust lens'));
+    await tester.pump();
+    expect(tester.widget<Slider>(customSlider).value, greaterThan(.3));
     final lockedFinger = await tester.startGesture(tester.getCenter(shutter));
     await tester.pump(const Duration(milliseconds: 600));
     await waitForState(tester, (state) => state['recording'] == true);
