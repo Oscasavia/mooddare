@@ -197,7 +197,11 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                         ),
                         label: const Text('Continue with Google'),
                       ),
-                      const SizedBox(height: 24),
+                      const Divider(
+                        height: 32,
+                        thickness: 1,
+                        color: Colors.white24,
+                      ),
                       TextButton(
                         onPressed: _busy
                             ? null
