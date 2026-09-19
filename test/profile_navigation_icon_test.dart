@@ -101,8 +101,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.person), findsOneWidget);
-      expect(tester.getSize(find.byType(ClipOval)), const Size(24, 24));
-      expect(tester.takeException(), isNull);
-      debugNetworkImageHttpClientProvider = previous;
+    expect(tester.getSize(find.byType(ClipOval)), const Size(24, 24));
+    expect(tester.takeException(), isNull);
+    debugNetworkImageHttpClientProvider = previous;
   });
 }
