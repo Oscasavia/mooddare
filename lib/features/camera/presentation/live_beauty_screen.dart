@@ -18,7 +18,13 @@ enum _CameraFrame {
 
 class LiveBeautyScreen extends StatefulWidget {
   final String dareText;
-  const LiveBeautyScreen({super.key, required this.dareText});
+  final String? moodId, moodName;
+  const LiveBeautyScreen({
+    super.key,
+    required this.dareText,
+    this.moodId,
+    this.moodName,
+  });
 
   @override
   State<LiveBeautyScreen> createState() => _LiveBeautyScreenState();
@@ -304,6 +310,8 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
             mediaFile: file,
             mediaType: type,
             dareText: widget.dareText,
+            moodId: widget.moodId,
+            moodName: widget.moodName,
             liveLens: _comparing ? 'Original' : BeautyLens.all[_selected].name,
           ),
         ),

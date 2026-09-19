@@ -8,17 +8,33 @@ import '../../../camera/presentation/live_beauty_screen.dart';
 
 class CameraScreen extends StatelessWidget {
   final String dareText;
-  const CameraScreen({super.key, required this.dareText});
+  final String? moodId, moodName;
+  const CameraScreen({
+    super.key,
+    required this.dareText,
+    this.moodId,
+    this.moodName,
+  });
   @override
   Widget build(BuildContext context) => Platform.isAndroid
-      ? LiveBeautyScreen(dareText: dareText)
-      : BasicCameraScreen(dareText: dareText);
+      ? LiveBeautyScreen(dareText: dareText, moodId: moodId, moodName: moodName)
+      : BasicCameraScreen(
+          dareText: dareText,
+          moodId: moodId,
+          moodName: moodName,
+        );
 }
 
 /// Fallback for platforms that do not yet implement native live lenses.
 class BasicCameraScreen extends StatefulWidget {
   final String dareText;
-  const BasicCameraScreen({super.key, required this.dareText});
+  final String? moodId, moodName;
+  const BasicCameraScreen({
+    super.key,
+    required this.dareText,
+    this.moodId,
+    this.moodName,
+  });
   @override
   State<BasicCameraScreen> createState() => _CameraScreenState();
 }
@@ -156,6 +172,8 @@ class _CameraScreenState extends State<BasicCameraScreen>
             mediaFile: File(file.path),
             mediaType: _videoMode ? 'video' : 'image',
             dareText: widget.dareText,
+            moodId: widget.moodId,
+            moodName: widget.moodName,
           ),
         ),
       );
@@ -198,7 +216,11 @@ class _CameraScreenState extends State<BasicCameraScreen>
       if (!mounted) return;
       final posted = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
-          builder: (_) => LiveBeautyScreen(dareText: widget.dareText),
+          builder: (_) => LiveBeautyScreen(
+            dareText: widget.dareText,
+            moodId: widget.moodId,
+            moodName: widget.moodName,
+          ),
         ),
       );
       _inPreview = false;

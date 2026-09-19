@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:mooddare/models/comment_model.dart';
+import 'package:mooddare/features/dares/data/repositories/dares_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -30,6 +32,8 @@ class PostRepository {
     required File mediaFile,
     required String mediaType,
     String? postId,
+    String? moodId,
+    String? moodName,
   }) async {
     final user = _auth.currentUser;
     if (user == null) throw StateError('Sign in before posting.');
@@ -37,6 +41,11 @@ class PostRepository {
         dareText.trim().isEmpty ||
         dareText.length > 500) {
       throw const FormatException('Invalid capture.');
+    }
+    if ((moodId == null) != (moodName == null) ||
+        (moodId != null && (moodId.isEmpty || moodId.length > 128)) ||
+        (moodName != null && (moodName.isEmpty || moodName.length > 80))) {
+      throw const FormatException('Invalid mood metadata.');
     }
     if (!await mediaFile.exists() ||
         await mediaFile.length() > 30 * 1024 * 1024) {
@@ -58,6 +67,10 @@ class PostRepository {
     final url = await ref.getDownloadURL();
     await doc.set({
       'dareText': dareText.trim(),
+      if (moodId != null && moodName != null) ...{
+        'moodId': moodId,
+        'moodName': moodName,
+      },
       'mediaUrl': url,
       'mediaPath': path,
       'mediaType': mediaType,
@@ -70,13 +83,24 @@ class PostRepository {
     });
   }
 
-  Stream<List<PostModel>> getPosts() => _firestore
-      .collection('posts')
-      .where('expiresAt', isGreaterThan: Timestamp.now())
-      .orderBy('expiresAt', descending: true)
-      .limit(60)
-      .snapshots()
-      .map((snapshot) => snapshot.docs.map(PostModel.fromFirestore).toList());
+  Future<Map<String, String>> getMoodOptions() async {
+    final catalog = await DaresRepository(firestore: _firestore).getCatalog();
+    return {
+      for (final mood in catalog.moods)
+        if (mood.isAvailable) mood.id: mood.name,
+    };
+  }
+
+  Stream<List<PostModel>> getPosts({String? moodId}) {
+    Query<Map<String, dynamic>> query = _firestore.collection('posts');
+    if (moodId != null) query = query.where('moodId', isEqualTo: moodId);
+    return query
+        .where('expiresAt', isGreaterThan: Timestamp.now())
+        .orderBy('expiresAt', descending: true)
+        .limit(60)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map(PostModel.fromFirestore).toList());
+  }
 
   Stream<List<PostModel>> getUserPosts(String uid) => _firestore
       .collection('posts')
@@ -99,6 +123,49 @@ class PostRepository {
       ),
     };
   }
+
+  Stream<List<CommentModel>> getComments(String postId) => _firestore
+      .collection('posts')
+      .doc(postId)
+      .collection('comments')
+      .orderBy('createdAt', descending: true)
+      .limit(100)
+      .snapshots()
+      .map(
+        (snapshot) => snapshot.docs.map(CommentModel.fromFirestore).toList(),
+      );
+
+  Future<void> addComment(String postId, String commentId, String text) async {
+    final uid = currentUserId;
+    if (uid == null) throw StateError('Sign in to comment.');
+    text = text.trim();
+    if (text.isEmpty || text.length > 500) {
+      throw const FormatException('Write a comment of 1–500 characters.');
+    }
+    final post = _firestore.collection('posts').doc(postId);
+    final comment = post.collection('comments').doc(commentId);
+    // Stable IDs make retries safe even if the first acknowledgement was lost.
+    await _firestore.runTransaction((tx) async {
+      final parent = await tx.get(post);
+      final existing = await tx.get(comment);
+      if (!parent.exists) {
+        throw StateError('This moment is no longer available.');
+      }
+      if (existing.exists) return;
+      tx.set(comment, {
+        'authorId': uid,
+        'text': text,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  Future<void> deleteComment(String postId, String commentId) => _firestore
+      .collection('posts')
+      .doc(postId)
+      .collection('comments')
+      .doc(commentId)
+      .delete();
 
   Future<void> toggleLike(String postId, String userId) async {
     if (_auth.currentUser?.uid != userId) {
@@ -129,6 +196,16 @@ class PostRepository {
       await _storage.refFromURL(doc.data()!['mediaUrl'] as String).delete();
     } on FirebaseException catch (e) {
       if (e.code != 'object-not-found') rethrow;
+    }
+    // Firestore does not cascade deletion to subcollections.
+    while (true) {
+      final page = await ref.collection('comments').limit(100).get();
+      if (page.docs.isEmpty) break;
+      final batch = _firestore.batch();
+      for (final comment in page.docs) {
+        batch.delete(comment.reference);
+      }
+      await batch.commit();
     }
     await ref.delete();
   }

@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:mooddare/core/app_theme.dart';
 import 'package:mooddare/core/navigation.dart';
+import 'package:mooddare/features/feed/presentation/video_sound.dart';
 import 'package:mooddare/features/feed/presentation/screens/feed_screen.dart';
 import 'package:mooddare/features/feed/presentation/screens/post_details_screen.dart';
 import '../test/support/moments_fakes.dart' show MemoryPosts, moment;
@@ -32,6 +33,7 @@ void main() {
   testWidgets(
     'photo and native video fill feed cards and open the shared viewer',
     (tester) async {
+      videoMuted.value = true;
       await allowCameraAndAudio();
       final bytes = base64Decode(faceFixtureBase64);
       final fixture = File(
@@ -88,6 +90,10 @@ void main() {
         final feedPlayer = tester
             .widget<VideoPlayer>(find.byType(VideoPlayer))
             .controller;
+        expect(feedPlayer.value.volume, 0);
+        await tester.tap(find.byTooltip('Unmute video'));
+        await tester.pumpAndSettle();
+        expect(feedPlayer.value.volume, 1);
         final bounds = tester.getRect(
           find.byKey(const ValueKey('moment_surface_video')),
         );
@@ -102,6 +108,25 @@ void main() {
             .controller;
         expect(identical(feedPlayer, detailPlayer), isFalse);
         expect(feedPlayer.value.isPlaying, isFalse);
+        expect(detailPlayer.value.volume, 1);
+        await tester.tap(find.byTooltip('Mute video'));
+        await tester.pumpAndSettle();
+        expect(detailPlayer.value.volume, 0);
+        expect(feedPlayer.value.volume, 0);
+        await tester.tap(find.byTooltip('Comments'));
+        await tester.pumpAndSettle();
+        expect(detailPlayer.value.isPlaying, isFalse);
+        await tester.enterText(
+          find.byType(TextField),
+          'A native playback test',
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Post comment'));
+        await tester.pumpAndSettle();
+        expect(find.text('A native playback test'), findsOneWidget);
+        await tester.tap(find.byTooltip('Close comments'));
+        await tester.pumpAndSettle();
+        await waitForPlayer(tester);
         expect(find.byType(PostDetailsScreen), findsOneWidget);
         final position = detailPlayer.value.position;
         await tester.pump(const Duration(seconds: 1));

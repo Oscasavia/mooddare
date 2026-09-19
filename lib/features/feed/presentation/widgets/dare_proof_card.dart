@@ -8,6 +8,8 @@ import 'package:mooddare/models/user_model.dart';
 import 'package:mooddare/features/feed/data/repositories/post_repository.dart';
 import 'package:mooddare/features/profile/presentation/screens/profile_screen.dart';
 import '../screens/post_details_screen.dart';
+import '../video_sound.dart';
+import 'comments_sheet.dart';
 
 class DareProofCard extends StatefulWidget {
   final PostModel post;
@@ -39,7 +41,9 @@ class _DareProofCardState extends State<DareProofCard>
       _covered = false,
       _foreground = true,
       _opening = false,
-      _pausedByUser = false;
+      _pausedByUser = false,
+      _sharing = false,
+      _commenting = false;
   int _likes = 0;
   String? get _uid => _repository.currentUserId;
   bool get _shouldPlay =>
@@ -47,11 +51,14 @@ class _DareProofCardState extends State<DareProofCard>
       !_covered &&
       _foreground &&
       !_opening &&
+      !_sharing &&
+      !_commenting &&
       !_pausedByUser;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    videoMuted.addListener(_soundChanged);
     _repository = widget.repository ?? PostRepository();
     _author = _repository.getAuthor(widget.post.authorId);
     _liked = widget.post.likedBy.contains(_uid);
@@ -70,6 +77,7 @@ class _DareProofCardState extends State<DareProofCard>
     try {
       await video.initialize();
       if (!mounted) return;
+      await video.setVolume(videoMuted.value ? 0 : 1);
       await video.setLooping(true);
       if (_shouldPlay) await video.play();
       if (mounted) setState(() {});
@@ -86,6 +94,22 @@ class _DareProofCardState extends State<DareProofCard>
       appRouteObserver.unsubscribe(this);
       _route = route;
       appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  void _soundChanged() {
+    _video?.setVolume(videoMuted.value ? 0 : 1);
+  }
+
+  Future<void> _comments() async {
+    if (_commenting) return;
+    _commenting = true;
+    _syncPlayback();
+    try {
+      await showComments(context, widget.post, _repository);
+    } finally {
+      _commenting = false;
+      if (mounted) _syncPlayback();
     }
   }
 
@@ -134,6 +158,7 @@ class _DareProofCardState extends State<DareProofCard>
 
   @override
   void dispose() {
+    videoMuted.removeListener(_soundChanged);
     WidgetsBinding.instance.removeObserver(this);
     appRouteObserver.unsubscribe(this);
     _timer?.cancel();
@@ -256,6 +281,9 @@ class _DareProofCardState extends State<DareProofCard>
   }
 
   Future<void> _share() async {
+    if (_sharing) return;
+    _sharing = true;
+    _syncPlayback();
     final box = context.findRenderObject() as RenderBox?;
     try {
       await Share.share(
@@ -266,6 +294,9 @@ class _DareProofCardState extends State<DareProofCard>
       );
     } catch (_) {
       _message('Could not open sharing. Please try again.');
+    } finally {
+      _sharing = false;
+      if (mounted) _syncPlayback();
     }
   }
 
@@ -333,8 +364,29 @@ class _DareProofCardState extends State<DareProofCard>
                     ),
                   ),
                 ),
+                if (widget.post.mediaType == 'video')
+                  Positioned(
+                    top: widget.isFullScreen
+                        ? MediaQuery.paddingOf(context).top + 8
+                        : 8,
+                    right: 56,
+                    child: ValueListenableBuilder<bool>(
+                      valueListenable: videoMuted,
+                      builder: (_, muted, _) => IconButton.filledTonal(
+                        tooltip: muted ? 'Unmute video' : 'Mute video',
+                        onPressed: () => videoMuted.value = !muted,
+                        icon: Icon(
+                          muted
+                              ? Icons.volume_off_rounded
+                              : Icons.volume_up_rounded,
+                        ),
+                      ),
+                    ),
+                  ),
                 Positioned(
-                  top: widget.isFullScreen ? 72 : 8,
+                  top: widget.isFullScreen
+                      ? MediaQuery.paddingOf(context).top + 8
+                      : 8,
                   right: 8,
                   child: PopupMenuButton<String>(
                     onSelected: _action,
@@ -365,7 +417,9 @@ class _DareProofCardState extends State<DareProofCard>
                 Positioned(
                   left: 20,
                   right: 20,
-                  bottom: 24,
+                  bottom: widget.isFullScreen
+                      ? MediaQuery.paddingOf(context).bottom + 16
+                      : 24,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -418,39 +472,49 @@ class _DareProofCardState extends State<DareProofCard>
                                   ),
                                 ),
                               ),
-                              IconButton(
-                                tooltip: _liked ? 'Unlike' : 'Like',
-                                onPressed: _liking ? null : _like,
-                                icon: Icon(
-                                  _liked
-                                      ? Icons.favorite
-                                      : Icons.favorite_outline,
-                                  color: _liked
-                                      ? Colors.pinkAccent
-                                      : Colors.white,
-                                ),
-                              ),
-                              Text('$_likes'),
-                              IconButton(
-                                tooltip: 'Share moment',
-                                onPressed: _share,
-                                icon: const Icon(Icons.ios_share, size: 22),
-                              ),
                             ],
                           );
                         },
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        remaining.isNegative
-                            ? 'Archived moment'
-                            : remaining.inHours > 0
-                            ? '${remaining.inHours}h left in the feed'
-                            : '${remaining.inMinutes}m left in the feed',
-                        style: const TextStyle(
-                          color: Colors.white60,
-                          fontSize: 12,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              remaining.isNegative
+                                  ? 'Archived moment'
+                                  : remaining.inHours > 0
+                                  ? '${remaining.inHours}h left in the feed'
+                                  : '${remaining.inMinutes}m left in the feed',
+                              style: const TextStyle(
+                                color: Colors.white60,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: _liked ? 'Unlike' : 'Like',
+                            onPressed: _liking ? null : _like,
+                            icon: Icon(
+                              _liked ? Icons.favorite : Icons.favorite_outline,
+                              color: _liked ? Colors.pinkAccent : Colors.white,
+                            ),
+                          ),
+                          Text('$_likes'),
+                          IconButton(
+                            tooltip: 'Comments',
+                            onPressed: _comments,
+                            icon: const Icon(
+                              Icons.chat_bubble_outline,
+                              size: 22,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Share moment',
+                            onPressed: _share,
+                            icon: const Icon(Icons.ios_share, size: 22),
+                          ),
+                        ],
                       ),
                     ],
                   ),

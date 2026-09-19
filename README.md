@@ -22,6 +22,11 @@ The Moments header uses **mooddare** branding. Photos and videos fill their roun
 
 The feed video pauses before its viewer opens, the outgoing viewer pauses as it closes, and the active feed video resumes on return. Manually paused viewer videos stay paused after interruptions. Hiding a moment from the viewer closes it and removes the card from the current feed session.
 
+Comments open in a keyboard-aware bottom sheet from either surface. Signed-in users can post up to 500 characters, retry failed sends with the same comment ID, and delete their own comments; post owners can also remove comments on their posts. The panel streams the latest 100 comments and hides blocked authors. Videos pause while commenting or sharing. Sharing opens the native chooser with the dare and media URL.
+
+Videos start muted on each app launch. The mute button changes a session-wide preference shared by subsequent videos and profile/full-screen viewers. The feed's filter button selects a mood with a server-side query; new posts retain mood ID/name through capture and review. Older posts without this metadata remain under All moods. Back refreshes the current filter and returns to the first card; a second Back within two seconds exits. Opening a sheet or interacting with the feed cancels the exit countdown.
+
+
 ## Mood collections
 
 Discover has a searchable mood grid with All, Free, Daring, Epic and Seasonal filters. Daring and Epic are locked premium previews. Tapping a premium mood shows **Coming soon**, including for legacy premium documents marked unlocked. Subscriptions, checkout and paid access are not implemented. Free moods still open the selected-dare screen and camera.
@@ -69,17 +74,17 @@ The Android integration tests use a public-domain U.S. Navy portrait of Grace Ho
 
 The mood regression suite covers legacy tier parsing, malformed catalog data, duplicate handling, source timeouts, offline fallback/retry, collection/search combinations, locked previews, direct premium-route guards and narrow/foldable layouts with enlarged text. The Android mood integration test follows an offline catalog through a premium preview, seasonal dare, live capture, floating photo controls and return navigation. It never posts or modifies Firebase. Unit/widget tests run in the existing GitHub workflow on pushes and pull requests; native integration tests currently run locally on a disposable Android emulator.
 
-Moments widget tests cover branding, photo fit, single/double taps, caption/action handling, vertical swiping, hiding, three video shapes, playback handoff, interruption and disposal. A dedicated Android test records a real clip, decodes a local photo fixture and follows both through feed/detail navigation. Its repository and photo response are test fixtures; video playback uses the native player with a local file. It does not post to Firebase or exercise live Storage streaming.
+Moments widget tests cover branding, photo fit, single/double taps, caption/action handling, vertical swiping, hiding, three video shapes, playback handoff, interruption, disposal, comments and retry/delete permissions, native share calls, mood filters, double-Back timing, shared mute state, keyboard insets and large-text layouts. A dedicated Android test records a real clip, decodes a local photo fixture and follows both through feed/detail navigation. Its repository and photo response are test fixtures; video playback uses the native player with a local file. It does not post to Firebase or exercise live Storage streaming.
 
 ## Structure
 
 - `lib/features/camera`: photo processing, lens presets, live camera UI and platform-channel adapters.
-- `lib/features/feed`: capture, preview, posting, playback, likes, blocking and reports.
+- `lib/features/feed`: capture, preview, posting, playback, comments, mood filters, likes, blocking and reports.
 - `lib/features/auth`, `user`, `profile`: account flow and profile management.
 - `lib/features/dares`: discovery and local starter dares if the remote catalog is empty or unavailable.
 - `android/.../BeautyPlugin.kt`: bundled native face detector.
 - `android/.../LiveBeautyPlugin.kt`, `LiveBeautyRenderer.kt` and `LiveBeautyRecorder.kt`: native live camera, landmark tracking, GPU lens rendering/capture and MP4 recording with audio.
-- `firestore.rules`, `storage.rules`, `firestore.indexes.json`: versioned backend access policy, not automatically deployed.
+- `firestore.rules`, `storage.rules`, `firestore.indexes.json`: full target policy and indexes. `firestore.compat.rules` / `firebase.compat.json` contain the current, explicitly deployed post/comment rollout; profile migration is still required before using the full policy. See `docs/RELEASE.md`.
 - `docs/RELEASE.md`: required migration and release work.
 
 Feed queries are bounded to 60 posts. Profile grids show the latest 60. The feed hides moments after 24 hours; the profile retains them until deleted. No fake followers, premium checkout or notification controls are shown.

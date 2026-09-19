@@ -44,6 +44,19 @@ class AccountRepository {
       }
       await batch.commit();
     }
+    while (true) {
+      final comments = await db
+          .collectionGroup('comments')
+          .where('authorId', isEqualTo: user.uid)
+          .limit(100)
+          .get();
+      if (comments.docs.isEmpty) break;
+      final batch = db.batch();
+      for (final comment in comments.docs) {
+        batch.delete(comment.reference);
+      }
+      await batch.commit();
+    }
     final storage = FirebaseStorage.instance;
     // Remove current and legacy avatar locations, plus unfinished uploads.
     for (final folder in [

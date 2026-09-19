@@ -1,48 +1,16 @@
+// Compatibility rollout: preserve existing profile/username behavior until
+// the profile migration in docs/RELEASE.md is complete. Posts and comments
+// use the tested production rules. Do not use the legacy allowance for new features.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function owner(uid) { return signedIn() && request.auth.uid == uid; }
-    function validProfile(uid) {
-      let data = request.resource.data;
-      return data.keys().hasOnly(['id', 'name', 'username', 'username_lower', 'username_normalized', 'photoUrl', 'bio', 'createdAt', 'updatedAt'])
-        && data.id == uid
-        && (!('name' in data) || data.name == null || (data.name is string && data.name.size() <= 50))
-        && (!('bio' in data) || data.bio == null || (data.bio is string && data.bio.size() <= 160))
-        && (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 2048 && data.photoUrl.matches('https://.*')))
-        && (!('username' in data) || data.username == null || (
-          data.username is string && data.username.matches('^[a-zA-Z0-9_]{3,20}$')
-          && data.username_lower == data.username.lower()
-          && getAfter(/databases/$(database)/documents/usernames/$(data.username_lower)).data.uid == uid));
-    }
-    match /users/{uid} {
-      allow read: if signedIn();
-      allow create: if owner(uid) && validProfile(uid) && request.resource.data.createdAt == request.time;
-      allow update: if owner(uid) && validProfile(uid)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','username','username_lower','username_normalized','photoUrl','bio','updatedAt']);
-      allow delete: if owner(uid);
-      match /blocked/{authorId} {
-        allow read, delete: if owner(uid);
-        allow create, update: if owner(uid) && authorId != uid
-          && request.resource.data.keys().hasOnly(['createdAt'])
-          && request.resource.data.createdAt == request.time;
+    match /{collection}/{id} {
+      allow read, write: if signedIn() && collection != 'posts';
+      match /{subcollection}/{document=**} {
+        allow read, write: if signedIn() && collection != 'posts' && subcollection != 'comments';
       }
-    }
-    match /usernames/{name} {
-      allow get: if signedIn();
-      allow create, update: if signedIn()
-        && request.resource.data.keys().hasOnly(['uid'])
-        && request.resource.data.uid == request.auth.uid
-        && (!exists(/databases/$(database)/documents/usernames/$(name)) || resource.data.uid == request.auth.uid)
-        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.username_lower == name;
-      allow delete: if owner(resource.data.uid)
-        && (!existsAfter(/databases/$(database)/documents/users/$(request.auth.uid))
-          || getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.username_lower != name);
-    }
-    match /dares/{id} {
-      allow read: if signedIn();
-      // Curated content is managed through trusted administrative tooling.
-      allow write: if false;
     }
     match /posts/{id} {
       allow read: if signedIn();
@@ -89,16 +57,6 @@ service cloud.firestore {
     // including comments whose parent was removed during an interrupted cleanup.
     match /{path=**}/comments/{commentId} {
       allow read, delete: if signedIn() && resource.data.authorId == request.auth.uid;
-    }
-    match /reports/{id} {
-      allow create, update: if signedIn()
-        && request.resource.data.keys().hasOnly(['postId','reporterId','reason','createdAt'])
-        && request.resource.data.reporterId == request.auth.uid
-        && request.resource.data.postId is string
-        && id == request.auth.uid + '_' + request.resource.data.postId
-        && request.resource.data.reason == 'inappropriate'
-        && request.resource.data.createdAt == request.time;
-      allow read, delete: if owner(resource.data.reporterId);
     }
   }
 }

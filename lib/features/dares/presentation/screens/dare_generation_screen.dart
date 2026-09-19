@@ -48,7 +48,13 @@ class _DareDisplayScreenState extends State<DareDisplayScreen> {
     try {
       final posted = await Navigator.push<bool>(
         context,
-        MaterialPageRoute(builder: (_) => CameraScreen(dareText: dare)),
+        MaterialPageRoute(
+          builder: (_) => CameraScreen(
+            dareText: dare,
+            moodId: widget.mood.id,
+            moodName: widget.mood.name,
+          ),
+        ),
       );
       if (mounted && posted == true) Navigator.pop(context);
     } finally {

@@ -16,6 +16,7 @@ class PreviewScreen extends StatefulWidget {
   final File mediaFile;
   final String mediaType;
   final String dareText;
+  final String? moodId, moodName;
   final String? liveLens;
   const PreviewScreen({
     super.key,
@@ -23,6 +24,8 @@ class PreviewScreen extends StatefulWidget {
     required this.mediaType,
     required this.dareText,
     this.liveLens,
+    this.moodId,
+    this.moodName,
   });
   @override
   State<PreviewScreen> createState() => _PreviewScreenState();
@@ -135,6 +138,8 @@ class _PreviewScreenState extends State<PreviewScreen>
       if (action == 'post') {
         await PostRepository().createPost(
           dareText: widget.dareText,
+          moodId: widget.moodId,
+          moodName: widget.moodName,
           mediaFile: file,
           mediaType: widget.mediaType,
           postId: _postId,

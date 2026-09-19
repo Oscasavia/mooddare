@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { before, after, beforeEach, test } from 'node:test';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, setDoc, getDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, Timestamp, collection, collectionGroup, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, deleteObject, listAll } from 'firebase/storage';
 let env;
 before(async () => {
@@ -87,3 +87,64 @@ test('a username cannot be released while the profile still claims it', async ()
   deletion.delete(doc(alice, 'usernames/alice'));
   await assertSucceeds(deletion.commit());
 });
+
+const comment = (uid = 'bob', text = 'Love this!') => ({authorId: uid, text, createdAt: serverTimestamp()});
+for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
+  test(`${policy}: comments enforce identity, content, parent and deletion permissions`, async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({projectId: 'demo-mooddare',
+      firestore: {rules: await readFile(new URL(`../../${policy}`, import.meta.url), 'utf8')},
+      storage: {rules: await readFile(new URL('../../storage.rules', import.meta.url), 'utf8')},
+    });
+    await setDoc(doc(db('alice'), 'posts/one'), post());
+    const bob = db('bob');
+    await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), 'posts/one/comments/c'), comment()));
+    await assertFails(setDoc(doc(bob, 'posts/missing/comments/c'), comment()));
+    await assertFails(setDoc(doc(bob, 'posts/one/comments/c'), comment('alice')));
+    for (const text of ['', '   ', '\n \t', 'x'.repeat(501)]) {
+      await assertFails(setDoc(doc(bob, 'posts/one/comments/c'), comment('bob', text)));
+    }
+    await assertFails(setDoc(doc(bob, 'posts/one/comments/c'), {...comment(), createdAt: Timestamp.fromMillis(1)}));
+    await assertFails(setDoc(doc(bob, 'posts/one/comments/c'), {...comment(), admin: true}));
+    await assertSucceeds(setDoc(doc(bob, 'posts/one/comments/c'), comment('bob', 'Nice!\nA second line 😊')));
+    await assertSucceeds(getDocs(query(collection(db('charlie'), 'posts/one/comments'), orderBy('createdAt', 'desc'))));
+    await assertFails(getDocs(collection(env.unauthenticatedContext().firestore(), 'posts/one/comments')));
+    await assertFails(updateDoc(doc(bob, 'posts/one/comments/c'), {text: 'Changed'}));
+    await assertFails(deleteDoc(doc(db('charlie'), 'posts/one/comments/c')));
+    await assertSucceeds(deleteDoc(doc(db('alice'), 'posts/one/comments/c')));
+    await setDoc(doc(bob, 'posts/one/comments/c'), comment());
+    await assertSucceeds(deleteDoc(doc(bob, 'posts/one/comments/c')));
+    await assertFails(deleteDoc(doc(bob, 'posts/one')));
+    await assertFails(updateDoc(doc(bob, 'posts/one'), {authorId: 'bob'}));
+  });
+  test(`${policy}: mood metadata stays paired and immutable; legacy posts still work`, async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({projectId: 'demo-mooddare',
+      firestore: {rules: await readFile(new URL(`../../${policy}`, import.meta.url), 'utf8')},
+      storage: {rules: await readFile(new URL('../../storage.rules', import.meta.url), 'utf8')},
+    });
+    const ref = doc(db('alice'), 'posts/one');
+    await assertFails(setDoc(ref, {...post(), moodId: 'happy'}));
+    await assertFails(setDoc(ref, {...post(), moodId: 7, moodName: 'Happy'}));
+    await assertFails(setDoc(ref, {...post(), moodId: 'happy', moodName: ''}));
+    await assertSucceeds(setDoc(ref, {...post(), moodId: 'happy', moodName: 'Happy'}));
+    await assertFails(updateDoc(ref, {moodId: 'calm'}));
+    await deleteDoc(ref);
+    await assertSucceeds(setDoc(ref, post()));
+  });
+  test(`${policy}: account cleanup can query only its own comments including orphans`, async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({projectId: 'demo-mooddare',
+      firestore: {rules: await readFile(new URL(`../../${policy}`, import.meta.url), 'utf8')},
+      storage: {rules: await readFile(new URL('../../storage.rules', import.meta.url), 'utf8')},
+    });
+    await setDoc(doc(db('alice'), 'posts/one'), post());
+    await setDoc(doc(db('bob'), 'posts/one/comments/c'), comment());
+    await deleteDoc(doc(db('alice'), 'posts/one'));
+    await assertFails(getDocs(collection(db('charlie'), 'posts/one/comments')));
+    const own = query(collectionGroup(db('bob'), 'comments'), where('authorId', '==', 'bob'));
+    await assertSucceeds(getDocs(own));
+    await assertFails(getDocs(query(collectionGroup(db('charlie'), 'comments'), where('authorId', '==', 'bob'))));
+    await assertSucceeds(deleteDoc(doc(db('bob'), 'posts/one/comments/c')));
+  });
+}
