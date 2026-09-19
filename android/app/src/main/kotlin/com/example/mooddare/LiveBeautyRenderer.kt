@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.opengl.EGL14
 import android.opengl.GLES20
+import android.opengl.GLUtils
 import android.opengl.EGLExt
 import android.view.Surface
 import java.io.File
@@ -101,7 +102,9 @@ internal class LiveBeautyRenderer(surface: Surface) {
         }
     }
 
-    private fun drawPixels(w: Int, h: Int) {
+    private fun drawPixels(w: Int, h: Int, inputTexture: Int = texture,
+        sourceWidth: Int = width, sourceHeight: Int = height,
+        landmarks: FloatArray? = face, confidence: Float = faceStrength) {
         GLES20.glViewport(0, 0, w, h)
         GLES20.glUseProgram(program)
         val position = GLES20.glGetAttribLocation(program, "position")
@@ -109,18 +112,20 @@ internal class LiveBeautyRenderer(surface: Surface) {
         vertices.position(0)
         GLES20.glVertexAttribPointer(position, 2, GLES20.GL_FLOAT, false, 0, vertices)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, inputTexture)
         GLES20.glUniform1i(uniform("image"), 0)
-        val sourceAspect = width.toFloat() / height
+        val sourceAspect = sourceWidth.toFloat() / sourceHeight
         val targetAspect = w.toFloat() / h
         GLES20.glUniform2f(uniform("crop"),
             if (sourceAspect > targetAspect) targetAspect / sourceAspect else 1f,
             if (sourceAspect < targetAspect) sourceAspect / targetAspect else 1f)
         GLES20.glUniform1f(uniform("mirror"), if (mirror) 1f else 0f)
-        GLES20.glUniform2f(uniform("stepSize"), 2f / width, 2f / height)
-        val f = face
+        // Preserve the visible smoothing radius when rendering a larger still.
+        val sampleScale = sourceHeight.toFloat() / height.coerceAtLeast(1)
+        GLES20.glUniform2f(uniform("stepSize"), 2f * sampleScale / sourceWidth, 2f * sampleScale / sourceHeight)
+        val f = landmarks
         GLES20.glUniform4f(uniform("settings"), if (original) 0f else smooth,
-            if (original) 0f else light, if (original) 0f else warmth, if (f == null) 0f else faceStrength)
+            if (original) 0f else light, if (original) 0f else warmth, if (f == null) 0f else confidence)
         GLES20.glUniform2f(uniform("shape"), if (original) 0f else eyeSize, if (original) 0f else faceSlim)
         GLES20.glUniform4fv(uniform("face"), 1, f ?: FloatArray(12), 0)
         GLES20.glUniform4fv(uniform("eyes"), 1, f ?: FloatArray(12), 4)
@@ -169,6 +174,51 @@ internal class LiveBeautyRenderer(surface: Surface) {
             bottomUp.recycle()
         }
         check(EGL14.eglSwapBuffers(display, window))
+    }
+
+    /** Render a sensor still offscreen without replacing the preview texture. */
+    fun captureStill(bitmap: Bitmap, file: File, landmarks: FloatArray?, confidence: Float) {
+        val aspect = outputAspect ?: (bitmap.width.toFloat() / bitmap.height)
+        val w = minOf(bitmap.width, (bitmap.height * aspect).toInt()).coerceAtLeast(2)
+        val h = minOf(bitmap.height, (bitmap.width / aspect).toInt()).coerceAtLeast(2)
+        val textures = IntArray(2)
+        val framebuffer = IntArray(1)
+        GLES20.glGenTextures(2, textures, 0)
+        GLES20.glGenFramebuffers(1, framebuffer, 0)
+        try {
+            for (index in textures.indices) {
+                GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textures[index])
+                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+                GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+                if (index == 0) GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0)
+                else GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, w, h, 0,
+                    GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, null)
+            }
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffer[0])
+            GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
+                GLES20.GL_TEXTURE_2D, textures[1], 0)
+            check(GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) == GLES20.GL_FRAMEBUFFER_COMPLETE)
+            drawPixels(w, h, textures[0], bitmap.width, bitmap.height, landmarks, confidence)
+            val bytes = ByteBuffer.allocateDirect(w * h * 4)
+            GLES20.glReadPixels(0, 0, w, h, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, bytes)
+            check(GLES20.glGetError() == GLES20.GL_NO_ERROR)
+            val bottomUp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            bytes.rewind(); bottomUp.copyPixelsFromBuffer(bytes)
+            val upright = Bitmap.createBitmap(bottomUp, 0, 0, w, h, Matrix().apply { preScale(1f, -1f) }, false)
+            try {
+                file.outputStream().use { check(upright.compress(Bitmap.CompressFormat.JPEG, 95, it)) }
+            } finally {
+                if (upright !== bottomUp) upright.recycle()
+                bottomUp.recycle()
+            }
+        } finally {
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+            GLES20.glDeleteFramebuffers(1, framebuffer, 0)
+            GLES20.glDeleteTextures(2, textures, 0)
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture)
+        }
     }
 
     fun close() {

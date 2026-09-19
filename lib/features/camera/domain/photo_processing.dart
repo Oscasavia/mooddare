@@ -37,11 +37,11 @@ Uint8List normalizePhoto(Uint8List bytes) {
   }
   var image = img.bakeOrientation(decoded);
   // Bound memory and processing cost on older phones. Never upscale a photo.
-  if (math.max(image.width, image.height) > 1600) {
+  if (math.max(image.width, image.height) > 2048) {
     image = img.copyResize(
       image,
-      width: image.width >= image.height ? 1600 : null,
-      height: image.height > image.width ? 1600 : null,
+      width: image.width >= image.height ? 2048 : null,
+      height: image.height > image.width ? 2048 : null,
       interpolation: img.Interpolation.average,
     );
   }

@@ -26,11 +26,11 @@ void main() {
       throwsFormatException,
     );
     final bytes = normalizePhoto(
-      Uint8List.fromList(img.encodePng(img.Image(width: 2000, height: 1000))),
+      Uint8List.fromList(img.encodePng(img.Image(width: 2560, height: 1280))),
     );
     final image = img.decodeJpg(bytes)!;
-    expect(image.width, 1600);
-    expect(image.height, 800);
+    expect(image.width, 2048);
+    expect(image.height, 1024);
   });
   test('normalization bakes EXIF rotation and removes camera metadata', () {
     final source = img.Image(width: 60, height: 40);

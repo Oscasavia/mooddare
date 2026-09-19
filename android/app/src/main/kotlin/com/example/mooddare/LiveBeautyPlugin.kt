@@ -5,6 +5,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.Handler
@@ -12,11 +13,18 @@ import android.os.HandlerThread
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Size
+import android.util.Rational
 import android.view.Surface
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Camera
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.UseCaseGroup
+import androidx.camera.core.ViewPort
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.core.app.ActivityCompat
@@ -113,10 +121,14 @@ class LiveBeautyPlugin(
                 if (current == null) result.error("closed", "Camera is closed.", null)
                 else current.setLook(call, result)
             }
-            "capture" -> {
+            "capture", "captureStillFixture" -> {
+                val fixture = call.method == "captureStillFixture"
+                if (fixture && activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) {
+                    result.notImplemented(); return
+                }
                 val current = session
                 if (current == null) result.error("closed", "Camera is closed.", null)
-                else current.capture(result, call.argument<Boolean>("flash") ?: false)
+                else current.capture(result, call.argument<Boolean>("flash") ?: false, fixture)
             }
             "setCaptureLight" -> {
                 val current = session
@@ -172,6 +184,10 @@ class LiveBeautyPlugin(
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
             .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
             .enableTracking().setMinFaceSize(.15f).build())
+        private val photoDetector = FaceDetection.getClient(FaceDetectorOptions.Builder()
+            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
+            .setMinFaceSize(.15f).build())
         private var provider: ProcessCameraProvider? = null
         private var camera: Camera? = null
         private var savedBrightness: Float? = null
@@ -180,12 +196,18 @@ class LiveBeautyPlugin(
         @Volatile private var lightFrame = 0L
         private val lightTimeout = Runnable { clearCaptureLight() }
         private var analysis: ImageAnalysis? = null
+        private var stillCapture: ImageCapture? = null
+        private var photoResult: MethodChannel.Result? = null
+        private var photoDetecting = false
+        private var threadFinished = false
+        private val photoTimeout = Runnable { finishPhoto(null, "Photo capture timed out. Please try again.") }
         private var renderer: LiveBeautyRenderer? = null
         private var pixels: ByteBuffer? = null
         private var detecting = false
         private var lastDetection = 0L
         private val faceTracker = FaceStabilizer()
         private var fixtureMode = false
+        private var fixtureFile: File? = null
         private var count = 0
         private var rateStart = SystemClock.elapsedRealtime()
         @Volatile private var closed = false
@@ -215,12 +237,17 @@ class LiveBeautyPlugin(
         fun start(fixture: File?, result: MethodChannel.Result) {
             startResult = result
             fixtureMode = fixture != null
+            fixtureFile = fixture
             handler.post {
                 try {
                     renderer = LiveBeautyRenderer(surface).apply { mirror = front }
                     if (fixture != null) {
-                        val bitmap = BitmapFactory.decodeFile(fixture.path)
+                        val originalBitmap = BitmapFactory.decodeFile(fixture.path)
                             ?: throw IllegalArgumentException("Invalid test image")
+                        val scale = min(1f, 1280f / max(originalBitmap.width, originalBitmap.height))
+                        val bitmap = if (scale < 1f) Bitmap.createScaledBitmap(originalBitmap,
+                            (originalBitmap.width * scale).toInt(), (originalBitmap.height * scale).toInt(), true) else originalBitmap
+                        if (bitmap !== originalBitmap) originalBitmap.recycle()
                         val rgba = ByteBuffer.allocateDirect(bitmap.width * bitmap.height * 4)
                         bitmap.copyPixelsToBuffer(rgba); rgba.rewind()
                         resize(bitmap.width, bitmap.height)
@@ -249,8 +276,8 @@ class LiveBeautyPlugin(
                     provider = future.get()
                     val selector = if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
                     check(provider!!.hasCamera(selector)) { "This camera is not available" }
-                    // Single upright RGBA stream: preview and capture have identical geometry.
-                    // CameraX drops old frames; work and memory never queue without bounds.
+                    // The viewport aligns preview/still crop rectangles on the sensor.
+                    // Keep preview resolution low; only shutter captures use a larger image.
                     val useCase = ImageAnalysis.Builder()
                         .setTargetResolution(Size(960, 720))
                         .setTargetRotation(Surface.ROTATION_0)
@@ -260,7 +287,30 @@ class LiveBeautyPlugin(
                         .build()
                     analysis = useCase
                     useCase.setAnalyzer(executor) { image -> render(image) }
-                    camera = provider!!.bindToLifecycle(activity, selector, useCase)
+                    val still = ImageCapture.Builder()
+                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                        .setTargetRotation(Surface.ROTATION_0)
+                        .setJpegQuality(95)
+                        .setResolutionSelector(ResolutionSelector.Builder()
+                            .setResolutionStrategy(ResolutionStrategy(Size(2048, 1536),
+                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER))
+                            .setResolutionFilter { sizes, _ ->
+                                sizes.filter { max(it.width, it.height) <= 3072 }
+                                    .ifEmpty { listOf(sizes.minBy { it.width.toLong() * it.height }) }
+                            }.build())
+                        .build()
+                    val group = UseCaseGroup.Builder().addUseCase(useCase).addUseCase(still)
+                        .setViewPort(ViewPort.Builder(Rational(3, 4), Surface.ROTATION_0)
+                            .setScaleType(ViewPort.FILL_CENTER).build()).build()
+                    try {
+                        camera = provider!!.bindToLifecycle(activity, selector, group)
+                        stillCapture = still
+                    } catch (_: IllegalArgumentException) {
+                        // Some older cameras cannot support both streams. Preserve capture.
+                        provider!!.unbind(useCase, still)
+                        camera = provider!!.bindToLifecycle(activity, selector, useCase)
+                        stillCapture = null
+                    }
                     finishStart()
                 } catch (e: Exception) {
                     error = "Could not start this camera. Return to Photo and try again."
@@ -289,7 +339,8 @@ class LiveBeautyPlugin(
         private fun render(image: ImageProxy) {
             try {
                 if (closed) return
-                resize(image.width, image.height)
+                val crop = image.cropRect
+                resize(crop.width(), crop.height())
                 val buffer = pixels!!
                 buffer.clear()
                 val plane = image.planes[0]
@@ -297,8 +348,9 @@ class LiveBeautyPlugin(
                 val source = plane.buffer.duplicate()
                 for (row in 0 until height) {
                     source.limit(source.capacity())
-                    source.position(row * plane.rowStride)
-                    source.limit(row * plane.rowStride + width * 4)
+                    val start = (row + crop.top) * plane.rowStride + crop.left * 4
+                    source.position(start)
+                    source.limit(start + width * 4)
                     buffer.put(source)
                 }
                 buffer.flip()
@@ -363,7 +415,7 @@ class LiveBeautyPlugin(
                     renderer?.face = null
                 }.addOnCompleteListener(executor) {
                     bitmap.recycle(); detecting = false; detections++
-                    if (closed) finishThread()
+                    if (closed) maybeFinishThread()
                 }
         }
 
@@ -387,6 +439,8 @@ class LiveBeautyPlugin(
         }
 
         fun status(): Map<String, Any?> = mapOf("ready" to ready, "width" to width, "height" to height,
+            "front" to front,
+            "highQualityPhotos" to (stillCapture != null),
             "hasFlash" to (camera?.cameraInfo?.hasFlashUnit() ?: false), "captureLight" to captureLight,
             "faceDetected" to faceVisible, "fps" to fps, "frames" to frames,
             "detections" to detections, "error" to error,
@@ -448,7 +502,7 @@ class LiveBeautyPlugin(
             handler.post {
                 var candidate: LiveBeautyRecorder? = null
                 try {
-                    check(!closed && ready && recorder == null && pendingVideo == null && !captureLight)
+                    check(!closed && ready && recorder == null && pendingVideo == null && !captureLight && photoResult == null && !photoDetecting)
                     val crop = renderer!!.captureSize()
                     val scale = min(1.0, min(1280.0 / max(crop.first, crop.second), 720.0 / min(crop.first, crop.second)))
                     val w = (crop.first * scale / 2).toInt() * 2
@@ -496,6 +550,7 @@ class LiveBeautyPlugin(
         fun setLook(call: MethodCall, result: MethodChannel.Result) {
             handler.post {
                 if (closed) { main.post { result.error("closed", "Camera is closed.", null) }; return@post }
+                if (photoResult != null) { main.post { result.error("busy", "Wait for the photo to finish.", null) }; return@post }
                 try {
                     renderer!!.apply {
                         smooth = (call.argument<Number>("smooth")?.toFloat() ?: 0f).coerceIn(0f, 1f)
@@ -514,15 +569,131 @@ class LiveBeautyPlugin(
             }
         }
 
-        fun capture(result: MethodChannel.Result, flash: Boolean = false) {
+        fun capture(result: MethodChannel.Result, flash: Boolean = false, highQualityFixture: Boolean = false) {
             handler.post {
                 try {
                     check(!closed && ready) { "Camera is not ready" }
+                    check(!recording && photoResult == null && !photoDetecting) { "Capture is busy" }
                     check(!flash || (captureLight && frames > lightFrame + 2)) { "Wait for an illuminated frame" }
-                    val file = File(activity.cacheDir, "mooddare-live-${UUID.randomUUID()}.jpg")
-                    renderer!!.capture(file)
-                    main.post { result.success(file.path) }
+                    val still = stillCapture
+                    if (highQualityFixture) {
+                        check(fixtureMode)
+                        val decoded = BitmapFactory.decodeFile(fixtureFile!!.path)
+                            ?: throw IllegalArgumentException("Invalid test image")
+                        val scale = min(1f, 2048f / max(decoded.width, decoded.height))
+                        val bitmap = if (scale < 1f) Bitmap.createScaledBitmap(decoded,
+                            (decoded.width * scale).toInt(), (decoded.height * scale).toInt(), true) else decoded
+                        if (bitmap !== decoded) decoded.recycle()
+                        val file = File(activity.cacheDir, "mooddare-still-fixture-${UUID.randomUUID()}.jpg")
+                        try { renderer!!.captureStill(bitmap, file, renderer!!.face, renderer!!.faceStrength) }
+                        finally { bitmap.recycle() }
+                        main.post { result.success(file.path) }
+                    } else if (fixtureMode || still == null) {
+                        val file = File(activity.cacheDir, "mooddare-live-${UUID.randomUUID()}.jpg")
+                        renderer!!.capture(file)
+                        main.post { result.success(file.path) }
+                    } else {
+                        photoResult = result
+                        val anchor = renderer!!.face?.copyOf()
+                        handler.postDelayed(photoTimeout, 20_000)
+                        main.post {
+                            if (!closed) {
+                                try {
+                                    still.takePicture(ContextCompat.getMainExecutor(activity), object : ImageCapture.OnImageCapturedCallback() {
+                                        override fun onCaptureSuccess(image: ImageProxy) {
+                                            if (closed || !handler.post { processStill(image, anchor, result) }) image.close()
+                                        }
+                                        override fun onError(exception: ImageCaptureException) {
+                                            handler.post { if (photoResult === result) finishPhoto(null, "Could not take this photo. Please try again.") }
+                                        }
+                                    })
+                                } catch (_: Exception) {
+                                    handler.post { if (photoResult === result) finishPhoto(null, "Could not take this photo. Please try again.") }
+                                }
+                            }
+                        }
+                    }
                 } catch (e: Exception) { main.post { result.error("capture", "Could not take this photo. Try again.", null) } }
+            }
+        }
+
+        private fun processStill(image: ImageProxy, anchor: FloatArray?, request: MethodChannel.Result) {
+            var bitmap: Bitmap? = null
+            try {
+                if (closed || photoResult !== request) return
+                val decoded = image.toBitmap()
+                try {
+                    val crop = image.cropRect
+                    val scale = min(1f, 2048f / max(crop.width(), crop.height()))
+                    bitmap = Bitmap.createBitmap(decoded, crop.left, crop.top, crop.width(), crop.height(),
+                        Matrix().apply { postRotate(image.imageInfo.rotationDegrees.toFloat()); postScale(scale, scale) }, true)
+                } finally { if (bitmap !== decoded) decoded.recycle() }
+            } catch (_: Exception) {
+                finishPhoto(null, "Could not process this photo. Please try again.")
+            } finally { image.close() }
+            val photo = bitmap ?: return
+            if (closed || photoResult !== request) { photo.recycle(); return }
+            val output = renderer!!
+            if (output.original || (output.smooth == 0f && output.eyeSize == 0f && output.faceSlim == 0f)) {
+                try { renderStill(photo, null, 0f) } finally { photo.recycle() }
+                return
+            }
+            photoDetecting = true
+            try {
+                photoDetector.process(InputImage.fromBitmap(photo, 0))
+                    .addOnSuccessListener(executor) { faces ->
+                        if (!closed && photoResult === request) {
+                            val candidates = faces.mapNotNull { face ->
+                                val types = listOf(FaceLandmark.LEFT_EYE, FaceLandmark.RIGHT_EYE, FaceLandmark.MOUTH_BOTTOM, FaceLandmark.NOSE_BASE)
+                                if (types.any { face.getLandmark(it) == null }) null else {
+                                    val points = coordinates(face, photo.width.toFloat(), photo.height.toFloat())
+                                    if (!FaceStabilizer.valid(points)) null else Pair(face, points)
+                                }
+                            }
+                            // A still may arrive after movement. Re-detect on the still itself;
+                            // never reuse preview landmarks on a different exposure.
+                            val picked = if (anchor == null) candidates.maxByOrNull { it.second[2] * it.second[3] }
+                                else candidates.minByOrNull { faceDistance(it.second, anchor) }
+                                    ?.takeIf { faceDistance(it.second, anchor) < 1f }
+                            val quality = picked?.first?.let { FaceStabilizer.poseStrength(it.headEulerAngleX, it.headEulerAngleY, it.headEulerAngleZ) } ?: 0f
+                            renderStill(photo, picked?.second, quality)
+                        }
+                    }.addOnFailureListener(executor) {
+                        if (photoResult === request) finishPhoto(null, "Could not apply this lens. Please try again.")
+                    }.addOnCompleteListener(executor) {
+                        photo.recycle(); photoDetecting = false
+                        if (closed) maybeFinishThread()
+                    }
+            } catch (_: Exception) {
+                photo.recycle(); photoDetecting = false
+                finishPhoto(null, "Could not apply this lens. Please try again.")
+            }
+        }
+
+        private fun faceDistance(face: FloatArray, anchor: FloatArray): Float {
+            val dx = (face[0] + face[2] * .5f - anchor[0] - anchor[2] * .5f) / anchor[2]
+            val dy = (face[1] + face[3] * .5f - anchor[1] - anchor[3] * .5f) / anchor[3]
+            return dx * dx + dy * dy
+        }
+
+        private fun renderStill(photo: Bitmap, points: FloatArray?, strength: Float) {
+            val file = File(activity.cacheDir, "mooddare-live-${UUID.randomUUID()}.jpg")
+            try {
+                renderer!!.captureStill(photo, file, points, strength)
+                finishPhoto(file.path)
+            } catch (_: Exception) {
+                file.delete()
+                finishPhoto(null, "Could not finish this photo. Please try again.")
+            }
+        }
+
+        private fun finishPhoto(path: String?, message: String = "Photo capture was interrupted.") {
+            handler.removeCallbacks(photoTimeout)
+            val pending = photoResult ?: return
+            photoResult = null
+            main.post {
+                if (path != null) pending.success(path)
+                else pending.error("capture", message, null)
             }
         }
 
@@ -532,14 +703,20 @@ class LiveBeautyPlugin(
             clearCaptureLight()
             finishStartError("closed", "Camera was closed.")
             analysis?.let { it.clearAnalyzer(); provider?.unbind(it) }
+            stillCapture?.let { provider?.unbind(it) }; stillCapture = null
             handler.post {
+                finishPhoto(null)
                 finishRecording()
                 renderer?.close(); renderer = null
                 surface.release()
                 main.post { entry.release(); done() }
-                if (!detecting) finishThread()
+                maybeFinishThread()
             }
         }
-        private fun finishThread() { detector.close(); thread.quitSafely() }
+        private fun maybeFinishThread() {
+            if (!closed || detecting || photoDetecting || threadFinished) return
+            threadFinished = true
+            detector.close(); photoDetector.close(); thread.quitSafely()
+        }
     }
 }

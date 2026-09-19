@@ -50,171 +50,181 @@ double difference(img.Image a, img.Image b, {int? right, int? bottom}) {
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'GPU lens capture preserves orientation, applies shapes and resets',
-    (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
-      final file = File(
-        '${(await getTemporaryDirectory()).path}/live-fixture.jpg',
+  testWidgets('GPU lens capture preserves orientation, applies shapes and resets', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    final file = File(
+      '${(await getTemporaryDirectory()).path}/live-fixture.jpg',
+    );
+    await file.writeAsBytes(base64Decode(faceFixtureBase64));
+    final source = img.decodeJpg(await file.readAsBytes())!;
+    try {
+      await channel.invokeMethod<void>('startFixture', {
+        'path': file.path,
+        'front': false,
+      });
+      await waitForState(
+        tester,
+        (state) => state['ready'] == true && state['faceDetected'] == true,
       );
-      await file.writeAsBytes(base64Decode(faceFixtureBase64));
-      final source = img.decodeJpg(await file.readAsBytes())!;
-      try {
-        await channel.invokeMethod<void>('startFixture', {
-          'path': file.path,
-          'front': false,
-        });
-        await waitForState(
-          tester,
-          (state) => state['ready'] == true && state['faceDetected'] == true,
-        );
-        await channel.invokeMethod<void>(
-          'setLook',
-          BeautyLens.all.first.settings(0),
-        );
-        final original = await capture();
-        expect(original.width, source.width);
-        expect(original.height, source.height);
-        expect(
-          difference(original, source),
-          lessThan(6),
-          reason: 'RGBA color order and upright output must match the input',
-        );
+      await channel.invokeMethod<void>(
+        'setLook',
+        BeautyLens.all.first.settings(0),
+      );
+      final original = await capture();
+      expect(original.width, source.width);
+      expect(original.height, source.height);
+      expect(
+        difference(original, source),
+        lessThan(6),
+        reason: 'RGBA color order and upright output must match the input',
+      );
 
-        for (final ratio in [9 / 16, 3 / 4]) {
-          await channel.invokeMethod<void>('setLook', {
-            ...BeautyLens.all.first.settings(0),
-            'aspectRatio': ratio,
-          });
-          final cropped = await capture();
-          final cropWidth = (source.height * ratio).toInt();
-          expect(cropped.width, cropWidth);
-          expect(cropped.height, source.height);
-          expect(
-            difference(
-              cropped,
-              img.copyCrop(
-                source,
-                x: (source.width - cropWidth) ~/ 2,
-                y: 0,
-                width: cropWidth,
-                height: source.height,
-              ),
-            ),
-            lessThan(6),
-            reason:
-                'The saved photo must match the selected preview ratio without stretching',
-          );
-        }
+      for (final ratio in [9 / 16, 3 / 4]) {
         await channel.invokeMethod<void>('setLook', {
           ...BeautyLens.all.first.settings(0),
-          'aspectRatio': null,
+          'aspectRatio': ratio,
         });
-
-        await channel.invokeMethod<void>(
-          'setLook',
-          const BeautyLens('Shape', eyeSize: 1, faceSlim: 1).settings(1),
-        );
-        final shaped = await capture();
-        expect(
-          difference(original, shaped),
-          greaterThan(.15),
-          reason: 'Eye and jaw geometry must actually change pixels',
-        );
+        final cropped = await capture();
+        final cropWidth = (source.height * ratio).toInt();
+        expect(cropped.width, cropWidth);
+        expect(cropped.height, source.height);
         expect(
           difference(
-            original,
-            shaped,
-            right: source.width ~/ 5,
-            bottom: source.height ~/ 5,
+            cropped,
+            img.copyCrop(
+              source,
+              x: (source.width - cropWidth) ~/ 2,
+              y: 0,
+              width: cropWidth,
+              height: source.height,
+            ),
           ),
-          lessThan(.5),
-          reason: 'The background outside the face must stay unchanged',
+          lessThan(6),
+          reason:
+              'The saved photo must match the selected preview ratio without stretching',
         );
+      }
+      await channel.invokeMethod<void>('setLook', {
+        ...BeautyLens.all.first.settings(0),
+        'aspectRatio': null,
+      });
 
-        for (final lens in const [
-          BeautyLens('Eyes', eyeSize: 1),
-          BeautyLens('Jaw', faceSlim: 1),
-          BeautyLens('Skin', smooth: 1),
-        ]) {
-          await channel.invokeMethod<void>('setLook', lens.settings(1));
-          expect(
-            difference(original, await capture()),
-            greaterThan(.02),
-            reason: '${lens.name} must independently change the output',
-          );
-        }
+      await channel.invokeMethod<void>(
+        'setLook',
+        const BeautyLens('Shape', eyeSize: 1, faceSlim: 1).settings(1),
+      );
+      final shaped = await capture();
+      final stillFile = File(
+        (await channel.invokeMethod<String>('captureStillFixture'))!,
+      );
+      final stillShaped = img.decodeJpg(await stillFile.readAsBytes())!;
+      await stillFile.delete();
+      expect(
+        difference(shaped, stillShaped),
+        lessThan(.5),
+        reason:
+            'Dedicated still rendering must use the same lens shader as preview',
+      );
+      expect(
+        difference(original, shaped),
+        greaterThan(.15),
+        reason: 'Eye and jaw geometry must actually change pixels',
+      );
+      expect(
+        difference(
+          original,
+          shaped,
+          right: source.width ~/ 5,
+          bottom: source.height ~/ 5,
+        ),
+        lessThan(.5),
+        reason: 'The background outside the face must stay unchanged',
+      );
 
-        await channel.invokeMethod<void>(
-          'setLook',
-          BeautyLens.all.last.settings(1, original: true),
-        );
+      for (final lens in const [
+        BeautyLens('Eyes', eyeSize: 1),
+        BeautyLens('Jaw', faceSlim: 1),
+        BeautyLens('Skin', smooth: 1),
+      ]) {
+        await channel.invokeMethod<void>('setLook', lens.settings(1));
         expect(
           difference(original, await capture()),
-          lessThan(.1),
-          reason: 'Original bypasses every effect',
+          greaterThan(.02),
+          reason: '${lens.name} must independently change the output',
         );
-        await channel.invokeMethod<void>('stop');
-
-        await channel.invokeMethod<void>('startFixture', {
-          'path': file.path,
-          'front': true,
-        });
-        await waitForState(
-          tester,
-          (state) => state['ready'] == true && state['faceDetected'] == true,
-        );
-        await channel.invokeMethod<void>(
-          'setLook',
-          BeautyLens.all.first.settings(0),
-        );
-        expect(
-          difference(await capture(), img.flipHorizontal(source)),
-          lessThan(6),
-          reason: 'Selfie preview and export use the same horizontal mirror',
-        );
-        await channel.invokeMethod<void>('stop');
-        final empty = img.Image(width: 256, height: 256);
-        for (var y = 0; y < 256; y++) {
-          for (var x = 0; x < 256; x++) {
-            empty.setPixelRgb(x, y, x, y, (x * 7 + y * 3) % 256);
-          }
-        }
-        await file.writeAsBytes(img.encodeJpg(empty));
-        await channel.invokeMethod<void>('startFixture', {
-          'path': file.path,
-          'front': false,
-        });
-        final noFace = await waitForState(
-          tester,
-          (state) => (state['detections'] as num? ?? 0) > 0,
-        );
-        expect(noFace['faceDetected'], isFalse);
-        await channel.invokeMethod<void>(
-          'setLook',
-          BeautyLens.all.first.settings(0),
-        );
-        final unchanged = await capture();
-        await channel.invokeMethod<void>(
-          'setLook',
-          const BeautyLens(
-            'Face',
-            smooth: 1,
-            eyeSize: 1,
-            faceSlim: 1,
-          ).settings(1),
-        );
-        expect(
-          difference(unchanged, await capture()),
-          lessThan(.1),
-          reason: 'Without a face, skin and geometry effects must be bypassed',
-        );
-      } finally {
-        await channel.invokeMethod<void>('stop');
-        await file.delete();
       }
-    },
-  );
+
+      await channel.invokeMethod<void>(
+        'setLook',
+        BeautyLens.all.last.settings(1, original: true),
+      );
+      expect(
+        difference(original, await capture()),
+        lessThan(.1),
+        reason: 'Original bypasses every effect',
+      );
+      await channel.invokeMethod<void>('stop');
+
+      await channel.invokeMethod<void>('startFixture', {
+        'path': file.path,
+        'front': true,
+      });
+      await waitForState(
+        tester,
+        (state) => state['ready'] == true && state['faceDetected'] == true,
+      );
+      await channel.invokeMethod<void>(
+        'setLook',
+        BeautyLens.all.first.settings(0),
+      );
+      expect(
+        difference(await capture(), img.flipHorizontal(source)),
+        lessThan(6),
+        reason: 'Selfie preview and export use the same horizontal mirror',
+      );
+      await channel.invokeMethod<void>('stop');
+      final empty = img.Image(width: 256, height: 256);
+      for (var y = 0; y < 256; y++) {
+        for (var x = 0; x < 256; x++) {
+          empty.setPixelRgb(x, y, x, y, (x * 7 + y * 3) % 256);
+        }
+      }
+      await file.writeAsBytes(img.encodeJpg(empty));
+      await channel.invokeMethod<void>('startFixture', {
+        'path': file.path,
+        'front': false,
+      });
+      final noFace = await waitForState(
+        tester,
+        (state) => (state['detections'] as num? ?? 0) > 0,
+      );
+      expect(noFace['faceDetected'], isFalse);
+      await channel.invokeMethod<void>(
+        'setLook',
+        BeautyLens.all.first.settings(0),
+      );
+      final unchanged = await capture();
+      await channel.invokeMethod<void>(
+        'setLook',
+        const BeautyLens(
+          'Face',
+          smooth: 1,
+          eyeSize: 1,
+          faceSlim: 1,
+        ).settings(1),
+      );
+      expect(
+        difference(unchanged, await capture()),
+        lessThan(.1),
+        reason: 'Without a face, skin and geometry effects must be bypassed',
+      );
+    } finally {
+      await channel.invokeMethod<void>('stop');
+      await file.delete();
+    }
+  });
 
   testWidgets(
     'live camera streams, switches lens, captures and resumes for retake',
@@ -290,6 +300,22 @@ void main() {
         tester,
         (state) => state['ready'] == true && (state['frames'] as num) > 2,
       );
+      // Native readiness precedes the UI's status poll after returning from review.
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        final button = tester.widget<IconButton>(
+          find.widgetWithIcon(IconButton, Icons.flip_camera_ios_outlined),
+        );
+        if (button.onPressed != null) break;
+      }
+      expect(
+        tester
+            .widget<IconButton>(
+              find.widgetWithIcon(IconButton, Icons.flip_camera_ios_outlined),
+            )
+            .onPressed,
+        isNotNull,
+      );
       // A native stop restores brightness even without a Dart cleanup request.
       await channel.invokeMethod<void>('setCaptureLight', {'enabled': true});
       expect(
@@ -301,7 +327,10 @@ void main() {
       await tester.tap(find.byTooltip('Switch camera'));
       await waitForState(
         tester,
-        (state) => state['ready'] == true && (state['frames'] as num) > 2,
+        (state) =>
+            state['front'] == false &&
+            state['ready'] == true &&
+            (state['frames'] as num) > 2,
       );
       final rear = (await channel.invokeMapMethod<String, dynamic>('status'))!;
       expect(rear['captureLight'], isFalse);
