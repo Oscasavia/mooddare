@@ -1,25 +1,26 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:mooddare/core/navigation.dart';
 import 'package:mooddare/models/post_model.dart';
 import 'package:mooddare/models/user_model.dart';
-import 'package:mooddare/features/user/data/repositories/user_repository.dart';
 import 'package:mooddare/features/feed/data/repositories/post_repository.dart';
 import 'package:mooddare/features/profile/presentation/screens/profile_screen.dart';
+import '../screens/post_details_screen.dart';
 
 class DareProofCard extends StatefulWidget {
   final PostModel post;
   final bool isFullScreen, isActive;
   final VoidCallback? onHidden;
+  final PostRepository? repository;
   const DareProofCard({
     super.key,
     required this.post,
     this.isFullScreen = false,
     this.isActive = false,
     this.onHidden,
+    this.repository,
   });
   @override
   State<DareProofCard> createState() => _DareProofCardState();
@@ -27,7 +28,7 @@ class DareProofCard extends StatefulWidget {
 
 class _DareProofCardState extends State<DareProofCard>
     with WidgetsBindingObserver, RouteAware {
-  final _repository = PostRepository();
+  late final PostRepository _repository;
   late Future<UserModel?> _author;
   VideoPlayerController? _video;
   Timer? _timer;
@@ -36,14 +37,23 @@ class _DareProofCardState extends State<DareProofCard>
       _liking = false,
       _videoFailed = false,
       _covered = false,
-      _foreground = true;
+      _foreground = true,
+      _opening = false,
+      _pausedByUser = false;
   int _likes = 0;
-  String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+  String? get _uid => _repository.currentUserId;
+  bool get _shouldPlay =>
+      widget.isActive &&
+      !_covered &&
+      _foreground &&
+      !_opening &&
+      !_pausedByUser;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _author = UserRepository().getUserModel(widget.post.authorId);
+    _repository = widget.repository ?? PostRepository();
+    _author = _repository.getAuthor(widget.post.authorId);
     _liked = widget.post.likedBy.contains(_uid);
     _likes = widget.post.likedBy.length;
     _timer = Timer.periodic(const Duration(minutes: 1), (_) {
@@ -61,7 +71,7 @@ class _DareProofCardState extends State<DareProofCard>
       await video.initialize();
       if (!mounted) return;
       await video.setLooping(true);
-      if (widget.isActive && !_covered && _foreground) await video.play();
+      if (_shouldPlay) await video.play();
       if (mounted) setState(() {});
     } catch (_) {
       if (mounted) setState(() => _videoFailed = true);
@@ -81,7 +91,7 @@ class _DareProofCardState extends State<DareProofCard>
 
   void _syncPlayback() {
     if (!(_video?.value.isInitialized ?? false)) return;
-    if (widget.isActive && !_covered && _foreground) {
+    if (_shouldPlay) {
       _video!.play();
     } else {
       _video!.pause();
@@ -90,6 +100,12 @@ class _DareProofCardState extends State<DareProofCard>
 
   @override
   void didPushNext() {
+    _covered = true;
+    _syncPlayback();
+  }
+
+  @override
+  void didPop() {
     _covered = true;
     _syncPlayback();
   }
@@ -133,6 +149,42 @@ class _DareProofCardState extends State<DareProofCard>
     }
   }
 
+  Future<void> _openMoment() async {
+    if (widget.isFullScreen) {
+      final video = _video;
+      if (video != null && video.value.isInitialized) {
+        _pausedByUser = video.value.isPlaying;
+        _syncPlayback();
+      }
+      return;
+    }
+    if (_opening) return;
+    _opening = true;
+    try {
+      // Stop the feed's audio before the detail viewer starts its player.
+      await _video?.pause();
+      if (!mounted) return;
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PostDetailsScreen(
+            post: widget.post,
+            repository: _repository,
+            onHidden: widget.onHidden,
+          ),
+        ),
+      );
+    } finally {
+      _opening = false;
+      if (mounted) _syncPlayback();
+    }
+  }
+
+  void _hide() {
+    widget.onHidden?.call();
+    if (widget.isFullScreen && mounted) Navigator.pop(context);
+  }
+
   Future<void> _like() async {
     final uid = _uid;
     if (uid == null || _liking) return;
@@ -160,14 +212,14 @@ class _DareProofCardState extends State<DareProofCard>
   Future<void> _action(String action) async {
     if (!mounted) return;
     if (action == 'hide') {
-      widget.onHidden?.call();
+      _hide();
       return;
     }
     try {
       if (action == 'block') {
         await _repository.blockAuthor(widget.post.authorId);
-        widget.onHidden?.call();
         _message('Account blocked. Manage blocked accounts in Settings.');
+        _hide();
         return;
       }
       if (action == 'report') {
@@ -221,7 +273,7 @@ class _DareProofCardState extends State<DareProofCard>
     if (widget.post.mediaType != 'video') {
       return Image.network(
         widget.post.mediaUrl,
-        fit: BoxFit.contain,
+        fit: widget.isFullScreen ? BoxFit.contain : BoxFit.cover,
         errorBuilder: (_, _, _) =>
             const Center(child: Icon(Icons.broken_image_outlined, size: 44)),
         loadingBuilder: (context, child, progress) => progress == null
@@ -235,9 +287,12 @@ class _DareProofCardState extends State<DareProofCard>
     if (!(_video?.value.isInitialized ?? false)) {
       return const Center(child: CircularProgressIndicator());
     }
-    return Center(
-      child: AspectRatio(
-        aspectRatio: _video!.value.aspectRatio,
+    return FittedBox(
+      fit: widget.isFullScreen ? BoxFit.contain : BoxFit.cover,
+      clipBehavior: Clip.hardEdge,
+      child: SizedBox(
+        width: _video!.value.size.width,
+        height: _video!.value.size.height,
         child: VideoPlayer(_video!),
       ),
     );
@@ -250,171 +305,173 @@ class _DareProofCardState extends State<DareProofCard>
       padding: EdgeInsets.all(widget.isFullScreen ? 0 : 12),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(widget.isFullScreen ? 0 : 28),
-        child: ColoredBox(
-          color: Colors.black,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              GestureDetector(
-                onDoubleTap: () {
-                  if (!_liked) _like();
-                },
-                onTap: () {
-                  final video = _video;
-                  if (video != null && video.value.isInitialized) {
-                    setState(() {
-                      video.value.isPlaying ? video.pause() : video.play();
-                    });
-                  }
-                },
-                child: _media(),
-              ),
-              const IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      stops: [.4, 1],
-                      colors: [Colors.transparent, Color(0xE6000000)],
+        child: GestureDetector(
+          key: ValueKey('moment_surface_${widget.post.id}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: _openMoment,
+          child: ColoredBox(
+            color: Colors.black,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onDoubleTap: () {
+                    if (!_liked) _like();
+                  },
+                  child: _media(),
+                ),
+                const IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: [.4, 1],
+                        colors: [Colors.transparent, Color(0xE6000000)],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Positioned(
-                top: widget.isFullScreen ? 72 : 8,
-                right: 8,
-                child: PopupMenuButton<String>(
-                  onSelected: _action,
-                  itemBuilder: (_) => [
-                    if (widget.post.authorId == _uid)
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Text('Delete moment'),
-                      ),
-                    if (widget.post.authorId != _uid)
-                      const PopupMenuItem(
-                        value: 'report',
-                        child: Text('Report moment'),
-                      ),
-                    if (widget.post.authorId != _uid)
-                      const PopupMenuItem(
-                        value: 'block',
-                        child: Text('Block account'),
-                      ),
-                    if (widget.onHidden != null)
-                      const PopupMenuItem(
-                        value: 'hide',
-                        child: Text('Hide for now'),
-                      ),
-                  ],
+                Positioned(
+                  top: widget.isFullScreen ? 72 : 8,
+                  right: 8,
+                  child: PopupMenuButton<String>(
+                    onSelected: _action,
+                    itemBuilder: (_) => [
+                      if (widget.post.authorId == _uid)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Delete moment'),
+                        ),
+                      if (widget.post.authorId != _uid)
+                        const PopupMenuItem(
+                          value: 'report',
+                          child: Text('Report moment'),
+                        ),
+                      if (widget.post.authorId != _uid)
+                        const PopupMenuItem(
+                          value: 'block',
+                          child: Text('Block account'),
+                        ),
+                      if (widget.onHidden != null)
+                        const PopupMenuItem(
+                          value: 'hide',
+                          child: Text('Hide for now'),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              Positioned(
-                left: 20,
-                right: 20,
-                bottom: 24,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.post.dareText,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        height: 1.25,
-                        fontWeight: FontWeight.w700,
+                Positioned(
+                  left: 20,
+                  right: 20,
+                  bottom: 24,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.post.dareText,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          height: 1.25,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    FutureBuilder<UserModel?>(
-                      future: _author,
-                      builder: (context, snapshot) {
-                        final author = snapshot.data;
-                        return Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 18,
-                              backgroundImage: author?.photoUrl != null
-                                  ? NetworkImage(author!.photoUrl!)
-                                  : null,
-                              child: author?.photoUrl == null
-                                  ? const Icon(Icons.person_outline, size: 20)
-                                  : null,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: TextButton(
-                                onPressed: author == null
-                                    ? null
-                                    : () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => ProfileScreen(
-                                            isGuest: false,
-                                            userId: author.id,
+                      const SizedBox(height: 16),
+                      FutureBuilder<UserModel?>(
+                        future: _author,
+                        builder: (context, snapshot) {
+                          final author = snapshot.data;
+                          return Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 18,
+                                backgroundImage: author?.photoUrl != null
+                                    ? NetworkImage(author!.photoUrl!)
+                                    : null,
+                                child: author?.photoUrl == null
+                                    ? const Icon(Icons.person_outline, size: 20)
+                                    : null,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextButton(
+                                  onPressed: author == null
+                                      ? null
+                                      : () => Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ProfileScreen(
+                                              isGuest: false,
+                                              userId: author.id,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    author?.username == null
-                                        ? 'MoodDare member'
-                                        : '@${author!.username}',
-                                    overflow: TextOverflow.ellipsis,
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      author?.username == null
+                                          ? 'MoodDare member'
+                                          : '@${author!.username}',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                            IconButton(
-                              tooltip: _liked ? 'Unlike' : 'Like',
-                              onPressed: _liking ? null : _like,
-                              icon: Icon(
-                                _liked
-                                    ? Icons.favorite
-                                    : Icons.favorite_outline,
-                                color: _liked
-                                    ? Colors.pinkAccent
-                                    : Colors.white,
+                              IconButton(
+                                tooltip: _liked ? 'Unlike' : 'Like',
+                                onPressed: _liking ? null : _like,
+                                icon: Icon(
+                                  _liked
+                                      ? Icons.favorite
+                                      : Icons.favorite_outline,
+                                  color: _liked
+                                      ? Colors.pinkAccent
+                                      : Colors.white,
+                                ),
                               ),
-                            ),
-                            Text('$_likes'),
-                            IconButton(
-                              tooltip: 'Share moment',
-                              onPressed: _share,
-                              icon: const Icon(Icons.ios_share, size: 22),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      remaining.isNegative
-                          ? 'Archived moment'
-                          : remaining.inHours > 0
-                          ? '${remaining.inHours}h left in the feed'
-                          : '${remaining.inMinutes}m left in the feed',
-                      style: const TextStyle(
-                        color: Colors.white60,
-                        fontSize: 12,
+                              Text('$_likes'),
+                              IconButton(
+                                tooltip: 'Share moment',
+                                onPressed: _share,
+                                icon: const Icon(Icons.ios_share, size: 22),
+                              ),
+                            ],
+                          );
+                        },
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              if (_video?.value.isInitialized == true &&
-                  !_video!.value.isPlaying)
-                const IgnorePointer(
-                  child: Center(
-                    child: Icon(
-                      Icons.play_circle_outline,
-                      size: 60,
-                      color: Colors.white70,
-                    ),
+                      const SizedBox(height: 8),
+                      Text(
+                        remaining.isNegative
+                            ? 'Archived moment'
+                            : remaining.inHours > 0
+                            ? '${remaining.inHours}h left in the feed'
+                            : '${remaining.inMinutes}m left in the feed',
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-            ],
+                if (_video != null)
+                  ValueListenableBuilder<VideoPlayerValue>(
+                    valueListenable: _video!,
+                    builder: (_, value, _) => IgnorePointer(
+                      child: value.isInitialized && !value.isPlaying
+                          ? const Center(
+                              child: Icon(
+                                Icons.play_circle_outline,
+                                size: 60,
+                                color: Colors.white70,
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

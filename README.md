@@ -16,6 +16,12 @@ Use your own Java 17 path on other machines. Flutter may otherwise choose Androi
 
 If the debugger connection hangs on the splash screen on this Mac, the verified fallback is `flutter run -d sdk --no-hot --no-resident`. It installs and opens the app without a hot-reload session. The standalone debug APK also launches normally.
 
+## Moments
+
+The Moments header uses **mooddare** branding. Photos and videos fill their rounded feed cards with a centered crop, preserving proportions. A single tap on the media or caption opens the same full-screen viewer used by profile dares; that viewer contains the full image/video without the feed crop. Tap a video in the viewer to pause or resume. Double-tapping media still likes the post, and action buttons and vertical feed swipes retain their own behavior.
+
+The feed video pauses before its viewer opens, the outgoing viewer pauses as it closes, and the active feed video resumes on return. Manually paused viewer videos stay paused after interruptions. Hiding a moment from the viewer closes it and removes the card from the current feed session.
+
 ## Mood collections
 
 Discover has a searchable mood grid with All, Free, Daring, Epic and Seasonal filters. Daring and Epic are locked premium previews. Tapping a premium mood shows **Coming soon**, including for legacy premium documents marked unlocked. Subscriptions, checkout and paid access are not implemented. Free moods still open the selected-dare screen and camera.
@@ -62,6 +68,8 @@ firebase emulators:exec --project demo-mooddare --only firestore,storage 'npm --
 The Android integration tests use a public-domain U.S. Navy portrait of Grace Hopper (James S. Davis; TensorFlow test crop). They cover detection, GPU pixel effects, no-face bypass, orientation/mirroring, export, editor UI, continuous frames, camera switching, capture/retake and rapid background/resume without posting to Firebase. Widget tests cover tap/hold/lock, pointer cancellation, release during recorder startup and switching between 9:16, 3:4 and Full on narrow/foldable layouts with enlarged text. Photo review tests cover opening/closing adjustments, rendered edits, comparison, reset and the export menu. Video tests check playback controls and encoded effects against a GPU still, H.264/AAC tracks and duration, playback, the 30-second limit and interrupted-clip recovery. Run these on a test emulator: Flutter's integration runner may uninstall the app afterward. Allow camera and microphone access when Android prompts. The test fixture is not part of the normal app bundle, and native fixture/track-inspection entry points are disabled in release builds.
 
 The mood regression suite covers legacy tier parsing, malformed catalog data, duplicate handling, source timeouts, offline fallback/retry, collection/search combinations, locked previews, direct premium-route guards and narrow/foldable layouts with enlarged text. The Android mood integration test follows an offline catalog through a premium preview, seasonal dare, live capture, floating photo controls and return navigation. It never posts or modifies Firebase. Unit/widget tests run in the existing GitHub workflow on pushes and pull requests; native integration tests currently run locally on a disposable Android emulator.
+
+Moments widget tests cover branding, photo fit, single/double taps, caption/action handling, vertical swiping, hiding, three video shapes, playback handoff, interruption and disposal. A dedicated Android test records a real clip, decodes a local photo fixture and follows both through feed/detail navigation. Its repository and photo response are test fixtures; video playback uses the native player with a local file. It does not post to Firebase or exercise live Storage streaming.
 
 ## Structure
 

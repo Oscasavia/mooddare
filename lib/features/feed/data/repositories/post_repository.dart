@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:mooddare/models/post_model.dart';
+import 'package:mooddare/models/user_model.dart';
 import 'package:uuid/uuid.dart';
 
 class PostRepository {
@@ -16,6 +17,13 @@ class PostRepository {
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
        _storage = storage ?? FirebaseStorage.instance,
        _auth = auth ?? FirebaseAuth.instance;
+
+  String? get currentUserId => _auth.currentUser?.uid;
+
+  Future<UserModel?> getAuthor(String uid) async {
+    final doc = await _firestore.collection('users').doc(uid).get();
+    return doc.exists ? UserModel.fromFirestore(doc) : null;
+  }
 
   Future<void> createPost({
     required String dareText,

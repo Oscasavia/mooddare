@@ -6,7 +6,8 @@ import '../../data/repositories/post_repository.dart';
 import '../widgets/dare_proof_card.dart';
 
 class FeedScreen extends StatefulWidget {
-  const FeedScreen({super.key});
+  final PostRepository? repository;
+  const FeedScreen({super.key, this.repository});
   @override
   State<FeedScreen> createState() => _FeedScreenState();
 }
@@ -15,6 +16,7 @@ class _FeedScreenState extends State<FeedScreen> {
   final _pages = PageController();
   final _hidden = <String>{};
   late Stream<List<PostModel>> _posts;
+  late final PostRepository _repository;
   Timer? _clock;
   StreamSubscription<Set<String>>? _blocks;
   Set<String> _blocked = {};
@@ -22,8 +24,9 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
-    _posts = PostRepository().getPosts();
-    _blocks = PostRepository().blockedAuthors().listen(
+    _repository = widget.repository ?? PostRepository();
+    _posts = _repository.getPosts();
+    _blocks = _repository.blockedAuthors().listen(
       (authors) {
         if (mounted) setState(() => _blocked = authors);
       },
@@ -53,11 +56,11 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Little moments'),
+      title: const Text('mooddare'),
       actions: [
         IconButton(
           tooltip: 'Refresh feed',
-          onPressed: () => setState(() => _posts = PostRepository().getPosts()),
+          onPressed: () => setState(() => _posts = _repository.getPosts()),
           icon: const Icon(Icons.refresh),
         ),
       ],
@@ -71,8 +74,7 @@ class _FeedScreenState extends State<FeedScreen> {
             title: 'Could not load moments',
             message: 'Check your connection and try again.',
             actionLabel: 'Retry',
-            onAction: () =>
-                setState(() => _posts = PostRepository().getPosts()),
+            onAction: () => setState(() => _posts = _repository.getPosts()),
           );
         }
         if (!snapshot.hasData) {
@@ -103,6 +105,7 @@ class _FeedScreenState extends State<FeedScreen> {
           itemBuilder: (context, i) => DareProofCard(
             key: ValueKey(posts[i].id),
             post: posts[i],
+            repository: _repository,
             isActive: i == active,
             onHidden: () => setState(() => _hidden.add(posts[i].id)),
           ),
