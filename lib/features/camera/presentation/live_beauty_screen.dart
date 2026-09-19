@@ -503,7 +503,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
             children: [
               if (_texture != null)
                 Align(
-                  alignment: Alignment.topCenter,
+                  alignment: Alignment.center,
                   child: AspectRatio(
                     key: const ValueKey('camera_frame'),
                     aspectRatio: _viewportAspect,

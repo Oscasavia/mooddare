@@ -262,12 +262,13 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('capture_shutter')));
       for (
         var i = 0;
-        i < 100 && find.textContaining('· Photo studio').evaluate().isEmpty;
+        i < 100 &&
+            find.byKey(const ValueKey('capture_preview')).evaluate().isEmpty;
         i++
       ) {
         await tester.pump(const Duration(milliseconds: 200));
       }
-      expect(find.textContaining('· Photo studio'), findsOneWidget);
+      expect(find.byKey(const ValueKey('capture_preview')), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pageBack();
       await waitForState(

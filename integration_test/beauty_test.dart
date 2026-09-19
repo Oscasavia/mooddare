@@ -45,17 +45,72 @@ void main() {
         );
         for (
           var i = 0;
-          i < 60 && find.text('Photo studio').evaluate().isEmpty;
+          i < 60 &&
+              find.byKey(const ValueKey('capture_preview')).evaluate().isEmpty;
           i++
         ) {
           await tester.pump(const Duration(milliseconds: 500));
         }
-        expect(find.text('Photo studio'), findsOneWidget);
+        expect(find.byKey(const ValueKey('capture_preview')), findsOneWidget);
+        expect(find.byType(Slider), findsNothing);
+        final before =
+            (tester
+                        .widget<Image>(
+                          find.byKey(const ValueKey('capture_preview')),
+                        )
+                        .image
+                    as MemoryImage)
+                .bytes;
+        await tester.tap(find.byTooltip('Adjust photo'));
+        await tester.pump();
+        expect(find.byType(Slider), findsOneWidget);
         expect(find.text('Smooth'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-        await tester.tap(find.text('Edited'));
+        await tester.tap(find.widgetWithText(ChoiceChip, 'Light'));
+        await tester.pump();
+        await tester.drag(find.byType(Slider), const Offset(50, 0));
+        for (var i = 0; i < 60; i++) {
+          await tester.pump(const Duration(milliseconds: 250));
+          if (find.byType(LinearProgressIndicator).evaluate().isEmpty) break;
+        }
+        final edited =
+            (tester
+                        .widget<Image>(
+                          find.byKey(const ValueKey('capture_preview')),
+                        )
+                        .image
+                    as MemoryImage)
+                .bytes;
+        expect(edited, isNot(before));
+        await tester.tap(find.text('Compare'));
         await tester.pump();
         expect(find.text('Original'), findsOneWidget);
+        expect(
+          (tester
+                      .widget<Image>(
+                        find.byKey(const ValueKey('capture_preview')),
+                      )
+                      .image
+                  as MemoryImage)
+              .bytes,
+          before,
+        );
+        await tester.tap(find.byTooltip('Reset adjustments'));
+        for (var i = 0; i < 60; i++) {
+          await tester.pump(const Duration(milliseconds: 250));
+          if (find.byType(LinearProgressIndicator).evaluate().isEmpty) break;
+        }
+        expect(find.text('Compare'), findsNothing);
+        expect(tester.widget<Slider>(find.byType(Slider)).value, 0);
+        await tester.tap(find.byTooltip('Done adjusting'));
+        await tester.pump();
+        expect(find.byType(Slider), findsNothing);
+        await tester.tap(find.byTooltip('Save or share'));
+        await tester.pumpAndSettle();
+        expect(find.text('Save to photos'), findsOneWidget);
+        expect(find.text('Share capture'), findsOneWidget);
+        Navigator.of(tester.element(find.byType(PreviewScreen))).pop();
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
         await tester.pumpWidget(const MaterialApp(home: SizedBox()));
         await tester.pump();
       } finally {
@@ -86,12 +141,13 @@ void main() {
     await tester.tap(find.bySemanticsLabel('Take photo'));
     for (
       var i = 0;
-      i < 80 && find.text('Photo studio').evaluate().isEmpty;
+      i < 80 &&
+          find.byKey(const ValueKey('capture_preview')).evaluate().isEmpty;
       i++
     ) {
       await tester.pump(const Duration(milliseconds: 250));
     }
-    expect(find.text('Photo studio'), findsOneWidget);
+    expect(find.byKey(const ValueKey('capture_preview')), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pageBack();
     await tester.pump(const Duration(seconds: 2));

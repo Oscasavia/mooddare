@@ -61,6 +61,7 @@ void main() {
         }
         final frame = find.byKey(const ValueKey('camera_frame'));
         expect(tester.getSize(frame).aspectRatio, closeTo(9 / 16, .0001));
+        expect(tester.getCenter(frame), size.center(Offset.zero));
         expect(sentAspect, 9 / 16);
         for (final entry in {
           '3:4': 3 / 4,
@@ -91,6 +92,7 @@ void main() {
           expect(tester.getRect(frame).left, greaterThanOrEqualTo(0));
           expect(tester.getRect(frame).right, lessThanOrEqualTo(size.width));
           expect(tester.getRect(frame).bottom, lessThanOrEqualTo(size.height));
+          expect(tester.getCenter(frame), size.center(Offset.zero));
         }
         expect(tester.getSize(find.byType(PageView)).width, size.width);
         expect(tester.getRect(find.byType(TextButton)).bottom, lessThan(100));

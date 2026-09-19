@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 import '../../../camera/data/photo_editor.dart';
 import '../../../camera/domain/photo_processing.dart';
+import '../../../camera/presentation/photo_adjustments_panel.dart';
 import '../../data/repositories/post_repository.dart';
 
 class PreviewScreen extends StatefulWidget {
@@ -37,6 +38,11 @@ class _PreviewScreenState extends State<PreviewScreen>
   String? _error;
   int _revision = 0;
   bool _processing = false;
+  bool _showAdjustments = false;
+  bool get _hasEdits =>
+      _settings.smoothing != 0 ||
+      _settings.brightness != 0 ||
+      _settings.warmth != 0;
   Timer? _debounce;
   bool get _isPhoto => widget.mediaType == 'image';
 
@@ -80,6 +86,7 @@ class _PreviewScreenState extends State<PreviewScreen>
     _debounce?.cancel();
     setState(() {
       _settings = settings;
+      _original = false;
       _rendering = true;
       _revision++;
     });
@@ -186,255 +193,302 @@ class _PreviewScreenState extends State<PreviewScreen>
     super.dispose();
   }
 
-  Widget _slider(
-    String label,
-    double value,
-    ValueChanged<double>? onChanged, {
-    double min = 0,
-  }) => Row(
-    children: [
-      SizedBox(
-        width: 68,
-        child: Text(label, style: Theme.of(context).textTheme.bodySmall),
-      ),
-      Expanded(
-        child: Slider(
-          value: value,
-          min: min,
-          max: 1,
-          onChanged: _busy ? null : onChanged,
+  void _reset() {
+    setState(() => _error = null);
+    _adjust(const PhotoAdjustments());
+  }
+
+  void _showDare() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+          child: Text(
+            widget.dareText,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
         ),
       ),
-      SizedBox(
-        width: 34,
-        child: Text(
-          '${(value * 100).round()}',
-          textAlign: TextAlign.end,
-          style: Theme.of(context).textTheme.bodySmall,
+    );
+  }
+
+  Widget _media() {
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(
+          semanticsLabel: 'Preparing your capture',
+        ),
+      );
+    }
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.refresh, size: 32, color: Colors.white60),
+              const SizedBox(height: 12),
+              Text(_error!, textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              if (_editor != null)
+                TextButton(
+                  onPressed: _busy ? null : _reset,
+                  child: const Text('Reset adjustments'),
+                )
+              else
+                TextButton(
+                  onPressed: () => Navigator.maybePop(context),
+                  child: const Text('Retake'),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_isPhoto) {
+      return Image.memory(
+        _original ? _editor!.original : _rendered!,
+        key: const ValueKey('capture_preview'),
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+      );
+    }
+    final video = _video;
+    if (video == null || !video.value.isInitialized) return const SizedBox();
+    return Center(
+      child: AspectRatio(
+        aspectRatio: video.value.aspectRatio,
+        child: ValueListenableBuilder<VideoPlayerValue>(
+          valueListenable: video,
+          builder: (context, value, _) => Semantics(
+            button: true,
+            label: value.isPlaying ? 'Pause video' : 'Play video',
+            child: GestureDetector(
+              onTap: () => value.isPlaying ? video.pause() : video.play(),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  VideoPlayer(video),
+                  if (!value.isPlaying)
+                    const Center(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Icon(Icons.play_arrow_rounded, size: 40),
+                        ),
+                      ),
+                    ),
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom: 12,
+                    child: VideoProgressIndicator(
+                      video,
+                      allowScrubbing: true,
+                      colors: VideoProgressColors(
+                        playedColor: Theme.of(context).colorScheme.primary,
+                        backgroundColor: Colors.white24,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
-    ],
-  );
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final blocked = _loading || _busy || _rendering || _error != null;
+    final canAdjust = _isPhoto && _editor != null;
     return PopScope(
       canPop: !_busy,
       child: Scaffold(
+        backgroundColor: Colors.black,
         appBar: AppBar(
-          title: Text(_isPhoto ? 'Make it yours' : 'Your moment'),
+          backgroundColor: Colors.black,
+          leading: BackButton(
+            onPressed: _busy ? null : () => Navigator.maybePop(context),
+          ),
+          title: Text(
+            _isPhoto ? 'Make it yours' : 'Your moment',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+          ),
           actions: [
-            if (_isPhoto && _editor != null)
-              TextButton(
-                onPressed: _busy
-                    ? null
-                    : () {
-                        setState(() => _error = null);
-                        _adjust(const PhotoAdjustments());
-                      },
-                child: const Text('Reset'),
-              ),
+            PopupMenuButton<String>(
+              tooltip: 'Save or share',
+              enabled: !blocked,
+              onSelected: _useMedia,
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'save',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.download_outlined),
+                    title: Text('Save to photos'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'share',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.ios_share),
+                    title: Text('Share capture'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 8),
           ],
         ),
         body: SafeArea(
+          top: false,
           child: Column(
             children: [
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(24),
-                    child: Container(
-                      color: Colors.black,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          if (_loading)
-                            const Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  CircularProgressIndicator(),
-                                  SizedBox(height: 16),
-                                  Text('Preparing your capture…'),
-                                ],
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _media(),
+                        if (canAdjust && _hasEdits && _error == null)
+                          Positioned(
+                            top: 12,
+                            right: 12,
+                            child: FilledButton.tonalIcon(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.black54,
+                                foregroundColor: Colors.white,
+                                minimumSize: const Size(48, 44),
                               ),
-                            )
-                          else if (_error != null)
-                            Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(24),
-                                child: Text(
-                                  _error!,
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                            )
-                          else if (_isPhoto)
-                            Image.memory(
-                              _original ? _editor!.original : _rendered!,
-                              fit: BoxFit.contain,
-                              gaplessPlayback: true,
-                            )
-                          else if (_video?.value.isInitialized ?? false)
-                            Center(
-                              child: AspectRatio(
-                                aspectRatio: _video!.value.aspectRatio,
-                                child: GestureDetector(
-                                  onTap: () => setState(() {
-                                    _video!.value.isPlaying
-                                        ? _video!.pause()
-                                        : _video!.play();
-                                  }),
-                                  child: VideoPlayer(_video!),
-                                ),
+                              onPressed: _busy
+                                  ? null
+                                  : () =>
+                                        setState(() => _original = !_original),
+                              icon: const Icon(Icons.compare_arrows, size: 18),
+                              label: Text(
+                                _original
+                                    ? (widget.liveLens == null
+                                          ? 'Original'
+                                          : 'Captured')
+                                    : 'Compare',
                               ),
                             ),
-                          if (_isPhoto && _editor != null && _error == null)
-                            Positioned(
-                              top: 12,
-                              right: 12,
-                              child: FilledButton.tonalIcon(
-                                onPressed: () =>
-                                    setState(() => _original = !_original),
-                                icon: const Icon(
-                                  Icons.compare_arrows,
-                                  size: 18,
-                                ),
-                                label: Text(
-                                  _original
-                                      ? (widget.liveLens == null
-                                            ? 'Original'
-                                            : 'Captured')
-                                      : 'Edited',
-                                ),
-                              ),
-                            ),
-                          if (_rendering)
-                            const Positioned(
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
-                              child: LinearProgressIndicator(),
-                            ),
-                        ],
-                      ),
+                          ),
+                        if (_rendering || _busy)
+                          const Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: LinearProgressIndicator(),
+                          ),
+                      ],
                     ),
                   ),
                 ),
               ),
-              Flexible(
-                flex: 0,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.sizeOf(context).height * .42,
-                  ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_isPhoto && _editor != null) ...[
-                          Row(
-                            children: [
-                              const Icon(Icons.auto_awesome, size: 18),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  widget.liveLens == null
-                                      ? 'Photo studio'
-                                      : '${widget.liveLens} · Photo studio',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                'On your device',
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(color: Colors.white54),
-                              ),
-                            ],
-                          ),
-                          if (_editor!.notice != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
+              // Keep the media visible even on short screens or with large text.
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * .42,
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (canAdjust && _showAdjustments)
+                        PhotoAdjustmentsPanel(
+                          settings: _settings,
+                          faceDetected: _editor!.faceDetected,
+                          notice: _editor!.notice,
+                          enabled: !_busy,
+                          onChanged: _adjust,
+                          onReset: _reset,
+                        ),
+                      TextButton(
+                        onPressed: _busy ? null : _showDare,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white60,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.bolt_rounded, size: 16),
+                            const SizedBox(width: 6),
+                            Flexible(
                               child: Text(
-                                _editor!.notice!,
+                                widget.dareText,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(color: Colors.white60),
                               ),
                             ),
-                          _slider(
-                            'Smooth',
-                            _settings.smoothing,
-                            _editor!.faceDetected
-                                ? (v) =>
-                                      _adjust(_settings.copyWith(smoothing: v))
-                                : null,
-                          ),
-                          _slider(
-                            'Light',
-                            _settings.brightness,
-                            (v) => _adjust(_settings.copyWith(brightness: v)),
-                            min: -1,
-                          ),
-                          _slider(
-                            'Warmth',
-                            _settings.warmth,
-                            (v) => _adjust(_settings.copyWith(warmth: v)),
-                            min: -1,
-                          ),
-                        ],
-                        Text(
-                          widget.dareText,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: Colors.white70),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            IconButton.filledTonal(
-                              tooltip: 'Save to photos',
-                              onPressed: blocked
-                                  ? null
-                                  : () => _useMedia('save'),
-                              icon: const Icon(Icons.download_outlined),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton.filledTonal(
-                              tooltip: 'Share capture',
-                              onPressed: blocked
-                                  ? null
-                                  : () => _useMedia('share'),
-                              icon: const Icon(Icons.ios_share),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: FilledButton.icon(
-                                onPressed: blocked
-                                    ? null
-                                    : () => _useMedia('post'),
-                                icon: _busy
-                                    ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.arrow_upward, size: 20),
-                                label: const Text('Post dare'),
-                              ),
-                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.chevron_right, size: 16),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                      Row(
+                        children: [
+                          if (canAdjust) ...[
+                            IconButton.filledTonal(
+                              tooltip: _showAdjustments
+                                  ? 'Done adjusting'
+                                  : 'Adjust photo',
+                              isSelected: _showAdjustments,
+                              style: IconButton.styleFrom(
+                                minimumSize: const Size(56, 52),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              onPressed: _busy
+                                  ? null
+                                  : () => setState(
+                                      () =>
+                                          _showAdjustments = !_showAdjustments,
+                                    ),
+                              icon: const Icon(Icons.tune),
+                              selectedIcon: const Icon(Icons.check),
+                            ),
+                            const SizedBox(width: 12),
+                          ],
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: blocked
+                                  ? null
+                                  : () => _useMedia('post'),
+                              icon: _busy
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.arrow_upward, size: 20),
+                              label: Text(_busy ? 'Please wait…' : 'Post dare'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),

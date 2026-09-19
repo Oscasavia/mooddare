@@ -219,6 +219,12 @@ void main() {
       await tester.pump(const Duration(milliseconds: 150));
     }
     expect(find.byType(VideoPlayer), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Pause video'));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.bySemanticsLabel('Play video'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Play video'));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.bySemanticsLabel('Pause video'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pageBack();
     await waitForState(tester, (state) => state['ready'] == true);
