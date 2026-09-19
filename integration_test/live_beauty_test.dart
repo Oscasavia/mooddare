@@ -227,6 +227,7 @@ void main() {
           smooth: 1,
           eyeSize: 1,
           faceSlim: 1,
+          makeup: 1,
         ).settings(1),
       );
       expect(

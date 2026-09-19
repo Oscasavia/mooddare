@@ -28,6 +28,10 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.core.app.ActivityCompat
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.facemesh.FaceMesh
+import com.google.mlkit.vision.facemesh.FaceMeshDetection
+import com.google.mlkit.vision.facemesh.FaceMeshDetectorOptions
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
@@ -121,6 +125,11 @@ class LiveBeautyPlugin(
                 if (current == null) result.error("closed", "Camera is closed.", null)
                 else current.setLook(call, result)
             }
+            "inspectFaceGeometry" -> {
+                if (activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) { result.notImplemented(); return }
+                session?.inspectGeometry(result, call.argument<List<List<Number>>>("polygons"))
+                    ?: result.error("closed", "Camera is closed.", null)
+            }
             "capture", "captureStillFixture" -> {
                 val fixture = call.method == "captureStillFixture"
                 if (fixture && activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) {
@@ -188,6 +197,8 @@ class LiveBeautyPlugin(
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
             .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
             .setMinFaceSize(.15f).build())
+        private val meshDetector = FaceMeshDetection.getClient(FaceMeshDetectorOptions.Builder().setUseCase(FaceMeshDetectorOptions.FACE_MESH).build())
+        private val photoMeshDetector = FaceMeshDetection.getClient(FaceMeshDetectorOptions.Builder().setUseCase(FaceMeshDetectorOptions.FACE_MESH).build())
         private var provider: ProcessCameraProvider? = null
         private var camera: Camera? = null
         private var savedBrightness: Float? = null
@@ -215,6 +226,8 @@ class LiveBeautyPlugin(
         @Volatile private var width = 0
         @Volatile private var height = 0
         @Volatile private var faceVisible = false
+        @Volatile private var geometryVisible = false
+        @Volatile private var detectionMillis = 0L
         @Volatile private var fps = 0.0
         @Volatile private var error: String? = null
         @Volatile private var frames = 0L
@@ -382,41 +395,51 @@ class LiveBeautyPlugin(
         private fun detect(bitmap: Bitmap) {
             detecting = true
             val submitted = SystemClock.elapsedRealtime()
-            detector.process(InputImage.fromBitmap(bitmap, 0))
-                .addOnSuccessListener(executor) { faces ->
-                    if (!closed) {
-                        val observations = faces.map { face ->
-                            val usable = face.getLandmark(FaceLandmark.LEFT_EYE) != null &&
-                                face.getLandmark(FaceLandmark.RIGHT_EYE) != null &&
-                                face.getLandmark(FaceLandmark.MOUTH_BOTTOM) != null &&
-                                face.getLandmark(FaceLandmark.NOSE_BASE) != null
-                            FaceObservation(face.trackingId,
-                                face.boundingBox.width().toFloat() * face.boundingBox.height(),
-                                if (usable) coordinates(face, bitmap.width.toFloat(), bitmap.height.toFloat()) else null,
-                                face.headEulerAngleX, face.headEulerAngleY, face.headEulerAngleZ)
-                        }
-                        val now = SystemClock.elapsedRealtime()
-                        if (fixtureMode) {
-                            // A still fixture has no timeline; evaluate its settled pose.
-                            val face = observations.maxByOrNull { it.area }
-                            val value = face?.points?.takeIf { FaceStabilizer.valid(it) }
-                            val strength = face?.let { FaceStabilizer.poseStrength(it.pitch, it.yaw, it.roll) } ?: 0f
-                            faceVisible = value != null && strength > 0f
-                            renderer?.face = if (faceVisible) value else null
-                            renderer?.faceStrength = strength
-                            renderer?.draw()
-                        } else {
-                            faceTracker.update(observations, submitted, now)
-                            updateTrackedFace(now)
-                        }
+            val input = InputImage.fromBitmap(bitmap, 0)
+            val facesTask = detector.process(input)
+            val meshTask = try {
+                if (fixtureMode || (renderer?.smooth ?: 0f) > 0f || (renderer?.makeup ?: 0f) > 0f) meshDetector.process(input)
+                else Tasks.forResult(emptyList<FaceMesh>())
+            }
+                catch (e: Exception) { Tasks.forException<List<FaceMesh>>(e) }
+            Tasks.whenAllComplete(facesTask, meshTask).addOnCompleteListener(executor) {
+                try {
+                    if (closed) return@addOnCompleteListener
+                    val meshes = if (meshTask.isSuccessful) meshTask.result else emptyList()
+                    val faces = if (facesTask.isSuccessful) facesTask.result else emptyList()
+                    val observations = faces.map { face ->
+                        val usable = listOf(FaceLandmark.LEFT_EYE, FaceLandmark.RIGHT_EYE,
+                            FaceLandmark.MOUTH_BOTTOM, FaceLandmark.NOSE_BASE).all { face.getLandmark(it) != null }
+                        val points = if (usable) coordinates(face, bitmap.width.toFloat(), bitmap.height.toFloat()) else null
+                        FaceObservation(face.trackingId,
+                            face.boundingBox.width().toFloat() * face.boundingBox.height(), points,
+                            face.headEulerAngleX, face.headEulerAngleY, face.headEulerAngleZ,
+                            points?.let { MeshGeometryFactory.matching(meshes, it, bitmap.width, bitmap.height) })
                     }
-                }.addOnFailureListener(executor) {
-                    faceTracker.reset(); faceVisible = false
-                    renderer?.face = null
-                }.addOnCompleteListener(executor) {
+                    val now = SystemClock.elapsedRealtime()
+                    detectionMillis = now - submitted
+                    if (fixtureMode) {
+                        val face = observations.maxByOrNull { it.area }
+                        val value = face?.points?.takeIf { FaceStabilizer.valid(it) }
+                        val strength = face?.let { FaceStabilizer.poseStrength(it.pitch, it.yaw, it.roll) } ?: 0f
+                        faceVisible = value != null && strength > 0f
+                        renderer?.face = if (faceVisible) value else null
+                        renderer?.faceGeometry = if (faceVisible) face?.geometry else null
+                        geometryVisible = renderer?.faceGeometry != null
+                        renderer?.faceStrength = strength
+                        renderer?.draw()
+                    } else {
+                        faceTracker.update(observations, submitted, now)
+                        updateTrackedFace(now)
+                    }
+                } catch (_: Exception) {
+                    faceTracker.reset(); faceVisible = false; geometryVisible = false
+                    renderer?.face = null; renderer?.faceGeometry = null
+                } finally {
                     bitmap.recycle(); detecting = false; detections++
                     if (closed) maybeFinishThread()
                 }
+            }
         }
 
         private fun updateTrackedFace(now: Long) {
@@ -424,6 +447,8 @@ class LiveBeautyPlugin(
             faceVisible = tracked != null && tracked.strength > .01f
             renderer?.face = tracked?.points
             renderer?.faceStrength = tracked?.strength ?: 0f
+            renderer?.faceGeometry = tracked?.geometry
+            geometryVisible = faceVisible && tracked?.geometry != null
         }
 
         private fun coordinates(face: Face, w: Float, h: Float): FloatArray {
@@ -438,11 +463,31 @@ class LiveBeautyPlugin(
             return result
         }
 
+        fun inspectGeometry(result: MethodChannel.Result, polygons: List<List<Number>>? = null) {
+            handler.post {
+                val geometry = if (polygons != null && fixtureMode)
+                    FaceGeometry.create(polygons.map { p -> p.map { it.toFloat() }.toFloatArray() })
+                    else renderer?.faceGeometry
+                if (geometry == null) { main.post { result.success(null) }; return@post }
+                val mask = FaceGeometryMask()
+                try {
+                    mask.update(geometry)
+                    val file = File(activity.cacheDir, "mooddare-mask-${UUID.randomUUID()}.png")
+                    file.outputStream().use { mask.bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    val value = mapOf("path" to file.path, "bounds" to mask.bounds.toList(),
+                        "polygons" to (0..6).map { geometry.polygon(it).toList() })
+                    main.post { result.success(value) }
+                } catch (_: Exception) { main.post { result.error("mask", "Could not inspect face geometry.", null) } }
+                finally { mask.close() }
+            }
+        }
+
         fun status(): Map<String, Any?> = mapOf("ready" to ready, "width" to width, "height" to height,
             "front" to front,
             "highQualityPhotos" to (stillCapture != null),
             "hasFlash" to (camera?.cameraInfo?.hasFlashUnit() ?: false), "captureLight" to captureLight,
-            "faceDetected" to faceVisible, "fps" to fps, "frames" to frames,
+            "faceDetected" to faceVisible, "geometryDetected" to geometryVisible,
+            "detectionMillis" to detectionMillis, "fps" to fps, "frames" to frames,
             "detections" to detections, "error" to error,
             "recording" to recording, "recordingMillis" to if (recording) SystemClock.elapsedRealtime() - recordingStarted else 0L,
             "videoReady" to (pendingVideo != null), "recordingError" to recordingError)
@@ -558,6 +603,7 @@ class LiveBeautyPlugin(
                         warmth = (call.argument<Number>("warmth")?.toFloat() ?: 0f).coerceIn(-1f, 1f)
                         eyeSize = (call.argument<Number>("eyeSize")?.toFloat() ?: 0f).coerceIn(0f, 1f)
                         faceSlim = (call.argument<Number>("faceSlim")?.toFloat() ?: 0f).coerceIn(0f, 1f)
+                        makeup = (call.argument<Number>("makeup")?.toFloat() ?: 0f).coerceIn(0f, 1f)
                         original = call.argument<Boolean>("original") ?: false
                         if (call.hasArgument("aspectRatio") && !recording) {
                             outputAspect = call.argument<Number>("aspectRatio")?.toFloat()?.coerceIn(.3f, 3f)
@@ -634,36 +680,48 @@ class LiveBeautyPlugin(
             val photo = bitmap ?: return
             if (closed || photoResult !== request) { photo.recycle(); return }
             val output = renderer!!
-            if (output.original || (output.smooth == 0f && output.eyeSize == 0f && output.faceSlim == 0f)) {
+            if (output.original || (output.smooth == 0f && output.eyeSize == 0f && output.faceSlim == 0f && output.makeup == 0f)) {
                 try { renderStill(photo, null, 0f) } finally { photo.recycle() }
                 return
             }
             photoDetecting = true
             try {
-                photoDetector.process(InputImage.fromBitmap(photo, 0))
-                    .addOnSuccessListener(executor) { faces ->
+                val input = InputImage.fromBitmap(photo, 0)
+                val facesTask = photoDetector.process(input)
+                val meshTask = try {
+                    if (output.smooth > 0f || output.makeup > 0f) photoMeshDetector.process(input)
+                    else Tasks.forResult(emptyList<FaceMesh>())
+                }
+                    catch (e: Exception) { Tasks.forException<List<FaceMesh>>(e) }
+                Tasks.whenAllComplete(facesTask, meshTask).addOnCompleteListener(executor) {
+                    try {
                         if (!closed && photoResult === request) {
-                            val candidates = faces.mapNotNull { face ->
+                            if (!facesTask.isSuccessful) {
+                                finishPhoto(null, "Could not apply this lens. Please try again.")
+                                return@addOnCompleteListener
+                            }
+                            val meshes = if (meshTask.isSuccessful) meshTask.result else emptyList()
+                            val candidates = facesTask.result.mapNotNull { face ->
                                 val types = listOf(FaceLandmark.LEFT_EYE, FaceLandmark.RIGHT_EYE, FaceLandmark.MOUTH_BOTTOM, FaceLandmark.NOSE_BASE)
                                 if (types.any { face.getLandmark(it) == null }) null else {
                                     val points = coordinates(face, photo.width.toFloat(), photo.height.toFloat())
                                     if (!FaceStabilizer.valid(points)) null else Pair(face, points)
                                 }
                             }
-                            // A still may arrive after movement. Re-detect on the still itself;
-                            // never reuse preview landmarks on a different exposure.
                             val picked = if (anchor == null) candidates.maxByOrNull { it.second[2] * it.second[3] }
                                 else candidates.minByOrNull { faceDistance(it.second, anchor) }
                                     ?.takeIf { faceDistance(it.second, anchor) < 1f }
                             val quality = picked?.first?.let { FaceStabilizer.poseStrength(it.headEulerAngleX, it.headEulerAngleY, it.headEulerAngleZ) } ?: 0f
-                            renderStill(photo, picked?.second, quality)
+                            val geometry = picked?.second?.let { MeshGeometryFactory.matching(meshes, it, photo.width, photo.height) }
+                            renderStill(photo, picked?.second, quality, geometry)
                         }
-                    }.addOnFailureListener(executor) {
+                    } catch (_: Exception) {
                         if (photoResult === request) finishPhoto(null, "Could not apply this lens. Please try again.")
-                    }.addOnCompleteListener(executor) {
+                    } finally {
                         photo.recycle(); photoDetecting = false
                         if (closed) maybeFinishThread()
                     }
+                }
             } catch (_: Exception) {
                 photo.recycle(); photoDetecting = false
                 finishPhoto(null, "Could not apply this lens. Please try again.")
@@ -676,10 +734,10 @@ class LiveBeautyPlugin(
             return dx * dx + dy * dy
         }
 
-        private fun renderStill(photo: Bitmap, points: FloatArray?, strength: Float) {
+        private fun renderStill(photo: Bitmap, points: FloatArray?, strength: Float, geometry: FaceGeometry? = null) {
             val file = File(activity.cacheDir, "mooddare-live-${UUID.randomUUID()}.jpg")
             try {
-                renderer!!.captureStill(photo, file, points, strength)
+                renderer!!.captureStill(photo, file, points, strength, geometry)
                 finishPhoto(file.path)
             } catch (_: Exception) {
                 file.delete()
@@ -716,7 +774,7 @@ class LiveBeautyPlugin(
         private fun maybeFinishThread() {
             if (!closed || detecting || photoDetecting || threadFinished) return
             threadFinished = true
-            detector.close(); photoDetector.close(); thread.quitSafely()
+            detector.close(); photoDetector.close(); meshDetector.close(); photoMeshDetector.close(); thread.quitSafely()
         }
     }
 }

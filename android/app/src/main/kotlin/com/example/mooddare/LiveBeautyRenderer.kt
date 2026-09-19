@@ -22,6 +22,9 @@ internal class LiveBeautyRenderer(surface: Surface) {
     private var videoHeight = 0
     private val program: Int
     private val texture: Int
+    private val maskTexture: Int
+    private val geometryMask = FaceGeometryMask()
+    private var lastGeometry: FaceGeometry? = null
     private val vertices = ByteBuffer.allocateDirect(8 * 4).order(ByteOrder.nativeOrder())
         .asFloatBuffer().apply { put(floatArrayOf(-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f)); position(0) }
     var width = 0; private set
@@ -32,9 +35,11 @@ internal class LiveBeautyRenderer(surface: Surface) {
     var warmth = 0f
     var eyeSize = 0f
     var faceSlim = 0f
+    var makeup = 0f
     var original = false
     var outputAspect: Float? = null
     var face: FloatArray? = null
+    var faceGeometry: FaceGeometry? = null
     var faceStrength = 1f
 
     init {
@@ -64,9 +69,16 @@ internal class LiveBeautyRenderer(surface: Surface) {
         GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, linked, 0)
         check(linked[0] != 0) { GLES20.glGetProgramInfoLog(program) }
         GLES20.glDeleteShader(vertex); GLES20.glDeleteShader(fragment)
-        val textures = IntArray(1)
-        GLES20.glGenTextures(1, textures, 0)
+        val textures = IntArray(2)
+        GLES20.glGenTextures(2, textures, 0)
         texture = textures[0]
+        maskTexture = textures[1]
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, maskTexture)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, geometryMask.bitmap, 0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture)
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
@@ -104,7 +116,8 @@ internal class LiveBeautyRenderer(surface: Surface) {
 
     private fun drawPixels(w: Int, h: Int, inputTexture: Int = texture,
         sourceWidth: Int = width, sourceHeight: Int = height,
-        landmarks: FloatArray? = face, confidence: Float = faceStrength) {
+        landmarks: FloatArray? = face, confidence: Float = faceStrength,
+        geometry: FaceGeometry? = faceGeometry) {
         GLES20.glViewport(0, 0, w, h)
         GLES20.glUseProgram(program)
         val position = GLES20.glGetAttribLocation(program, "position")
@@ -114,6 +127,18 @@ internal class LiveBeautyRenderer(surface: Surface) {
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, inputTexture)
         GLES20.glUniform1i(uniform("image"), 0)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, maskTexture)
+        if (geometry != null && (lastGeometry == null || !lastGeometry!!.points.contentEquals(geometry.points))) {
+            geometryMask.update(geometry)
+            GLUtils.texSubImage2D(GLES20.GL_TEXTURE_2D, 0, 0, 0, geometryMask.bitmap)
+            lastGeometry = geometry
+        }
+        GLES20.glUniform1i(uniform("geometryMask"), 1)
+        GLES20.glUniform1f(uniform("hasGeometry"), if (geometry != null) 1f else 0f)
+        GLES20.glUniform4fv(uniform("maskBounds"), 1, geometryMask.bounds, 0)
+        GLES20.glUniform1f(uniform("makeup"), if (original || geometry == null) 0f else makeup)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         val sourceAspect = sourceWidth.toFloat() / sourceHeight
         val targetAspect = w.toFloat() / h
         GLES20.glUniform2f(uniform("crop"),
@@ -177,7 +202,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
     }
 
     /** Render a sensor still offscreen without replacing the preview texture. */
-    fun captureStill(bitmap: Bitmap, file: File, landmarks: FloatArray?, confidence: Float) {
+    fun captureStill(bitmap: Bitmap, file: File, landmarks: FloatArray?, confidence: Float, geometry: FaceGeometry? = faceGeometry) {
         val aspect = outputAspect ?: (bitmap.width.toFloat() / bitmap.height)
         val w = minOf(bitmap.width, (bitmap.height * aspect).toInt()).coerceAtLeast(2)
         val h = minOf(bitmap.height, (bitmap.width / aspect).toInt()).coerceAtLeast(2)
@@ -200,7 +225,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
             GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER, GLES20.GL_COLOR_ATTACHMENT0,
                 GLES20.GL_TEXTURE_2D, textures[1], 0)
             check(GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER) == GLES20.GL_FRAMEBUFFER_COMPLETE)
-            drawPixels(w, h, textures[0], bitmap.width, bitmap.height, landmarks, confidence)
+            drawPixels(w, h, textures[0], bitmap.width, bitmap.height, landmarks, confidence, geometry)
             val bytes = ByteBuffer.allocateDirect(w * h * 4)
             GLES20.glReadPixels(0, 0, w, h, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, bytes)
             check(GLES20.glGetError() == GLES20.GL_NO_ERROR)
@@ -224,6 +249,8 @@ internal class LiveBeautyRenderer(surface: Surface) {
     fun close() {
         detachRecorder()
         GLES20.glDeleteTextures(1, intArrayOf(texture), 0)
+        GLES20.glDeleteTextures(1, intArrayOf(maskTexture), 0)
+        geometryMask.close()
         GLES20.glDeleteProgram(program)
         EGL14.eglMakeCurrent(display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
         EGL14.eglDestroySurface(display, window)
@@ -255,6 +282,10 @@ internal class LiveBeautyRenderer(surface: Surface) {
             precision mediump float;
             varying vec2 uv;
             uniform sampler2D image;
+            uniform sampler2D geometryMask;
+            uniform vec4 maskBounds;
+            uniform float hasGeometry;
+            uniform float makeup;
             uniform vec2 stepSize;
             uniform float mirror;
             uniform vec2 crop;
@@ -289,6 +320,9 @@ internal class LiveBeautyRenderer(surface: Surface) {
                     p = enlargeEye(p, eyes.zw);
                 }
                 vec3 color = texture2D(image, p).rgb;
+                vec2 maskUV = (p - maskBounds.xy) / max(maskBounds.zw, vec2(0.0001));
+                float inMask = step(0.0, maskUV.x) * step(maskUV.x, 1.0) * step(0.0, maskUV.y) * step(maskUV.y, 1.0);
+                vec2 contourMask = texture2D(geometryMask, maskUV).rg * inMask;
                 if (settings.x > 0.0 && settings.w > 0.0) {
                     float mask = clamp((1.0 - ellipse(p, face.xy + face.zw * vec2(0.5, 0.53),
                         face.zw * vec2(0.44, 0.43))) / 0.25, 0.0, 1.0);
@@ -297,6 +331,8 @@ internal class LiveBeautyRenderer(surface: Surface) {
                     mask *= protect(p, eyes.zw - face.zw * vec2(0.0, 0.035), face.zw * vec2(0.20, 0.14));
                     mask *= protect(p, features.xy, face.zw * vec2(0.29, 0.13));
                     mask *= protect(p, features.zw, face.zw * vec2(0.19, 0.10));
+                    // Detailed contours constrain skin smoothing to this person's face.
+                    if (hasGeometry > 0.5) mask *= contourMask.r;
                     if (mask > 0.0) {
                         vec3 sum = vec3(0.0);
                         float total = 0.0;
@@ -313,6 +349,21 @@ internal class LiveBeautyRenderer(surface: Surface) {
                         // Keep at least 28% of the original texture at full strength.
                         color = mix(color, sum / total, settings.x * settings.w * mask * 0.72);
                     }
+                }
+                if (makeup > 0.0 && settings.w > 0.0) {
+                    float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+                    // Preserve luminance and local texture rather than paint opaque lipstick.
+                    vec3 rose = vec3(0.76, 0.24, 0.36);
+                    vec3 tinted = clamp(rose * luma / dot(rose, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+                    color = mix(color, tinted, contourMask.g * makeup * settings.w * 0.5);
+                    vec2 leftCheek = mix(eyes.xy, features.xy, 0.45);
+                    vec2 rightCheek = mix(eyes.zw, features.xy, 0.45);
+                    leftCheek.x += sign(eyes.x - features.z) * face.z * 0.08;
+                    rightCheek.x += sign(eyes.z - features.z) * face.z * 0.08;
+                    float cheeks = exp(-ellipse(p, leftCheek, face.zw * vec2(0.15, 0.09)) * 2.0) +
+                        exp(-ellipse(p, rightCheek, face.zw * vec2(0.15, 0.09)) * 2.0);
+                    cheeks *= protect(p, features.zw, face.zw * vec2(0.20, 0.14));
+                    color = mix(color, tinted, min(cheeks, 1.0) * contourMask.r * makeup * settings.w * 0.22);
                 }
                 color = color * exp2(settings.y * 0.6) + vec3(settings.z, 0.0, -settings.z) * (14.0 / 255.0);
                 gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);

@@ -47,7 +47,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   CustomBeautyLook _customLook = const CustomBeautyLook();
   BeautyAdjustment _customAdjustment = BeautyAdjustment.smooth;
   bool get _isCustom => BeautyLens.all[_selected] == BeautyLens.custom;
-  bool _ready = false, _face = false, _front = true;
+  bool _ready = false, _face = false, _geometry = false, _front = true;
   bool _busy = false, _comparing = false, _active = true, _inPreview = false;
   bool _recording = false, _showAdjustments = false;
   bool _askedForCamera = false;
@@ -90,6 +90,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
       _texture = null;
       _error = null;
       _face = false;
+      _geometry = false;
       _recording = false;
       _recordingMillis = 0;
     });
@@ -158,6 +159,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
           setState(() {
             _ready = state['ready'] == true;
             _face = state['faceDetected'] == true;
+            _geometry = state['geometryDetected'] == true;
             _hasFlash = state['hasFlash'] == true;
             _recording = state['recording'] == true;
             _recordingMillis = (state['recordingMillis'] as num?)?.toInt() ?? 0;
@@ -453,6 +455,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     Icons.visibility_outlined,
     Icons.face_retouching_natural,
     Icons.auto_awesome,
+    Icons.local_florist_outlined,
     Icons.tune_rounded,
   ];
   static const _lensColors = [
@@ -462,6 +465,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     [Color(0xFFB6DCEE), Color(0xFF697FBD)],
     [Color(0xFFCDC3F1), Color(0xFF8774B3)],
     [Color(0xFFF2CEEA), Color(0xFFA583CB)],
+    [Color(0xFFFFB8C8), Color(0xFFC4597C)],
     [Color(0xFFA9E5D8), Color(0xFF548EAA)],
   ];
 
@@ -888,12 +892,20 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                                         ],
                                       ),
                                     ),
-                                    if (_selected != 0 && !_face && _ready)
-                                      const Padding(
-                                        padding: EdgeInsets.only(top: 4),
+                                    if (_selected != 0 &&
+                                        _ready &&
+                                        !_comparing &&
+                                        (!_face ||
+                                            (BeautyLens.all[_selected].makeup >
+                                                    0 &&
+                                                !_geometry)))
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4),
                                         child: Text(
-                                          'Find your face',
-                                          style: TextStyle(
+                                          !_face
+                                              ? 'Find your face'
+                                              : 'Face the camera for makeup',
+                                          style: const TextStyle(
                                             fontSize: 11,
                                             color: Colors.white70,
                                           ),

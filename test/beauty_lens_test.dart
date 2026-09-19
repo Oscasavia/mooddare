@@ -18,6 +18,7 @@ void main() {
         'faceSlim': .6,
         'light': 0.0,
         'warmth': 0.0,
+        'makeup': 0.0,
         'original': false,
       });
       expect(

@@ -13,6 +13,7 @@ void main() {
   final looks = <Map<String, dynamic>>[];
   Map<String, dynamic>? captureLook;
   Map<String, dynamic>? videoLook;
+  var geometryAvailable = false;
   setUp(() {
     sentAspect = null;
     captures = 0;
@@ -20,6 +21,7 @@ void main() {
     looks.clear();
     captureLook = null;
     videoLook = null;
+    geometryAvailable = false;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           if (call.method == 'setLook') {
@@ -53,6 +55,7 @@ void main() {
               'width': 960,
               'height': 1280,
               'faceDetected': true,
+              'geometryDetected': geometryAvailable,
             },
             _ => null,
           };
@@ -61,6 +64,47 @@ void main() {
   tearDown(
     () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null),
+  );
+
+  testWidgets(
+    'Rosy guides missing geometry and clears makeup when switching looks',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.build(),
+          home: const LiveBeautyScreen(dareText: 'Rosy test'),
+        ),
+      );
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 250));
+      }
+      final shutter = find.byKey(const ValueKey('capture_shutter'));
+      // Original -> My look -> Rosy around the left edge of the repeating wheel.
+      for (var i = 0; i < 2; i++) {
+        await tester.drag(shutter, const Offset(90, 0));
+        await tester.pumpAndSettle();
+      }
+      expect(find.text('Rosy'), findsOneWidget);
+      expect(find.text('Face the camera for makeup'), findsOneWidget);
+      expect(looks.last['makeup'], .65);
+      await tester.tap(find.byTooltip('Compare original'));
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(looks.last['original'], isTrue);
+      expect(find.text('Face the camera for makeup'), findsNothing);
+      await tester.tap(find.byTooltip('Show lens'));
+      await tester.pump(const Duration(milliseconds: 60));
+      geometryAvailable = true;
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+      expect(find.text('Face the camera for makeup'), findsNothing);
+      await tester.drag(shutter, const Offset(-90, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('My look'), findsOneWidget);
+      expect(looks.last['makeup'], 0);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
   );
 
   for (final size in [const Size(320, 640), const Size(768, 1024)]) {

@@ -69,6 +69,12 @@ void main() {
         ),
       );
       await waitForState(tester, (state) => state['faceDetected'] == true);
+      expect(
+        (await channel.invokeMapMethod<String, dynamic>(
+          'status',
+        ))!['geometryDetected'],
+        isTrue,
+      );
       await channel.invokeMethod<void>('setLook', {
         ...BeautyLens.all.first.settings(0),
         'aspectRatio': 9 / 16,
@@ -83,6 +89,7 @@ void main() {
           warmth: .8,
           eyeSize: 1,
           faceSlim: 1,
+          makeup: 1,
         ).settings(1),
       );
       final filtered = await capture();

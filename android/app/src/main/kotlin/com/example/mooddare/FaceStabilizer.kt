@@ -7,10 +7,11 @@ import kotlin.math.pow
 
 internal data class FaceObservation(
     val id: Int?, val area: Float, val points: FloatArray?,
-    val pitch: Float = 0f, val yaw: Float = 0f, val roll: Float = 0f
+    val pitch: Float = 0f, val yaw: Float = 0f, val roll: Float = 0f,
+    val geometry: FaceGeometry? = null
 )
 
-internal data class StabilizedFace(val points: FloatArray, val strength: Float)
+internal data class StabilizedFace(val points: FloatArray, val strength: Float, val geometry: FaceGeometry? = null)
 
 /** Render-thread only. Coordinates are normalized to the unmirrored source. */
 internal class FaceStabilizer {
@@ -21,9 +22,12 @@ internal class FaceStabilizer {
     private var updatedAt = 0L
     private var acquiredAt = 0L
     private var quality = 0f
+    private var geometry: FaceGeometry? = null
+    private var previousGeometry: FaceGeometry? = null
 
     fun reset() {
         id = null; points = null; previous = null; quality = 0f
+        geometry = null; previousGeometry = null
         measuredAt = 0L; updatedAt = 0L; acquiredAt = 0L
     }
 
@@ -41,6 +45,7 @@ internal class FaceStabilizer {
             // Known loss/occlusion stops the effect immediately; do not paint a
             // cached face over a hand, background, or a different person.
             points = null; previous = null; quality = 0f
+            geometry = null; previousGeometry = null
             measuredAt = submitted
             return
         }
@@ -50,14 +55,19 @@ internal class FaceStabilizer {
         val restart = old == null || !samePerson || submitted - measuredAt >= EXPIRES_MS || motion > .45f
         if (restart) {
             points = value.copyOf(); previous = points
+            geometry = face.geometry; previousGeometry = geometry
             acquiredAt = now
         } else {
             // Suppress small jitter but follow deliberate movement promptly.
             // Scale by elapsed time so slow detectors do not add more lag.
             val base = .22f + .66f * (motion / .08f).coerceIn(0f, 1f)
             val alpha = 1f - (1f - base).pow((submitted - measuredAt).coerceIn(1, 250) / 100f)
-            previous = sample(now)?.points ?: old
+            val sampled = sample(now)
+            previous = sampled?.points ?: old
+            previousGeometry = sampled?.geometry
             points = FloatArray(value.size) { old!![it] + (value[it] - old[it]) * alpha }
+            geometry = face.geometry?.let { geometry?.blend(it, alpha) ?: it }
+            if (geometry == null) previousGeometry = null
         }
         quality = pose
         measuredAt = submitted
@@ -72,7 +82,8 @@ internal class FaceStabilizer {
             (1f - ease((age - 160) / 100f))
         val blend = ease((now - updatedAt) / 35f)
         val from = previous ?: target
-        return StabilizedFace(FloatArray(target.size) { from[it] + (target[it] - from[it]) * blend }, confidence)
+        val shape = geometry?.let { previousGeometry?.blend(it, blend) ?: it }
+        return StabilizedFace(FloatArray(target.size) { from[it] + (target[it] - from[it]) * blend }, confidence, shape)
     }
 
     companion object {

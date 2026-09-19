@@ -1,7 +1,7 @@
 /// Lens strengths stay normalized; native rendering clamps every input again.
 class BeautyLens {
   final String name;
-  final double smooth, light, warmth, eyeSize, faceSlim;
+  final double smooth, light, warmth, eyeSize, faceSlim, makeup;
   const BeautyLens(
     this.name, {
     this.smooth = 0,
@@ -9,6 +9,7 @@ class BeautyLens {
     this.warmth = 0,
     this.eyeSize = 0,
     this.faceSlim = 0,
+    this.makeup = 0,
   });
 
   Map<String, Object> settings(double strength, {bool original = false}) {
@@ -19,6 +20,7 @@ class BeautyLens {
       'warmth': warmth * amount,
       'eyeSize': eyeSize * amount,
       'faceSlim': faceSlim * amount,
+      'makeup': makeup * amount,
       'original': original,
     };
   }
@@ -39,6 +41,7 @@ class BeautyLens {
       eyeSize: .65,
       faceSlim: .85,
     ),
+    BeautyLens('Rosy', smooth: .4, eyeSize: .2, faceSlim: .2, makeup: 1),
     custom,
   ];
 }
@@ -83,6 +86,7 @@ class CustomBeautyLook {
     'faceSlim': amount(BeautyAdjustment.face),
     'light': 0.0,
     'warmth': 0.0,
+    'makeup': 0.0,
     'original': original,
   };
 }
