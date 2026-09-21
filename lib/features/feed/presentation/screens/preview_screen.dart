@@ -43,7 +43,10 @@ class _PreviewScreenState extends State<PreviewScreen>
   PhotoEditor? _editor;
   VideoEditor? _videoEditor;
   VideoEdits? _videoEdits;
-  bool _seekingTrim = false;
+  bool _seekingTrim = false, _seekingPreview = false;
+  int? _pendingPreviewSeek;
+  bool _pauseBeforeSeek = false;
+  Future<void>? _trimLoopSeek;
   bool _showVideoEdits = false;
   Uint8List? _rendered;
   PhotoAdjustments _settings = const PhotoAdjustments();
@@ -225,22 +228,64 @@ class _PreviewScreenState extends State<PreviewScreen>
     if (video == null ||
         edits == null ||
         _seekingTrim ||
+        _seekingPreview ||
         !video.value.isPlaying) {
       return;
     }
     final position = video.value.position.inMilliseconds;
     if (position < edits.startMs || position >= edits.endMs) {
       _seekingTrim = true;
-      video
+      _trimLoopSeek = video
           .seekTo(Duration(milliseconds: edits.startMs))
+          .catchError(
+            (Object _) => _message('Could not preview that moment. Try again.'),
+          )
           .whenComplete(() => _seekingTrim = false);
+    }
+  }
+
+  Future<void> _seekVideoPreview(int milliseconds, {bool pause = true}) async {
+    final video = _video;
+    if (_busy ||
+        _loading ||
+        video == null ||
+        !video.value.isInitialized ||
+        video.value.duration.inMilliseconds <= 0) {
+      return;
+    }
+    _pendingPreviewSeek = milliseconds.clamp(
+      0,
+      video.value.duration.inMilliseconds - 1,
+    );
+    _pauseBeforeSeek = _pauseBeforeSeek || pause;
+    if (_seekingPreview) return;
+    _seekingPreview = true;
+    try {
+      // Serialize seeks and keep the latest tap if the decoder is still busy.
+      while (mounted && _pendingPreviewSeek != null) {
+        final target = _pendingPreviewSeek!;
+        _pendingPreviewSeek = null;
+        if (_pauseBeforeSeek) {
+          _pauseBeforeSeek = false;
+          await video.pause();
+        }
+        await _trimLoopSeek;
+        if (!mounted) return;
+        await video.seekTo(Duration(milliseconds: target));
+      }
+    } catch (_) {
+      _pendingPreviewSeek = null;
+      _message('Could not preview that moment. Try again.');
+    } finally {
+      _seekingPreview = false;
+      _pauseBeforeSeek = false;
     }
   }
 
   void _editVideo(VideoEdits edits) {
     setState(() => _videoEdits = edits);
     _video?.setVolume(edits.muted ? 0 : 1);
-    _video?.seekTo(Duration(milliseconds: edits.startMs));
+    unawaited(_seekVideoPreview(edits.startMs, pause: false));
   }
 
   void _reset() {
@@ -330,7 +375,10 @@ class _PreviewScreenState extends State<PreviewScreen>
             button: true,
             label: value.isPlaying ? 'Pause video' : 'Play video',
             child: GestureDetector(
-              onTap: () => value.isPlaying ? video.pause() : video.play(),
+              onTap: () {
+                if (_busy || _seekingPreview) return;
+                value.isPlaying ? video.pause() : video.play();
+              },
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -456,14 +504,20 @@ class _PreviewScreenState extends State<PreviewScreen>
                             left: 8,
                             right: 8,
                             bottom: 8,
-                            child: VideoAdjustmentsPanel(
-                              edits: _videoEdits!,
-                              durationMs: _videoEditor!.durationMs,
-                              thumbnails: _videoEditor!.thumbnails(),
-                              enabled: !_busy,
-                              onChanged: _editVideo,
-                              onDone: () =>
-                                  setState(() => _showVideoEdits = false),
+                            child: ValueListenableBuilder<VideoPlayerValue>(
+                              valueListenable: _video!,
+                              builder: (context, value, _) =>
+                                  VideoAdjustmentsPanel(
+                                    edits: _videoEdits!,
+                                    durationMs: _videoEditor!.durationMs,
+                                    thumbnails: _videoEditor!.thumbnails(),
+                                    positionMs: value.position.inMilliseconds,
+                                    onSeek: _seekVideoPreview,
+                                    enabled: !_busy,
+                                    onChanged: _editVideo,
+                                    onDone: () =>
+                                        setState(() => _showVideoEdits = false),
+                                  ),
                             ),
                           ),
                         if (_rendering || _busy)

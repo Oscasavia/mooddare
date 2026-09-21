@@ -89,6 +89,8 @@ void main() {
         addTearDown(tester.view.resetDevicePixelRatio);
         var edits = const VideoEdits(startMs: 0, endMs: 10000, muted: true);
         var enabled = true;
+        var position = 0;
+        final seeks = <int>[];
         late StateSetter update;
         final thumbnails = Future.value(List<Uint8List?>.filled(8, frames));
         await tester.pumpWidget(
@@ -109,6 +111,11 @@ void main() {
                       edits: edits,
                       durationMs: 10000,
                       thumbnails: thumbnails,
+                      positionMs: position,
+                      onSeek: (value) => set(() {
+                        position = value;
+                        seeks.add(value);
+                      }),
                       enabled: enabled,
                       onChanged: (value) => set(() => edits = value),
                       onDone: () {},
@@ -133,6 +140,7 @@ void main() {
         expect(edits.startMs, closeTo(2000, 100));
         expect(edits.endMs, 10000);
         expect(edits.muted, isTrue);
+        expect(seeks, isEmpty);
         await tester.dragFrom(
           Offset(strip.right - 24, strip.center.dy),
           Offset(-trackWidth * .2, 0),
@@ -140,6 +148,20 @@ void main() {
         await tester.pumpAndSettle();
         expect(edits.endMs, closeTo(8000, 100));
         expect(find.text('6.0s selected'), findsOneWidget);
+        expect(seeks, isEmpty);
+        final selected = edits;
+        await tester.tapAt(
+          Offset(strip.left + 24 + trackWidth * .5, strip.center.dy),
+        );
+        await tester.pumpAndSettle();
+        expect(seeks, [5000]);
+        expect(edits.sameAs(selected), isTrue);
+        expect(
+          tester
+              .getCenter(find.byKey(const ValueKey('video_trim_playhead')))
+              .dx,
+          closeTo(strip.left + 24 + trackWidth * .5, .1),
+        );
         final before = edits;
         update(() => enabled = false);
         await tester.pumpAndSettle();
@@ -149,6 +171,11 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(edits.sameAs(before), isTrue);
+        await tester.tapAt(
+          Offset(strip.left + 24 + trackWidth * .5, strip.center.dy),
+        );
+        await tester.pumpAndSettle();
+        expect(seeks, [5000]);
         expect(tester.takeException(), isNull);
       },
     );

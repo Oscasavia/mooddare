@@ -11,6 +11,8 @@ class VideoAdjustmentsPanel extends StatelessWidget {
   final VoidCallback onDone;
   final bool enabled;
   final Future<List<Uint8List?>>? thumbnails;
+  final int? positionMs;
+  final ValueChanged<int>? onSeek;
   const VideoAdjustmentsPanel({
     super.key,
     required this.edits,
@@ -19,6 +21,8 @@ class VideoAdjustmentsPanel extends StatelessWidget {
     required this.onDone,
     this.enabled = true,
     this.thumbnails,
+    this.positionMs,
+    this.onSeek,
   });
   static String time(int ms) =>
       '${ms ~/ 60000}:${((ms ~/ 1000) % 60).toString().padLeft(2, '0')}.${(ms % 1000) ~/ 100}';
@@ -71,6 +75,8 @@ class VideoAdjustmentsPanel extends StatelessWidget {
           VideoTrimTimeline(
             durationMs: durationMs.toDouble(),
             thumbnails: thumbnails,
+            positionMs: positionMs,
+            onSeek: enabled && durationMs > 0 ? onSeek : null,
             values: RangeValues(
               edits.startMs.toDouble(),
               edits.endMs.toDouble(),

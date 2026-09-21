@@ -11,6 +11,7 @@ import 'package:image/image.dart' as img;
 import 'package:mooddare/features/camera/data/video_editor.dart';
 import 'package:mooddare/features/camera/presentation/video_adjustments_panel.dart';
 import 'package:mooddare/core/app_theme.dart';
+import 'package:mooddare/features/feed/presentation/screens/preview_screen.dart';
 import 'face_fixture.dart';
 import 'live_beauty_test.dart' show channel, waitForState, difference;
 import 'live_video_test.dart' show allowCameraAndAudio;
@@ -177,6 +178,63 @@ void main() {
           }),
           throwsA(isA<PlatformException>()),
         );
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.build(),
+            home: PreviewScreen(
+              mediaFile: original,
+              mediaType: 'video',
+              dareText: 'Preview seeking test',
+            ),
+          ),
+        );
+        for (
+          var i = 0;
+          i < 40 && find.byType(VideoPlayer).evaluate().isEmpty;
+          i++
+        ) {
+          await tester.pump(const Duration(milliseconds: 250));
+        }
+        expect(find.byType(VideoPlayer), findsOneWidget);
+        await tester.tap(find.byTooltip('Edit video'));
+        await tester.pumpAndSettle();
+        tester.widget<RangeSlider>(find.byType(RangeSlider)).onChanged!(
+          const RangeValues(1000, 3000),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+        final selected = tester
+            .widget<VideoAdjustmentsPanel>(find.byType(VideoAdjustmentsPanel))
+            .edits;
+        final strip = tester.getRect(
+          find.byKey(const ValueKey('video_trim_timeline')),
+        );
+        await tester.tapAt(strip.center);
+        await tester.pump(const Duration(milliseconds: 500));
+        final previewController = tester
+            .widget<VideoPlayer>(find.byType(VideoPlayer))
+            .controller;
+        expect(previewController.value.isPlaying, isFalse);
+        expect(
+          previewController.value.position.inMilliseconds,
+          closeTo(duration / 2, 100),
+        );
+        expect(
+          tester
+              .widget<VideoAdjustmentsPanel>(find.byType(VideoAdjustmentsPanel))
+              .edits
+              .sameAs(selected),
+          isTrue,
+        );
+        expect(
+          find.byKey(const ValueKey('video_trim_playhead')),
+          findsOneWidget,
+        );
+        await previewController.play();
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(previewController.value.isPlaying, isTrue);
+        expect(previewController.value.hasError, isFalse);
+        await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+        await tester.pump(const Duration(seconds: 1));
         expect(await original.exists(), true);
       } finally {
         await channel.invokeMethod<void>('stop');

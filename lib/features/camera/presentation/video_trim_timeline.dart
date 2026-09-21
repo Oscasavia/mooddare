@@ -10,6 +10,8 @@ class VideoTrimTimeline extends StatelessWidget {
   final ValueChanged<RangeValues>? onChanged;
   final RangeLabels labels;
   final Future<List<Uint8List?>>? thumbnails;
+  final int? positionMs;
+  final ValueChanged<int>? onSeek;
   const VideoTrimTimeline({
     super.key,
     required this.values,
@@ -17,6 +19,8 @@ class VideoTrimTimeline extends StatelessWidget {
     required this.onChanged,
     required this.labels,
     this.thumbnails,
+    this.positionMs,
+    this.onSeek,
   });
 
   @override
@@ -26,81 +30,168 @@ class VideoTrimTimeline extends StatelessWidget {
       child: SizedBox(
         key: const ValueKey('video_trim_timeline'),
         height: 84,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Positioned(
-              left: 24,
-              right: 24,
-              top: 10,
-              bottom: 10,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: ExcludeSemantics(
-                  child: FutureBuilder<List<Uint8List?>>(
-                    future: thumbnails,
-                    builder: (context, snapshot) => Row(
-                      children: List.generate(8, (index) {
-                        final frames = snapshot.data;
-                        final bytes = frames != null && index < frames.length
-                            ? frames[index]
-                            : null;
-                        const placeholder = ColoredBox(
-                          color: Color(0xFF303039),
-                          child: Center(
-                            child: Icon(
-                              Icons.movie_outlined,
-                              size: 18,
-                              color: Colors.white24,
-                            ),
-                          ),
-                        );
-                        return Expanded(
-                          child: SizedBox.expand(
-                            child: bytes == null
-                                ? placeholder
-                                : Image.memory(
-                                    bytes,
-                                    key: ValueKey('trim_frame_$index'),
-                                    fit: BoxFit.cover,
-                                    gaplessPlayback: true,
-                                    errorBuilder: (_, _, _) => placeholder,
-                                  ),
-                          ),
-                        );
-                      }),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final trackWidth = math.max(0.0, constraints.maxWidth - 48);
+            final duration = math.max(1.0, durationMs);
+            final position = ((positionMs ?? 0) / duration).clamp(0.0, 1.0);
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned(
+                  left: 24,
+                  right: 24,
+                  top: 10,
+                  bottom: 10,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: ExcludeSemantics(
+                      child: FutureBuilder<List<Uint8List?>>(
+                        future: thumbnails,
+                        builder: (context, snapshot) => Row(
+                          children: List.generate(8, (index) {
+                            final frames = snapshot.data;
+                            final bytes =
+                                frames != null && index < frames.length
+                                ? frames[index]
+                                : null;
+                            const placeholder = ColoredBox(
+                              color: Color(0xFF303039),
+                              child: Center(
+                                child: Icon(
+                                  Icons.movie_outlined,
+                                  size: 18,
+                                  color: Colors.white24,
+                                ),
+                              ),
+                            );
+                            return Expanded(
+                              child: SizedBox.expand(
+                                child: bytes == null
+                                    ? placeholder
+                                    : Image.memory(
+                                        bytes,
+                                        key: ValueKey('trim_frame_$index'),
+                                        fit: BoxFit.cover,
+                                        gaplessPlayback: true,
+                                        errorBuilder: (_, _, _) => placeholder,
+                                      ),
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-            SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                rangeTrackShape: const _FilmstripTrack(),
-                rangeThumbShape: const _TrimHandle(),
-                overlayColor: Colors.transparent,
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 24),
-                activeTrackColor: Theme.of(context).colorScheme.primary,
-                disabledActiveTrackColor: Colors.white38,
-                showValueIndicator: ShowValueIndicator.never,
-                minThumbSeparation: 0,
-              ),
-              child: RangeSlider(
-                key: const ValueKey('video_trim_range'),
-                min: 0,
-                max: math.max(1, durationMs),
-                values: values,
-                labels: labels,
-                onChanged: onChanged,
-                semanticFormatterCallback: (value) =>
-                    '${(value / 1000).toStringAsFixed(1)} seconds',
-              ),
-            ),
-          ],
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    rangeTrackShape: const _FilmstripTrack(),
+                    rangeThumbShape: const _TrimHandle(),
+                    overlayColor: Colors.transparent,
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 24,
+                    ),
+                    activeTrackColor: Theme.of(context).colorScheme.primary,
+                    disabledActiveTrackColor: Colors.white38,
+                    showValueIndicator: ShowValueIndicator.never,
+                    minThumbSeparation: 0,
+                  ),
+                  child: RangeSlider(
+                    key: const ValueKey('video_trim_range'),
+                    min: 0,
+                    max: math.max(1, durationMs),
+                    values: values,
+                    labels: labels,
+                    onChanged: onChanged,
+                    semanticFormatterCallback: (value) =>
+                        '${(value / 1000).toStringAsFixed(1)} seconds',
+                  ),
+                ),
+                if (positionMs != null)
+                  Positioned(
+                    left: 24 + position * trackWidth - 1.5,
+                    top: 6,
+                    bottom: 6,
+                    child: IgnorePointer(
+                      child: ExcludeSemantics(
+                        child: Container(
+                          key: const ValueKey('video_trim_playhead'),
+                          width: 3,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(2),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black54, blurRadius: 3),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (onSeek != null && durationMs > 0 && trackWidth > 0)
+                  _seekRegions(trackWidth, duration),
+              ],
+            );
+          },
         ),
       ),
     ),
   );
+
+  int _boundedTime(double value) =>
+      value.round().clamp(0, math.max(0, durationMs.ceil() - 1));
+
+  Widget _seekRegions(double trackWidth, double duration) {
+    final start = 24 + values.start / duration * trackWidth;
+    final end = 24 + values.end / duration * trackWidth;
+    final right = trackWidth + 24;
+    final zones = [
+      (24.0, (start - 24).clamp(24.0, right)),
+      ((start + 24).clamp(24.0, right), (end - 24).clamp(24.0, right)),
+      ((end + 24).clamp(24.0, right), right),
+    ];
+    final current = _boundedTime((positionMs ?? 0).toDouble());
+    final next = _boundedTime(current + 1000);
+    final previous = _boundedTime(current - 1000);
+    String time(int ms) => '${(ms / 1000).toStringAsFixed(1)} seconds';
+    return Positioned.fill(
+      child: Semantics(
+        container: true,
+        label: 'Video preview position',
+        value: time(current),
+        increasedValue: time(next),
+        decreasedValue: time(previous),
+        onIncrease: next == current ? null : () => onSeek!(next),
+        onDecrease: previous == current ? null : () => onSeek!(previous),
+        child: Stack(
+          children: [
+            // Reserve 48px around each handle for trimming. Other frame taps seek.
+            for (final zone in zones)
+              if (zone.$2 > zone.$1)
+                Positioned(
+                  left: zone.$1,
+                  width: zone.$2 - zone.$1,
+                  top: 10,
+                  bottom: 10,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    excludeFromSemantics: true,
+                    onTapUp: (details) => onSeek!(
+                      _boundedTime(
+                        (details.localPosition.dx + zone.$1 - 24) /
+                            trackWidth *
+                            duration,
+                      ),
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _FilmstripTrack extends RangeSliderTrackShape {
