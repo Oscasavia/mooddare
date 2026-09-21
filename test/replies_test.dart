@@ -448,6 +448,134 @@ void main() {
     },
   );
 
+  testWidgets(
+    'comment avatars align with the heading and spacing stays compact',
+    (tester) async {
+      repo.comments.add(
+        const CommentModel(
+          id: 'older',
+          authorId: 'author',
+          text: 'Older comment',
+        ),
+      );
+      repo.replies.add(
+        const CommentModel(
+          id: 'child',
+          parentId: 'root',
+          authorId: 'viewer',
+          text: 'Reply',
+        ),
+      );
+      await open(tester);
+      final avatar = find.descendant(
+        of: find.byKey(const ValueKey('comment_avatar_root')),
+        matching: find.byType(CircleAvatar),
+      );
+      expect(
+        tester.getTopLeft(avatar).dx,
+        closeTo(tester.getTopLeft(find.text('Comments')).dx, .1),
+      );
+      final toggle = find.byKey(const ValueKey('replies_root'));
+      expect(tester.getSize(toggle).height, 32);
+      expect(
+        tester.getTopLeft(toggle).dy,
+        closeTo(
+          tester
+              .getBottomLeft(find.byKey(const ValueKey('comment_actions_root')))
+              .dy,
+          .1,
+        ),
+      );
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey('older'))).dy -
+            tester.getBottomLeft(toggle).dy,
+        closeTo(8, .1),
+      );
+      // Keep the body, actions and toggle aligned with the username.
+      final nameX = tester
+          .getTopLeft(find.byKey(const ValueKey('comment_author_root')))
+          .dx;
+      for (final key in [
+        'comment_text_root',
+        'comment_actions_root',
+        'replies_root',
+      ]) {
+        expect(
+          tester.getTopLeft(find.byKey(ValueKey(key))).dx,
+          closeTo(nameX, .1),
+        );
+      }
+    },
+  );
+
+  for (final precedingComments in [0, 8]) {
+    testWidgets(
+      'expanding a long thread keeps its parent in place after $precedingComments comments',
+      (tester) async {
+        repo.comments.insertAll(
+          0,
+          List.generate(
+            precedingComments,
+            (i) => CommentModel(
+              id: 'recent$i',
+              authorId: 'author',
+              text: 'Recent comment $i',
+            ),
+          ),
+        );
+        repo.replies.addAll(
+          List.generate(
+            10,
+            (i) => CommentModel(
+              id: 'child$i',
+              parentId: 'root',
+              authorId: 'viewer',
+              text: "Reply $i: ${'A longer response. ' * 12}",
+            ),
+          ),
+        );
+        await open(tester);
+        final toggle = find.byKey(const ValueKey('replies_root'));
+        final scrollable = find
+            .descendant(
+              of: find.byType(ListView),
+              matching: find.byType(Scrollable),
+            )
+            .first;
+        await tester.scrollUntilVisible(toggle, 180, scrollable: scrollable);
+        await tester.pumpAndSettle();
+        final before = tester.getTopLeft(toggle);
+        final parent = find.byKey(const ValueKey('comment_author_root'));
+        final parentBefore = tester.getTopLeft(parent);
+        final scroll = tester.state<ScrollableState>(scrollable).position;
+        final offset = scroll.pixels;
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect(tester.getTopLeft(toggle).dy, closeTo(before.dy, .1));
+        expect(tester.getTopLeft(parent).dy, closeTo(parentBefore.dy, .1));
+        expect(scroll.pixels, closeTo(offset, .1));
+        expect(
+          tester
+              .getTopLeft(find.byKey(const ValueKey('comment_author_child0')))
+              .dy,
+          greaterThanOrEqualTo(tester.getBottomLeft(toggle).dy),
+        );
+        final viewport = tester.getRect(find.byType(ListView));
+        expect(
+          tester
+              .getTopLeft(find.byKey(const ValueKey('comment_text_child4')))
+              .dy,
+          greaterThan(viewport.bottom),
+        );
+        // Collapsing without scrolling also keeps the parent in the same place.
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect(tester.getTopLeft(parent).dy, closeTo(parentBefore.dy, .1));
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets('threads containing only blocked replies have no toggle', (
     tester,
   ) async {

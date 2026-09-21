@@ -205,7 +205,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(
           tester.getSize(find.byKey(const ValueKey('comment_text_c'))).width,
-          closeTo(238, .1),
+          closeTo(250, .1),
         );
         expect(
           tester.getRect(find.byKey(const ValueKey('comment_menu_c'))).right,

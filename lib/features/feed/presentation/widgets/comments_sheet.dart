@@ -218,7 +218,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
     final uid = widget.repository.currentUserId;
     return Padding(
       key: ValueKey(comment.id),
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -494,8 +494,8 @@ class _CommentsSheetState extends State<CommentsSheet> {
                           }
                           return ListView.builder(
                             controller: _scroll,
-                            reverse: true,
-                            padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
+                            // Anchor at the top so opening a thread grows downward.
+                            padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
                             itemCount: comments.length,
                             itemBuilder: (context, index) {
                               final comment = comments[index];
@@ -656,7 +656,11 @@ class _ReplyThreadState extends State<_ReplyThread> {
             child: TextButton(
               key: ValueKey('replies_${widget.parentId}'),
               onPressed: widget.onToggle,
-              style: TextButton.styleFrom(padding: EdgeInsets.zero),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
