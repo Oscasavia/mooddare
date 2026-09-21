@@ -103,7 +103,7 @@ void main() {
   );
 
   testWidgets(
-    'post icons match and aggregate comments use compact accessible counts',
+    'post icons share a color with a smaller share mark and compact counts',
     (tester) async {
       final repo = MemoryPosts([moment('counts')])..commentCount = 1250;
       await openFeed(tester, repo, size: const Size(320, 700), textScale: 2);
@@ -118,7 +118,7 @@ void main() {
                 )
                 .first,
           );
-          expect(icon.size, 22);
+          expect(icon.size, tooltip == 'Share moment' ? 18 : 22);
           expect(icon.color, Colors.white);
         }
         expect(find.byIcon(Icons.send_outlined), findsOneWidget);

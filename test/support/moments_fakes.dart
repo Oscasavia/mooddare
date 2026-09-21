@@ -87,6 +87,10 @@ class MemoryPosts implements PostRepository {
   }
 
   @override
+  Stream<List<CommentModel>> getReplies(String postId, String parentId) =>
+      Stream.value([]);
+
+  @override
   Future<void> addComment(String postId, String commentId, String text) async {
     submissions.add(commentId);
     if (failSending) throw StateError('Offline');

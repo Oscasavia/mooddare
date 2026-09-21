@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 class ShareIcon extends StatelessWidget {
   final Color? color;
   final double size;
-  const ShareIcon({super.key, this.color, this.size = 22});
+  const ShareIcon({super.key, this.color, this.size = 18});
   @override
   Widget build(BuildContext context) => Transform.rotate(
     angle: -math.pi / 4,

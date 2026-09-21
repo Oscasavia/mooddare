@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mooddare/features/feed/presentation/widgets/comments_sheet.dart';
 import 'package:mooddare/models/comment_model.dart';
+import 'package:mooddare/models/user_model.dart';
 import 'support/moments_fakes.dart';
 
 class ReplyPosts extends MemoryPosts {
@@ -15,7 +17,9 @@ class ReplyPosts extends MemoryPosts {
   Stream<List<CommentModel>> getReplies(String postId, String parentId) async* {
     replyReads++;
     yield List.of(replies.where((r) => r.parentId == parentId));
-    yield* changes.stream;
+    yield* changes.stream.map(
+      (items) => items.where((r) => r.parentId == parentId).toList(),
+    );
   }
 
   @override
@@ -66,6 +70,18 @@ void main() {
   late ReplyPosts repo;
   setUp(() {
     repo = ReplyPosts();
+    repo.authors['author'] = UserModel(
+      id: 'author',
+      name: 'Parent',
+      username: 'parent',
+      createdAt: Timestamp.now(),
+    );
+    repo.authors['viewer'] = UserModel(
+      id: 'viewer',
+      name: 'Viewer',
+      username: 'viewer',
+      createdAt: Timestamp.now(),
+    );
     repo.comments.add(
       const CommentModel(
         id: 'root',
@@ -94,16 +110,11 @@ void main() {
   }
 
   testWidgets(
-    'replies load on expansion, collapse, and retry sends without duplicate IDs',
+    'empty threads stay hidden and reply retries preserve text and IDs',
     (tester) async {
       await open(tester);
-      expect(repo.replyReads, 0);
-      await tester.tap(find.text('View replies'));
-      await tester.pumpAndSettle();
-      expect(find.text('No replies yet'), findsOneWidget);
-      await tester.tap(find.text('Hide replies'));
-      await tester.pumpAndSettle();
-      expect(find.text('No replies yet'), findsNothing);
+      expect(find.text('View replies'), findsNothing);
+      expect(find.text('Hide replies'), findsNothing);
       await tester.tap(find.text('Reply'));
       await tester.pumpAndSettle();
       expect(find.textContaining('Replying to'), findsOneWidget);
@@ -119,7 +130,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(repo.submissions[0], repo.submissions[1]);
       expect(repo.parents, ['root']);
-      expect(find.text('A reply'), findsOneWidget);
+      expect(find.text('@parent A reply'), findsOneWidget);
       expect(find.text('Hide replies'), findsOneWidget);
       expect(find.textContaining('Replying to'), findsNothing);
     },
@@ -146,6 +157,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Edit comment'));
       await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Child reply',
+      );
       await tester.enterText(find.byType(TextField), 'Edited child');
       await tester.tap(find.byTooltip('Save comment'));
       await tester.pumpAndSettle();
@@ -159,14 +174,111 @@ void main() {
       }
 
       await remove();
-      expect(find.text('Edited child'), findsOneWidget);
+      expect(find.text('@parent Edited child'), findsOneWidget);
       expect(find.textContaining('Could not delete'), findsOneWidget);
       repo.failDelete = false;
       await remove();
-      expect(find.text('Edited child'), findsNothing);
+      expect(find.text('@parent Edited child'), findsNothing);
       expect(find.text('Parent comment'), findsOneWidget);
+      expect(find.text('View replies'), findsNothing);
+      expect(find.text('Hide replies'), findsNothing);
     },
   );
+  testWidgets(
+    'reply controls follow live data, chevrons and aligned compact avatars',
+    (tester) async {
+      await open(tester);
+      expect(find.byKey(const ValueKey('replies_root')), findsNothing);
+      const reply = CommentModel(
+        id: 'child',
+        parentId: 'root',
+        authorId: 'viewer',
+        text: 'Thanks for the idea!',
+      );
+      repo.replies.add(reply);
+      repo.changes.add(List.of(repo.replies));
+      await tester.pumpAndSettle();
+      final control = find.byKey(const ValueKey('replies_root'));
+      expect(find.text('View replies'), findsOneWidget);
+      expect(find.text('@parent Thanks for the idea!'), findsNothing);
+      expect(
+        find.descendant(
+          of: control,
+          matching: find.byIcon(Icons.keyboard_arrow_down),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.getCenter(find.byIcon(Icons.keyboard_arrow_down)).dx,
+        greaterThan(tester.getTopRight(find.text('View replies')).dx),
+      );
+      await tester.tap(control);
+      await tester.pumpAndSettle();
+      expect(find.text('Hide replies'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: control,
+          matching: find.byIcon(Icons.keyboard_arrow_up),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.getCenter(find.byIcon(Icons.keyboard_arrow_up)).dx,
+        greaterThan(tester.getTopRight(find.text('Hide replies')).dx),
+      );
+      expect(find.text('@parent Thanks for the idea!'), findsOneWidget);
+      for (final id in ['root', 'child']) {
+        final name = find.byKey(ValueKey('comment_author_$id'));
+        final text = find.byKey(ValueKey('comment_text_$id'));
+        expect(
+          tester.getTopLeft(text).dx,
+          closeTo(tester.getTopLeft(name).dx, .1),
+        );
+        final avatar = find.descendant(
+          of: find.byKey(ValueKey('comment_avatar_$id')),
+          matching: find.byType(CircleAvatar),
+        );
+        expect(tester.getSize(avatar), const Size(28, 28));
+      }
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey('comment_text_child'))).dx,
+        greaterThan(
+          tester.getTopLeft(find.byKey(const ValueKey('comment_text_root'))).dx,
+        ),
+      );
+      await tester.tap(control);
+      await tester.pumpAndSettle();
+      expect(find.text('@parent Thanks for the idea!'), findsNothing);
+      await tester.tap(control);
+      await tester.pumpAndSettle();
+      expect(find.text('@parent Thanks for the idea!'), findsOneWidget);
+      expect(repo.replyReads, 1);
+      repo.changes.add([]);
+      await tester.pumpAndSettle();
+      expect(control, findsNothing);
+      expect(find.text('@parent Thanks for the idea!'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('threads containing only blocked replies have no toggle', (
+    tester,
+  ) async {
+    repo.blocked = {'hidden'};
+    repo.replies.add(
+      const CommentModel(
+        id: 'hidden-reply',
+        parentId: 'root',
+        authorId: 'hidden',
+        text: 'Hidden',
+      ),
+    );
+    await open(tester);
+    expect(find.text('View replies'), findsNothing);
+    expect(find.text('Hide replies'), findsNothing);
+    expect(find.textContaining('Hidden'), findsNothing);
+  });
+
   testWidgets(
     'cancel reply preserves typed text and deleting threads cannot receive replies',
     (tester) async {

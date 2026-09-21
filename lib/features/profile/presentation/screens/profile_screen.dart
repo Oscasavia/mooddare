@@ -145,6 +145,12 @@ class _ProfileScreenState extends State<ProfileScreen>
             body: Column(
               children: [
                 TabBar(
+                  splashFactory: NoSplash.splashFactory,
+                  overlayColor: WidgetStateProperty.resolveWith(
+                    (states) => states.contains(WidgetState.pressed)
+                        ? Colors.transparent
+                        : null,
+                  ),
                   controller: _tabController,
                   dividerColor: Colors.transparent,
                   indicatorSize: TabBarIndicatorSize.tab,

@@ -179,7 +179,7 @@ void main() {
 
   for (final scale in [1.0, 2.0]) {
     testWidgets(
-      'comment text uses full width and the like count stays beside its heart at scale $scale',
+      'comment text aligns with the username and the like count stays beside its heart at scale $scale',
       (tester) async {
         final repo = MemoryPosts([moment('wide-comments')]);
         repo.comments.add(
@@ -205,7 +205,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(
           tester.getSize(find.byKey(const ValueKey('comment_text_c'))).width,
-          closeTo(288, .1),
+          closeTo(238, .1),
         );
         expect(
           tester.getRect(find.byKey(const ValueKey('comment_menu_c'))).right,

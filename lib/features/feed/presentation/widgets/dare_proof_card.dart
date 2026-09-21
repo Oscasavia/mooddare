@@ -596,10 +596,7 @@ class _DareProofCardState extends State<DareProofCard>
                           IconButton(
                             tooltip: 'Share moment',
                             onPressed: _share,
-                            icon: const ShareIcon(
-                              color: Colors.white,
-                              size: 22,
-                            ),
+                            icon: const ShareIcon(color: Colors.white),
                           ),
                         ],
                       ),

@@ -52,7 +52,7 @@ void main() {
       expect(transform.entry(0, 0), closeTo(math.sqrt(.5), .0001));
       expect(transform.entry(1, 0), closeTo(-math.sqrt(.5), .0001));
       final icon = tester.widget<Icon>(find.byIcon(Icons.send_outlined));
-      expect(icon.size, 22);
+      expect(icon.size, 18);
       expect(icon.color, Colors.white);
     },
   );

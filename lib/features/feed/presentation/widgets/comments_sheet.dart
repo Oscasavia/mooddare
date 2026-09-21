@@ -209,7 +209,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
     }
   }
 
-  Widget _comment(CommentModel comment) {
+  Widget _comment(CommentModel comment, {String? replyTo}) {
     final uid = widget.repository.currentUserId;
     return Padding(
       key: ValueKey(comment.id),
@@ -227,6 +227,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                   ),
                   builder: (context, snapshot) => AuthorIdentity(
                     user: snapshot.data,
+                    avatarRadius: 14,
                     avatarKey: ValueKey('comment_avatar_${comment.id}'),
                     nameKey: ValueKey('comment_author_${comment.id}'),
                     onPressed: () {
@@ -268,11 +269,32 @@ class _CommentsSheetState extends State<CommentsSheet> {
             ],
           ),
           Padding(
-            padding: const EdgeInsets.only(right: 12, top: 4),
-            child: Text(
-              comment.text,
-              key: ValueKey('comment_text_${comment.id}'),
+            padding: const EdgeInsets.only(
+              left: AuthorIdentity.textInset,
+              right: 12,
+              top: 4,
             ),
+            child: replyTo == null
+                ? Text(
+                    comment.text,
+                    key: ValueKey('comment_text_${comment.id}'),
+                  )
+                : FutureBuilder<UserModel?>(
+                    future: _authors.putIfAbsent(
+                      replyTo,
+                      () => widget.repository.getAuthor(replyTo),
+                    ),
+                    builder: (_, snapshot) {
+                      final username = snapshot.data?.username;
+                      final recipient = username != null && username.isNotEmpty
+                          ? username
+                          : 'member';
+                      return Text(
+                        '@$recipient ${comment.text}',
+                        key: ValueKey('comment_text_${comment.id}'),
+                      );
+                    },
+                  ),
           ),
           Row(
             children: [
@@ -332,31 +354,20 @@ class _CommentsSheetState extends State<CommentsSheet> {
                 ),
             ],
           ),
-          if (comment.parentId == null && !comment.deleting) ...[
-            TextButton(
-              key: ValueKey('replies_${comment.id}'),
-              onPressed: () => setState(() {
+          if (comment.parentId == null && !comment.deleting)
+            _ReplyThread(
+              key: ValueKey('thread_${comment.id}'),
+              repository: widget.repository,
+              postId: widget.post.id,
+              parentId: comment.id,
+              blocked: _blocked,
+              expanded: _expanded.contains(comment.id),
+              onToggle: () => setState(() {
                 if (!_expanded.remove(comment.id)) _expanded.add(comment.id);
               }),
-              child: Text(
-                _expanded.contains(comment.id)
-                    ? 'Hide replies'
-                    : 'View replies',
-              ),
+              buildComment: (reply) =>
+                  _comment(reply, replyTo: comment.authorId),
             ),
-            if (_expanded.contains(comment.id))
-              Padding(
-                padding: const EdgeInsets.only(left: 24),
-                child: _ReplyThread(
-                  key: ValueKey('thread_${comment.id}'),
-                  repository: widget.repository,
-                  postId: widget.post.id,
-                  parentId: comment.id,
-                  blocked: _blocked,
-                  buildComment: _comment,
-                ),
-              ),
-          ],
           if (comment.deleting)
             const Text(
               'Thread deletion interrupted. Use Delete comment to retry.',
@@ -563,6 +574,8 @@ class _ReplyThread extends StatefulWidget {
   final PostRepository repository;
   final String postId, parentId;
   final Set<String> blocked;
+  final bool expanded;
+  final VoidCallback onToggle;
   final Widget Function(CommentModel) buildComment;
   const _ReplyThread({
     super.key,
@@ -570,6 +583,8 @@ class _ReplyThread extends StatefulWidget {
     required this.postId,
     required this.parentId,
     required this.blocked,
+    required this.expanded,
+    required this.onToggle,
     required this.buildComment,
   });
   @override
@@ -597,24 +612,55 @@ class _ReplyThreadState extends State<_ReplyThread> {
           child: const Text('Could not load replies. Retry'),
         );
       }
-      if (!snapshot.hasData) return const LinearProgressIndicator();
+      if (!snapshot.hasData) return const SizedBox.shrink();
       final replies = snapshot.data!
           .where((r) => !widget.blocked.contains(r.authorId))
           .toList();
-      if (replies.isEmpty) {
-        return const Text(
-          'No replies yet',
-          style: TextStyle(color: Colors.white54),
-        );
-      }
+      if (replies.isEmpty) return const SizedBox.shrink();
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ...replies.take(_visible).map(widget.buildComment),
-          if (replies.length > _visible)
-            TextButton(
-              onPressed: () => setState(() => _visible += 5),
-              child: Text('View ${replies.length - _visible} more replies'),
+          Padding(
+            padding: const EdgeInsets.only(left: AuthorIdentity.textInset),
+            child: TextButton(
+              key: ValueKey('replies_${widget.parentId}'),
+              onPressed: widget.onToggle,
+              style: TextButton.styleFrom(padding: EdgeInsets.zero),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      widget.expanded ? 'Hide replies' : 'View replies',
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    widget.expanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    size: 18,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (widget.expanded)
+            Padding(
+              padding: const EdgeInsets.only(left: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ...replies.take(_visible).map(widget.buildComment),
+                  if (replies.length > _visible)
+                    TextButton(
+                      onPressed: () => setState(() => _visible += 5),
+                      child: Text(
+                        'View ${replies.length - _visible} more replies',
+                      ),
+                    ),
+                ],
+              ),
             ),
         ],
       );

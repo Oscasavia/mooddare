@@ -30,6 +30,18 @@ void main() {
         expect(find.text('Following'), findsOneWidget);
         expect(find.text('Likes'), findsNothing);
         expect(find.text('Moments'), findsOneWidget);
+        final tabs = tester.widget<TabBar>(find.byType(TabBar));
+        expect(tabs.splashFactory, NoSplash.splashFactory);
+        expect(
+          tabs.overlayColor!.resolve({WidgetState.pressed}),
+          Colors.transparent,
+        );
+        await tester.tap(find.text('Stats'));
+        await tester.pumpAndSettle();
+        expect(tabs.controller!.index, 1);
+        await tester.tap(find.text('Dares'));
+        await tester.pumpAndSettle();
+        expect(tabs.controller!.index, 0);
         expect(tester.takeException(), isNull);
         await tester.tap(find.text('Followers'));
         await tester.pumpAndSettle();

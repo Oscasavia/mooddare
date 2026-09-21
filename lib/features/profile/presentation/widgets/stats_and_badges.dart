@@ -17,8 +17,10 @@ class StatsAndBadges extends StatelessWidget {
         Card(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+            child: Wrap(
+              alignment: WrapAlignment.spaceAround,
+              spacing: 16,
+              runSpacing: 16,
               children: [
                 StatItem(value: '$daresCompleted', label: 'Moments'),
                 StatItem(value: '$totalLikes', label: 'Likes'),
