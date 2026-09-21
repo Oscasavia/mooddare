@@ -4,7 +4,7 @@ class CommentModel {
   final String id, authorId, text;
   final DateTime? createdAt, editedAt;
   final List<String> likedBy;
-  final String? parentId;
+  final String? parentId, replyToId, replyToAuthorId;
   final bool deleting;
   const CommentModel({
     required this.id,
@@ -14,6 +14,8 @@ class CommentModel {
     this.editedAt,
     this.likedBy = const [],
     this.parentId,
+    this.replyToId,
+    this.replyToAuthorId,
     this.deleting = false,
   });
 
@@ -24,6 +26,8 @@ class CommentModel {
     return CommentModel(
       id: doc.id,
       parentId: data['parentId'] as String?,
+      replyToId: data['replyToId'] as String?,
+      replyToAuthorId: data['replyToAuthorId'] as String?,
       deleting: data['deleting'] == true,
       authorId: data['authorId'] as String,
       text: data['text'] as String,

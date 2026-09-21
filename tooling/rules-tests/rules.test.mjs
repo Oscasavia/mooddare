@@ -284,6 +284,37 @@ for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
     await assertFails(setDoc(reply, value));
     await assertFails(updateDoc(doc(db('bob'), 'posts/one/comments/root'), {deleting: false}));
   });
+  test(`${policy}: reply targets are validated in the same thread and cannot be changed`, async () => {
+    await loadSocialPolicy();
+    await setDoc(doc(db('alice'), 'posts/one'), post());
+    await setDoc(doc(db('bob'), 'posts/one/comments/root'), comment());
+    await setDoc(doc(db('bob'), 'posts/one/comments/other'), comment());
+    const base = {...comment('charlie'), parentId: 'root', rootAuthorId: 'bob'};
+    await assertSucceeds(setDoc(doc(db('charlie'), 'posts/one/replies/first'), {...base, replyToAuthorId: 'bob'}));
+    await setDoc(doc(db('charlie'), 'posts/one/replies/elsewhere'), {...base, parentId: 'other'});
+    const target = doc(db('dana'), 'posts/one/replies/answer');
+    const answer = {...base, authorId: 'dana', replyToId: 'first', replyToAuthorId: 'charlie'};
+    await assertFails(setDoc(target, {...answer, replyToAuthorId: 'bob'}));
+    await assertFails(setDoc(target, {...answer, replyToId: 'elsewhere'}));
+    await assertFails(setDoc(target, {...answer, replyToId: 'missing'}));
+    await assertFails(setDoc(target, {...answer, replyToId: 123}));
+    await assertFails(setDoc(target, {...answer, replyToId: ''}));
+    const missingAuthor = {...answer}; delete missingAuthor.replyToAuthorId;
+    await assertFails(setDoc(target, missingAuthor));
+    const forgedRoot = {...answer}; delete forgedRoot.replyToId;
+    await assertFails(setDoc(target, forgedRoot));
+    await assertSucceeds(setDoc(target, answer));
+    await assertFails(updateDoc(target, {replyToId: 'elsewhere'}));
+    await assertFails(updateDoc(target, {replyToAuthorId: 'bob', text: 'Retarget', editedAt: serverTimestamp()}));
+    await assertSucceeds(updateDoc(target, {text: 'Still to Charlie', editedAt: serverTimestamp()}));
+    // A mention does not grant its recipient moderation over someone else's reply.
+    await assertFails(deleteDoc(doc(db('charlie'), 'posts/one/replies/answer')));
+    await assertSucceeds(deleteDoc(doc(db('charlie'), 'posts/one/replies/first')));
+    await assertSucceeds(updateDoc(target, {text: 'Target was deleted', editedAt: serverTimestamp()}));
+    await assertSucceeds(updateDoc(doc(db('bob'), 'posts/one/replies/answer'), {likedBy: ['bob']}));
+    await assertFails(setDoc(doc(db('dana'), 'posts/one/replies/new'), answer));
+    await assertSucceeds(deleteDoc(doc(db('bob'), 'posts/one/replies/answer')));
+  });
   test(`${policy}: own reply collection-group cleanup cannot inspect others' replies`, async () => {
     await loadSocialPolicy();
     await setDoc(doc(db('alice'), 'posts/one'), post());

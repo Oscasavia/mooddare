@@ -169,8 +169,9 @@ class PostRepository {
     String postId,
     String parentId,
     String replyId,
-    String text,
-  ) async {
+    String text, {
+    String? replyToId,
+  }) async {
     final uid = currentUserId;
     text = text.trim();
     if (uid == null) throw StateError('Sign in to reply.');
@@ -186,9 +187,18 @@ class PostRepository {
         throw StateError('This comment was deleted.');
       }
       if (existing.exists) return;
+      final target = replyToId == null
+          ? root
+          : await tx.get(post.collection('replies').doc(replyToId));
+      if (!target.exists ||
+          (replyToId != null && target.data()?['parentId'] != parentId)) {
+        throw StateError('This reply is no longer available in this thread.');
+      }
       tx.set(reply, {
         'parentId': parentId,
         'rootAuthorId': root.data()!['authorId'],
+        'replyToAuthorId': target.data()!['authorId'],
+        if (replyToId != null) 'replyToId': replyToId,
         'authorId': uid,
         'text': text,
         'createdAt': FieldValue.serverTimestamp(),

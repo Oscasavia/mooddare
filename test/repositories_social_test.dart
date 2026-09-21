@@ -73,6 +73,81 @@ void main() {
     },
   );
   test(
+    'reply targets stay in the root thread and survive edits, retries and target deletion',
+    () async {
+      await seed();
+      await posts.addComment('p', 'root', 'Root');
+      await posts.addReply('p', 'root', 'first', 'First');
+      expect(
+        (await posts.getReplies('p', 'root').first).single.replyToAuthorId,
+        'alice',
+      );
+      await db.doc('posts/p/replies/first').update({'authorId': 'bob'});
+      await posts.addReply(
+        'p',
+        'root',
+        'second',
+        'Answer Bob',
+        replyToId: 'first',
+      );
+      var answer = (await posts.getReplies('p', 'root').first).singleWhere(
+        (r) => r.id == 'second',
+      );
+      expect(answer.parentId, 'root');
+      expect(answer.replyToId, 'first');
+      expect(answer.replyToAuthorId, 'bob');
+      await posts.editReply('p', 'second', 'Edited answer');
+      await posts.deleteReply('p', 'first');
+      // A retry of an already accepted write is still idempotent.
+      await posts.addReply(
+        'p',
+        'root',
+        'second',
+        'Duplicate',
+        replyToId: 'first',
+      );
+      answer = (await posts.getReplies('p', 'root').first).single;
+      expect(answer.text, 'Edited answer');
+      expect(answer.replyToAuthorId, 'bob');
+      await posts.addReply(
+        'p',
+        'root',
+        'third',
+        'Answer Alice',
+        replyToId: 'second',
+      );
+      final third = (await posts.getReplies('p', 'root').first).singleWhere(
+        (r) => r.id == 'third',
+      );
+      expect(third.parentId, 'root');
+      expect(third.replyToAuthorId, 'alice');
+      await posts.deleteComment('p', 'root');
+      expect(await posts.getCommentCount('p'), 0);
+    },
+  );
+
+  test(
+    'reply targets must exist in the selected thread of the selected post',
+    () async {
+      await seed();
+      await posts.addComment('p', 'root', 'Root');
+      await posts.addComment('p', 'other-root', 'Other');
+      await posts.addReply('p', 'other-root', 'other', 'Other thread');
+      await db.doc('posts/elsewhere/replies/external').set({
+        'parentId': 'root',
+        'authorId': 'bob',
+      });
+      for (final target in ['missing', 'other', 'external']) {
+        await expectLater(
+          posts.addReply('p', 'root', 'bad', 'Wrong target', replyToId: target),
+          throwsStateError,
+        );
+        expect((await db.doc('posts/p/replies/bad').get()).exists, false);
+      }
+    },
+  );
+
+  test(
     'reply validation rejects empty/long drafts, missing/deleting roots and unauthorized edits',
     () async {
       await seed();

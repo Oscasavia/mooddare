@@ -1,5 +1,6 @@
 import 'package:mooddare/core/widgets/stable_popup_menu.dart';
 import 'dart:async';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:mooddare/core/app_routes.dart';
@@ -96,13 +97,16 @@ class _CommentsSheetState extends State<CommentsSheet> {
     try {
       final editing = _editing;
       if (editing == null && _replying != null) {
+        final target = _replying!;
+        final parentId = target.parentId ?? target.id;
         await widget.repository.addReply(
           widget.post.id,
-          _replying!.id,
+          parentId,
           _commentId,
           text,
+          replyToId: target.parentId == null ? null : target.id,
         );
-        _expanded.add(_replying!.id);
+        _expanded.add(parentId);
         _replying = null;
       } else if (editing == null) {
         await widget.repository.addComment(widget.post.id, _commentId, text);
@@ -196,7 +200,8 @@ class _CommentsSheetState extends State<CommentsSheet> {
       } else {
         await widget.repository.deleteReply(widget.post.id, comment.id);
       }
-      if (mounted && _replying?.id == comment.id) {
+      if (mounted &&
+          (_replying?.id == comment.id || _replying?.parentId == comment.id)) {
         setState(() => _replying = null);
       }
       if (mounted && _editing?.id == comment.id) _cancelEdit();
@@ -228,6 +233,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                   builder: (context, snapshot) => AuthorIdentity(
                     user: snapshot.data,
                     avatarRadius: 14,
+                    compact: true,
                     avatarKey: ValueKey('comment_avatar_${comment.id}'),
                     nameKey: ValueKey('comment_author_${comment.id}'),
                     onPressed: () {
@@ -289,70 +295,93 @@ class _CommentsSheetState extends State<CommentsSheet> {
                       final recipient = username != null && username.isNotEmpty
                           ? username
                           : 'member';
-                      return Text(
-                        '@$recipient ${comment.text}',
-                        key: ValueKey('comment_text_${comment.id}'),
+                      return _MentionedReplyText(
+                        mention: '@$recipient',
+                        text: comment.text,
+                        textKey: ValueKey('comment_text_${comment.id}'),
+                        onMentionPressed: () {
+                          _focus.unfocus();
+                          Navigator.pushNamed(
+                            context,
+                            profileRoute,
+                            arguments: replyTo,
+                          );
+                        },
                       );
                     },
                   ),
           ),
-          Row(
-            children: [
-              Tooltip(
-                message: comment.likedBy.contains(uid)
-                    ? 'Unlike comment'
-                    : 'Like comment',
-                child: TextButton.icon(
-                  key: ValueKey('comment_like_${comment.id}'),
-                  onPressed:
-                      uid == null ||
-                          _deleting.contains(comment.id) ||
-                          _liking.contains(comment.id)
-                      ? null
-                      : () => _like(comment),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    minimumSize: const Size(48, 48),
-                  ),
-                  icon: Icon(
-                    comment.likedBy.contains(uid)
-                        ? Icons.favorite
-                        : Icons.favorite_outline,
-                    size: 22,
-                  ),
-                  label: Text(
-                    compactCount(comment.likedBy.length),
-                    key: ValueKey('comment_count_${comment.id}'),
-                    semanticsLabel: '${comment.likedBy.length} likes',
-                  ),
-                ),
-              ),
-              if (comment.parentId == null && !comment.deleting)
-                TextButton(
-                  onPressed: uid == null || _sending
-                      ? null
-                      : () {
-                          if (_editing != null) _cancelEdit();
-                          setState(() {
-                            _replying = comment;
-                            _error = null;
-                          });
-                          _focus.requestFocus();
-                        },
-                  child: const Text('Reply'),
-                ),
-              if (comment.editedAt != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: Text(
-                    'Edited',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelSmall?.copyWith(color: Colors.white60),
+          Padding(
+            padding: const EdgeInsets.only(left: AuthorIdentity.textInset),
+            child: Wrap(
+              key: ValueKey('comment_actions_${comment.id}'),
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 4,
+              children: [
+                Tooltip(
+                  message: comment.likedBy.contains(uid)
+                      ? 'Unlike comment'
+                      : 'Like comment',
+                  child: TextButton.icon(
+                    key: ValueKey('comment_like_${comment.id}'),
+                    onPressed:
+                        uid == null ||
+                            _deleting.contains(comment.id) ||
+                            _liking.contains(comment.id)
+                        ? null
+                        : () => _like(comment),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(48, 48),
+                    ),
+                    icon: Icon(
+                      comment.likedBy.contains(uid)
+                          ? Icons.favorite
+                          : Icons.favorite_outline,
+                      size: 22,
+                    ),
+                    label: Text(
+                      compactCount(comment.likedBy.length),
+                      key: ValueKey('comment_count_${comment.id}'),
+                      semanticsLabel: '${comment.likedBy.length} likes',
+                    ),
                   ),
                 ),
-            ],
+                if (!comment.deleting)
+                  TextButton(
+                    key: ValueKey('comment_reply_${comment.id}'),
+                    onPressed:
+                        uid == null ||
+                            _sending ||
+                            _deleting.contains(comment.id)
+                        ? null
+                        : () {
+                            if (_editing != null) _cancelEdit();
+                            setState(() {
+                              if (_replying?.id != comment.id) {
+                                _commentId = const Uuid().v4();
+                              }
+                              _replying = comment;
+                              _error = null;
+                            });
+                            _focus.requestFocus();
+                          },
+                    child: const Text('Reply'),
+                  ),
+                if (comment.editedAt != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Text(
+                      'Edited',
+                      key: ValueKey('comment_edited_${comment.id}'),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.labelSmall?.copyWith(color: Colors.white60),
+                    ),
+                  ),
+              ],
+            ),
           ),
           if (comment.parentId == null && !comment.deleting)
             _ReplyThread(
@@ -365,8 +394,10 @@ class _CommentsSheetState extends State<CommentsSheet> {
               onToggle: () => setState(() {
                 if (!_expanded.remove(comment.id)) _expanded.add(comment.id);
               }),
-              buildComment: (reply) =>
-                  _comment(reply, replyTo: comment.authorId),
+              buildComment: (reply) => _comment(
+                reply,
+                replyTo: reply.replyToAuthorId ?? comment.authorId,
+              ),
             ),
           if (comment.deleting)
             const Text(
@@ -665,5 +696,49 @@ class _ReplyThreadState extends State<_ReplyThread> {
         ],
       );
     },
+  );
+}
+
+/// A real inline link: it wraps with the reply and owns its recognizer lifecycle.
+class _MentionedReplyText extends StatefulWidget {
+  final String mention, text;
+  final Key textKey;
+  final VoidCallback onMentionPressed;
+  const _MentionedReplyText({
+    required this.mention,
+    required this.text,
+    required this.textKey,
+    required this.onMentionPressed,
+  });
+  @override
+  State<_MentionedReplyText> createState() => _MentionedReplyTextState();
+}
+
+class _MentionedReplyTextState extends State<_MentionedReplyText> {
+  late final _tap = TapGestureRecognizer()
+    ..onTap = () => widget.onMentionPressed();
+  @override
+  void dispose() {
+    _tap.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Text.rich(
+    TextSpan(
+      children: [
+        TextSpan(
+          text: widget.mention,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.primary,
+            fontWeight: FontWeight.w500,
+          ),
+          recognizer: _tap,
+          mouseCursor: SystemMouseCursors.click,
+        ),
+        TextSpan(text: ' ${widget.text}'),
+      ],
+    ),
+    key: widget.textKey,
   );
 }

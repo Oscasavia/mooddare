@@ -143,15 +143,28 @@ service cloud.firestore {
             && after.toSet().difference(before.toSet()).hasOnly([request.auth.uid])
             && before.toSet().difference(after.toSet()).hasOnly([request.auth.uid]);
         }
+        // Older clients omit both target fields and reply to the root author.
+        function validReplyTarget() {
+          let data = request.resource.data;
+          return !data.keys().hasAny(['replyToId', 'replyToAuthorId'])
+            || (data.replyToAuthorId is string
+              && (!data.keys().hasAny(['replyToId'])
+                ? data.replyToAuthorId == data.rootAuthorId
+                : (data.replyToId is string && data.replyToId.size() > 0 && data.replyToId.size() <= 128
+                  && exists(/databases/$(database)/documents/posts/$(id)/replies/$(data.replyToId))
+                  && get(/databases/$(database)/documents/posts/$(id)/replies/$(data.replyToId)).data.parentId == data.parentId
+                  && get(/databases/$(database)/documents/posts/$(id)/replies/$(data.replyToId)).data.authorId == data.replyToAuthorId)));
+        }
         allow read: if signedIn() && exists(/databases/$(database)/documents/posts/$(id));
         allow create: if signedIn() && exists(/databases/$(database)/documents/posts/$(id))
           && get(/databases/$(database)/documents/posts/$(id)).data.get('deleting', false) == false
-          && request.resource.data.keys().hasOnly(['authorId', 'text', 'createdAt', 'likedBy', 'parentId', 'rootAuthorId'])
+          && request.resource.data.keys().hasOnly(['authorId', 'text', 'createdAt', 'likedBy', 'parentId', 'rootAuthorId', 'replyToId', 'replyToAuthorId'])
           && request.resource.data.authorId == request.auth.uid && validText()
           && request.resource.data.parentId is string
           && exists(/databases/$(database)/documents/posts/$(id)/comments/$(request.resource.data.parentId))
           && get(/databases/$(database)/documents/posts/$(id)/comments/$(request.resource.data.parentId)).data.get('deleting', false) == false
           && request.resource.data.rootAuthorId == get(/databases/$(database)/documents/posts/$(id)/comments/$(request.resource.data.parentId)).data.authorId
+          && validReplyTarget()
           && request.resource.data.get('likedBy', []) == []
           && request.resource.data.createdAt == request.time;
         allow update: if signedIn() && exists(/databases/$(database)/documents/posts/$(id))

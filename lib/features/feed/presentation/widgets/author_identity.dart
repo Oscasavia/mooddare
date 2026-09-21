@@ -8,6 +8,7 @@ class AuthorIdentity extends StatelessWidget {
   final Key? avatarKey, nameKey;
   final String fallback;
   final double avatarRadius;
+  final bool compact;
   static const textInset = 50.0;
   const AuthorIdentity({
     super.key,
@@ -17,6 +18,7 @@ class AuthorIdentity extends StatelessWidget {
     this.nameKey,
     this.fallback = 'MoodDare member',
     this.avatarRadius = 18,
+    this.compact = false,
   });
 
   @override
@@ -38,16 +40,22 @@ class AuthorIdentity extends StatelessWidget {
             child: SizedBox(
               width: 48,
               height: 48,
-              child: Center(
-                child: CircleAvatar(
-                  radius: avatarRadius,
-                  foregroundImage: photo != null && photo.isNotEmpty
-                      ? NetworkImage(photo)
-                      : null,
-                  onForegroundImageError: photo != null && photo.isNotEmpty
-                      ? (_, _) {}
-                      : null,
-                  child: Icon(Icons.person_outline, size: avatarRadius + 2),
+              child: Padding(
+                padding: compact
+                    ? const EdgeInsets.only(right: 4)
+                    : EdgeInsets.zero,
+                child: Align(
+                  alignment: compact ? Alignment.centerRight : Alignment.center,
+                  child: CircleAvatar(
+                    radius: avatarRadius,
+                    foregroundImage: photo != null && photo.isNotEmpty
+                        ? NetworkImage(photo)
+                        : null,
+                    onForegroundImageError: photo != null && photo.isNotEmpty
+                        ? (_, _) {}
+                        : null,
+                    child: Icon(Icons.person_outline, size: avatarRadius + 2),
+                  ),
                 ),
               ),
             ),
