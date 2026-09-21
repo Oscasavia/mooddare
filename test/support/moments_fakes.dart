@@ -119,16 +119,20 @@ class MemoryPosts implements PostRepository {
   }
 
   @override
-  Future<void> toggleCommentLike(String postId, String commentId) async {
+  Future<void> toggleCommentLike(
+    String postId,
+    String commentId, {
+    bool? liked,
+  }) async {
     commentLikes++;
     if (failCommentLike) throw StateError('Offline');
     final index = comments.indexWhere((c) => c.id == commentId);
     final old = comments[index];
     final likes = List<String>.of(old.likedBy);
-    if (likes.contains(uid)) {
-      likes.remove(uid);
+    if (liked ?? !likes.contains(uid)) {
+      if (!likes.contains(uid)) likes.add(uid!);
     } else {
-      likes.add(uid!);
+      likes.remove(uid);
     }
     comments[index] = CommentModel(
       id: old.id,

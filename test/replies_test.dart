@@ -68,7 +68,11 @@ class ReplyPosts extends MemoryPosts {
   }
 
   @override
-  Future<void> toggleReplyLike(String postId, String replyId) async {
+  Future<void> toggleReplyLike(
+    String postId,
+    String replyId, {
+    bool? liked,
+  }) async {
     replyLikes++;
   }
 

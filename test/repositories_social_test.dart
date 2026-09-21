@@ -148,6 +148,34 @@ void main() {
   );
 
   test(
+    'explicit like intent is idempotent and preserves other users for comments and replies',
+    () async {
+      await seed();
+      await posts.addComment('p', 'root', 'Root');
+      await posts.addReply('p', 'root', 'child', 'Reply');
+      for (final reply in [false, true]) {
+        final path = reply ? 'posts/p/replies/child' : 'posts/p/comments/root';
+        await db.doc(path).update({
+          'likedBy': ['other', 'alice'],
+        });
+        Future<void> setLike(bool value) => reply
+            ? posts.toggleReplyLike('p', 'child', liked: value)
+            : posts.toggleCommentLike('p', 'root', liked: value);
+        // Already liked elsewhere: a requested like must never toggle it off.
+        await setLike(true);
+        await setLike(true);
+        expect((await db.doc(path).get()).data()!['likedBy'], [
+          'other',
+          'alice',
+        ]);
+        await setLike(false);
+        await setLike(false);
+        expect((await db.doc(path).get()).data()!['likedBy'], ['other']);
+      }
+    },
+  );
+
+  test(
     'reply validation rejects empty/long drafts, missing/deleting roots and unauthorized edits',
     () async {
       await seed();

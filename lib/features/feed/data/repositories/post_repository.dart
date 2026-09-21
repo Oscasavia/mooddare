@@ -225,7 +225,11 @@ class PostRepository {
     });
   }
 
-  Future<void> toggleReplyLike(String postId, String replyId) async {
+  Future<void> toggleReplyLike(
+    String postId,
+    String replyId, {
+    bool? liked,
+  }) async {
     final uid = currentUserId;
     if (uid == null) throw StateError('Sign in to like replies.');
     final ref = _firestore
@@ -236,13 +240,13 @@ class PostRepository {
     await _firestore.runTransaction((tx) async {
       final doc = await tx.get(ref);
       if (!doc.exists) throw StateError('This reply was deleted.');
-      final liked = List<String>.from(
+      final wasLiked = List<String>.from(
         doc.data()?['likedBy'] ?? [],
       ).contains(uid);
       tx.update(ref, {
-        'likedBy': liked
-            ? FieldValue.arrayRemove([uid])
-            : FieldValue.arrayUnion([uid]),
+        'likedBy': (liked ?? !wasLiked)
+            ? FieldValue.arrayUnion([uid])
+            : FieldValue.arrayRemove([uid]),
       });
     });
   }
@@ -275,7 +279,11 @@ class PostRepository {
     });
   }
 
-  Future<void> toggleCommentLike(String postId, String commentId) async {
+  Future<void> toggleCommentLike(
+    String postId,
+    String commentId, {
+    bool? liked,
+  }) async {
     final uid = currentUserId;
     if (uid == null) throw StateError('Sign in to like a comment.');
     final ref = _firestore
@@ -288,9 +296,9 @@ class PostRepository {
       if (!doc.exists) throw StateError('This comment is no longer available.');
       final likes = List<String>.from(doc.data()?['likedBy'] ?? []);
       tx.update(ref, {
-        'likedBy': likes.contains(uid)
-            ? FieldValue.arrayRemove([uid])
-            : FieldValue.arrayUnion([uid]),
+        'likedBy': (liked ?? !likes.contains(uid))
+            ? FieldValue.arrayUnion([uid])
+            : FieldValue.arrayRemove([uid]),
       });
     });
   }

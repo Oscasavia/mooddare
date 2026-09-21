@@ -41,6 +41,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
   final _scroll = ScrollController();
   final _focus = FocusNode();
   final _liking = <String>{};
+  final _optimisticLikes = <String, bool>{};
   final _deleting = <String>{};
   CommentModel? _editing;
   CommentModel? _replying;
@@ -170,19 +171,39 @@ class _CommentsSheetState extends State<CommentsSheet> {
         widget.repository.currentUserId == null) {
       return;
     }
+    final previous = _optimisticLikes[comment.id];
+    final liked =
+        !(previous ??
+            comment.likedBy.contains(widget.repository.currentUserId));
     setState(() {
       _liking.add(comment.id);
+      _optimisticLikes[comment.id] = liked;
       _error = null;
     });
     try {
       if (comment.parentId == null) {
-        await widget.repository.toggleCommentLike(widget.post.id, comment.id);
+        await widget.repository.toggleCommentLike(
+          widget.post.id,
+          comment.id,
+          liked: liked,
+        );
       } else {
-        await widget.repository.toggleReplyLike(widget.post.id, comment.id);
+        await widget.repository.toggleReplyLike(
+          widget.post.id,
+          comment.id,
+          liked: liked,
+        );
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Could not update your like. Try again.');
+        setState(() {
+          if (previous == null) {
+            _optimisticLikes.remove(comment.id);
+          } else {
+            _optimisticLikes[comment.id] = previous;
+          }
+          _error = 'Could not update your like. Try again.';
+        });
       }
     } finally {
       if (mounted) setState(() => _liking.remove(comment.id));
@@ -217,6 +238,15 @@ class _CommentsSheetState extends State<CommentsSheet> {
 
   Widget _comment(CommentModel comment, {String? replyTo}) {
     final uid = widget.repository.currentUserId;
+    final savedLike = comment.likedBy.contains(uid);
+    final liked = _optimisticLikes[comment.id] ?? savedLike;
+    // Retain immediate feedback if the write finishes before the live snapshot.
+    if (!_liking.contains(comment.id) && savedLike == liked) {
+      _optimisticLikes.remove(comment.id);
+    }
+    // Merge other people's live likes without counting our own like twice.
+    final likeCount =
+        comment.likedBy.length + (liked ? 1 : 0) - (savedLike ? 1 : 0);
     return Padding(
       key: ValueKey(comment.id),
       padding: const EdgeInsets.only(bottom: 8),
@@ -320,9 +350,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
               spacing: 4,
               children: [
                 Tooltip(
-                  message: comment.likedBy.contains(uid)
-                      ? 'Unlike comment'
-                      : 'Like comment',
+                  message: liked ? 'Unlike comment' : 'Like comment',
                   child: TextButton.icon(
                     key: ValueKey('comment_like_${comment.id}'),
                     onPressed:
@@ -333,22 +361,19 @@ class _CommentsSheetState extends State<CommentsSheet> {
                         : () => _like(comment),
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.white,
+                      disabledForegroundColor: Colors.white,
                       padding: EdgeInsets.zero,
                       minimumSize: const Size(48, 48),
                     ),
                     icon: Icon(
-                      comment.likedBy.contains(uid)
-                          ? Icons.favorite
-                          : Icons.favorite_outline,
-                      color: comment.likedBy.contains(uid)
-                          ? AppTheme.likedHeart
-                          : null,
+                      liked ? Icons.favorite : Icons.favorite_outline,
+                      color: liked ? AppTheme.likedHeart : null,
                       size: 22,
                     ),
                     label: Text(
-                      compactCount(comment.likedBy.length),
+                      compactCount(likeCount),
                       key: ValueKey('comment_count_${comment.id}'),
-                      semanticsLabel: '${comment.likedBy.length} likes',
+                      semanticsLabel: '$likeCount likes',
                     ),
                   ),
                 ),
