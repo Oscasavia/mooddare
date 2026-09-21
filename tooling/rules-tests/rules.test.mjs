@@ -306,3 +306,26 @@ test('post deletion rejects new root comments and replies while allowing cleanup
   await assertSucceeds(deleteDoc(doc(db('alice'), 'posts/one/comments/root')));
   await assertSucceeds(deleteDoc(doc(db('alice'), 'posts/one')));
 });
+
+test('account relationship cleanup batches respect paired-edge rules without touching another page', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    const client = context.firestore(), seed = writeBatch(client);
+    for (let i = 0; i < 11; i++) {
+      seed.set(doc(client, `users/alice/following/u${i}`), {createdAt: Timestamp.now()});
+      seed.set(doc(client, `users/u${i}/followers/alice`), {createdAt: Timestamp.now()});
+    }
+    await seed.commit();
+  });
+  const client = db('alice'), batch = writeBatch(client);
+  for (let i = 0; i < 10; i++) {
+    batch.delete(doc(client, `users/alice/following/u${i}`));
+    batch.delete(doc(client, `users/u${i}/followers/alice`));
+  }
+  await assertSucceeds(batch.commit());
+  const remaining = await getDocs(collection(client, 'users/alice/following'));
+  if (remaining.size !== 1 || remaining.docs[0].id !== 'u10') throw new Error('Cleanup crossed its page boundary');
+  const last = writeBatch(client);
+  last.delete(doc(client, 'users/alice/following/u10'));
+  last.delete(doc(client, 'users/u10/followers/alice'));
+  await assertSucceeds(last.commit());
+});

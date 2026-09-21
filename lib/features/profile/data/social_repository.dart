@@ -85,7 +85,9 @@ class SocialRepository {
         'users/$uid/${followers ? 'followers' : 'following'}',
       );
       while (true) {
-        final page = await collection.limit(100).get();
+        // Each mirrored pair needs two existsAfter checks in the rules.
+        // Stay within Firestore's 20 document-access calls per batch.
+        final page = await collection.limit(10).get();
         if (page.docs.isEmpty) break;
         final batch = _db.batch();
         for (final doc in page.docs) {
