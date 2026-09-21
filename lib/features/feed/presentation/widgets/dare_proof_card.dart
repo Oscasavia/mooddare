@@ -1,3 +1,4 @@
+import 'package:mooddare/core/app_theme.dart';
 import 'package:mooddare/core/widgets/stable_popup_menu.dart';
 import 'package:mooddare/core/widgets/share_icon.dart';
 import 'dart:async';
@@ -557,7 +558,9 @@ class _DareProofCardState extends State<DareProofCard>
                                   _liked
                                       ? Icons.favorite
                                       : Icons.favorite_outline,
-                                  color: Colors.white,
+                                  color: _liked
+                                      ? AppTheme.likedHeart
+                                      : Colors.white,
                                   size: 22,
                                 ),
                               ),

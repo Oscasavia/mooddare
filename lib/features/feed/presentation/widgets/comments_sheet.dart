@@ -1,3 +1,4 @@
+import 'package:mooddare/core/app_theme.dart';
 import 'package:mooddare/core/widgets/stable_popup_menu.dart';
 import 'dart:async';
 import 'package:flutter/gestures.dart';
@@ -339,6 +340,9 @@ class _CommentsSheetState extends State<CommentsSheet> {
                       comment.likedBy.contains(uid)
                           ? Icons.favorite
                           : Icons.favorite_outline,
+                      color: comment.likedBy.contains(uid)
+                          ? AppTheme.likedHeart
+                          : null,
                       size: 22,
                     ),
                     label: Text(

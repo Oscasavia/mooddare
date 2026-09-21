@@ -456,7 +456,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   }
 
   static const _lensIcons = [
-    Icons.camera_alt_outlined,
+    null, // Original is a plain branded circle.
     Icons.blur_on_rounded,
     Icons.wb_sunny_outlined,
     Icons.visibility_outlined,
@@ -466,7 +466,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     Icons.tune_rounded,
   ];
   static const _lensColors = [
-    [Color(0xFFE5E0D8), Color(0xFF8B8580)],
+    <Color>[], // Original uses the translucent theme accent below.
     [Color(0xFFF0C9C2), Color(0xFFAD7593)],
     [Color(0xFFFFE2AA), Color(0xFFE99773)],
     [Color(0xFFB6DCEE), Color(0xFF697FBD)],
@@ -476,18 +476,30 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     [Color(0xFFA9E5D8), Color(0xFF548EAA)],
   ];
 
-  Widget _lensDisc(int index) => DecoratedBox(
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: _lensColors[index],
+  Widget _lensDisc(int index) {
+    if (index == 0) {
+      return DecoratedBox(
+        key: const ValueKey('original_lens_disc'),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: .25),
+        ),
+        child: const SizedBox.expand(),
+      );
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: _lensColors[index],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: .4)),
       ),
-      border: Border.all(color: Colors.white.withValues(alpha: .4)),
-    ),
-    child: Icon(_lensIcons[index], color: Colors.white, size: 28),
-  );
+      child: Icon(_lensIcons[index], color: Colors.white, size: 28),
+    );
+  }
 
   void _chooseLens(int index) {
     if (_busy || _recording || index < 0) {

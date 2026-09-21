@@ -234,6 +234,7 @@ void main() {
         parentId: 'root',
         authorId: 'viewer',
         text: 'Thanks for the idea!',
+        likedBy: ['viewer'],
       );
       repo.replies.add(reply);
       repo.changes.add(List.of(repo.replies));
@@ -272,6 +273,17 @@ void main() {
       expect(
         find.text('@parent Thanks for the idea!', findRichText: true),
         findsOneWidget,
+      );
+      final replyHeart = find.descendant(
+        of: find.byKey(const ValueKey('comment_like_child')),
+        matching: find.byIcon(Icons.favorite),
+      );
+      expect(tester.widget<Icon>(replyHeart).color, AppTheme.likedHeart);
+      expect(
+        DefaultTextStyle.of(
+          tester.element(find.byKey(const ValueKey('comment_count_child'))),
+        ).style.color,
+        Colors.white,
       );
       for (final id in ['root', 'child']) {
         final name = find.byKey(ValueKey('comment_author_$id'));

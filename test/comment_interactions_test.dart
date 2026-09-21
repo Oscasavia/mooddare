@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mooddare/core/app_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mooddare/core/app_routes.dart';
 import 'package:mooddare/core/compact_count.dart';
@@ -127,6 +128,28 @@ void main() {
         );
         expect(count.data, '1.2k');
         expect(count.semanticsLabel, '1250 comments');
+        Color? countColor(int likes) => DefaultTextStyle.of(
+          tester.element(
+            find.byWidgetPredicate(
+              (w) => w is Text && w.semanticsLabel == '$likes likes',
+            ),
+          ),
+        ).style.color;
+        final initialCountColor = countColor(0);
+        await tester.tap(find.byTooltip('Like'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<Icon>(find.byIcon(Icons.favorite)).color,
+          AppTheme.likedHeart,
+        );
+        expect(countColor(1), initialCountColor);
+        await tester.tap(find.byTooltip('Unlike'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<Icon>(find.byIcon(Icons.favorite_outline)).color,
+          Colors.white,
+        );
+        expect(countColor(0), initialCountColor);
         expect(tester.takeException(), isNull);
       }
     },
@@ -313,10 +336,26 @@ void main() {
       await tester.pumpAndSettle();
       expect(repo.comments.single.likedBy, ['viewer']);
       expect(find.byTooltip('Unlike comment'), findsOneWidget);
+      final likedIcon = find.descendant(
+        of: find.byKey(const ValueKey('comment_like_other')),
+        matching: find.byType(Icon),
+      );
+      expect(tester.widget<Icon>(likedIcon).color, AppTheme.likedHeart);
+      final likeCount = find.byKey(const ValueKey('comment_count_other'));
+      expect(
+        DefaultTextStyle.of(tester.element(likeCount)).style.color,
+        Colors.white,
+      );
       await tester.tap(find.byTooltip('Unlike comment'));
       await tester.pumpAndSettle();
       expect(repo.comments.single.likedBy, isEmpty);
       expect(repo.commentLikes, 3);
+      expect(tester.widget<Icon>(likedIcon).color, isNull);
+      expect(IconTheme.of(tester.element(likedIcon)).color, Colors.white);
+      expect(
+        DefaultTextStyle.of(tester.element(likeCount)).style.color,
+        Colors.white,
+      );
     },
   );
 }

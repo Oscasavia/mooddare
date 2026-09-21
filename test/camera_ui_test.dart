@@ -158,6 +158,30 @@ void main() {
           await tester.pump(const Duration(milliseconds: 250));
         }
         expect(find.text('Original'), findsOneWidget);
+        final originalDisc = find.descendant(
+          of: find.byKey(const ValueKey('capture_shutter')),
+          matching: find.byKey(const ValueKey('original_lens_disc')),
+        );
+        final originalStyle =
+            tester.widget<DecoratedBox>(originalDisc).decoration
+                as BoxDecoration;
+        expect(originalStyle.shape, BoxShape.circle);
+        expect(originalStyle.color, AppTheme.accent.withValues(alpha: .25));
+        expect(originalStyle.gradient, isNull);
+        expect(
+          find.descendant(of: originalDisc, matching: find.byType(Icon)),
+          findsNothing,
+        );
+        for (final effect in [
+          'smooth',
+          'light',
+          'warmth',
+          'eyeSize',
+          'faceSlim',
+          'makeup',
+        ]) {
+          expect(looks.last[effect], 0);
+        }
         final frame = tester.getRect(
           find.byKey(const ValueKey('camera_frame')),
         );
