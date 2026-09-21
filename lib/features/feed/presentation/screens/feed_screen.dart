@@ -146,9 +146,7 @@ class _FeedScreenState extends State<FeedScreen> {
             IconButton(
               tooltip: 'Filter by mood',
               onPressed: _filters,
-              icon: Icon(
-                _moodId == null ? Icons.tune_rounded : Icons.filter_alt_rounded,
-              ),
+              icon: const Icon(Icons.filter_list_rounded),
             ),
           ],
         ),
