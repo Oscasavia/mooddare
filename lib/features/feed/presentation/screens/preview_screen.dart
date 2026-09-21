@@ -459,6 +459,7 @@ class _PreviewScreenState extends State<PreviewScreen>
                             child: VideoAdjustmentsPanel(
                               edits: _videoEdits!,
                               durationMs: _videoEditor!.durationMs,
+                              thumbnails: _videoEditor!.thumbnails(),
                               enabled: !_busy,
                               onChanged: _editVideo,
                               onDone: () =>

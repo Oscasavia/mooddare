@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'video_trim_timeline.dart';
 import 'package:flutter/material.dart';
 import '../data/video_editor.dart';
 
@@ -8,6 +10,7 @@ class VideoAdjustmentsPanel extends StatelessWidget {
   final ValueChanged<VideoEdits> onChanged;
   final VoidCallback onDone;
   final bool enabled;
+  final Future<List<Uint8List?>>? thumbnails;
   const VideoAdjustmentsPanel({
     super.key,
     required this.edits,
@@ -15,6 +18,7 @@ class VideoAdjustmentsPanel extends StatelessWidget {
     required this.onChanged,
     required this.onDone,
     this.enabled = true,
+    this.thumbnails,
   });
   static String time(int ms) =>
       '${ms ~/ 60000}:${((ms ~/ 1000) % 60).toString().padLeft(2, '0')}.${(ms % 1000) ~/ 100}';
@@ -59,10 +63,14 @@ class VideoAdjustmentsPanel extends StatelessWidget {
               ),
             ],
           ),
-          RangeSlider(
-            key: const ValueKey('video_trim_range'),
-            min: 0,
-            max: math.max(1, durationMs).toDouble(),
+          Text(
+            '${((edits.endMs - edits.startMs) / 1000).toStringAsFixed(1)}s selected',
+            key: const ValueKey('video_trim_duration'),
+            style: const TextStyle(fontSize: 12, color: Colors.white70),
+          ),
+          VideoTrimTimeline(
+            durationMs: durationMs.toDouble(),
+            thumbnails: thumbnails,
             values: RangeValues(
               edits.startMs.toDouble(),
               edits.endMs.toDouble(),

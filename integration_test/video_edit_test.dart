@@ -9,6 +9,8 @@ import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:image/image.dart' as img;
 import 'package:mooddare/features/camera/data/video_editor.dart';
+import 'package:mooddare/features/camera/presentation/video_adjustments_panel.dart';
+import 'package:mooddare/core/app_theme.dart';
 import 'face_fixture.dart';
 import 'live_beauty_test.dart' show channel, waitForState, difference;
 import 'live_video_test.dart' show allowCameraAndAudio;
@@ -69,6 +71,50 @@ void main() {
         await player.dispose();
         expect(duration, greaterThan(3000));
         editor = VideoEditor(original, duration);
+        final thumbnails = editor.thumbnails();
+        final frames = await thumbnails;
+        expect(frames, hasLength(8));
+        for (final bytes in frames) {
+          expect(bytes, isNotNull);
+          final decoded = img.decodeJpg(bytes!);
+          expect(decoded, isNotNull);
+          expect(decoded!.height, 96);
+        }
+        var selection = VideoEdits(startMs: 0, endMs: duration);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.build(),
+            home: Scaffold(
+              body: Center(
+                child: StatefulBuilder(
+                  builder: (_, set) => VideoAdjustmentsPanel(
+                    edits: selection,
+                    durationMs: duration,
+                    thumbnails: thumbnails,
+                    onChanged: (value) => set(() => selection = value),
+                    onDone: () {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(Image), findsNWidgets(8));
+        final timeline = tester.getRect(
+          find.byKey(const ValueKey('video_trim_timeline')),
+        );
+        await tester.dragFrom(
+          Offset(timeline.left + 24, timeline.center.dy),
+          Offset((timeline.width - 48) * .2, 0),
+        );
+        await tester.pumpAndSettle();
+        expect(selection.startMs, greaterThan(0));
+        expect(selection.endMs, duration);
+        await tester.tap(find.byTooltip('Remove audio'));
+        await tester.pumpAndSettle();
+        expect(selection.muted, isTrue);
+        expect(tester.takeException(), isNull);
         Future<List<dynamic>> tracks(File file) async => (await channel
             .invokeListMethod<dynamic>('inspectVideo', {'path': file.path}))!;
         expect(

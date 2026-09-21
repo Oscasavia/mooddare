@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -27,7 +28,32 @@ class VideoEditor {
   Directory? _directory;
   VideoEdits? _cachedEdits;
   File? _cached;
-  bool _exporting = false;
+  bool _exporting = false, _disposed = false;
+  Future<List<Uint8List?>>? _thumbnails;
+
+  // Extract small frames sequentially and reuse them for the review session.
+  // Preview failure must never prevent trimming or exporting the original file.
+  Future<List<Uint8List?>> thumbnails() => _thumbnails ??= _loadThumbnails();
+
+  Future<List<Uint8List?>> _loadThumbnails() async {
+    final frames = List<Uint8List?>.filled(8, null);
+    if (durationMs <= 0) return frames;
+    for (var i = 0; i < frames.length && !_disposed; i++) {
+      try {
+        frames[i] = await VideoThumbnail.thumbnailData(
+          video: original.path,
+          imageFormat: ImageFormat.JPEG,
+          maxHeight: 96,
+          timeMs: ((durationMs - 1) * i / (frames.length - 1)).round(),
+          quality: 65,
+        );
+      } catch (_) {
+        // Keep a neutral frame placeholder for unsupported or unreadable media.
+      }
+    }
+    return frames;
+  }
+
   VideoEditor(this.original, this.durationMs);
 
   Future<File> export(VideoEdits edits) async {
@@ -72,6 +98,7 @@ class VideoEditor {
   }
 
   Future<void> dispose() async {
+    _disposed = true;
     if (_directory != null && await _directory!.exists()) {
       await _directory!.delete(recursive: true);
     }
