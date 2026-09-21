@@ -15,12 +15,38 @@ enum UserReportReason {
   const UserReportReason(this.label);
 }
 
+class PeoplePage {
+  final List<UserModel> users;
+  final DocumentSnapshot? next;
+  const PeoplePage(this.users, {this.next});
+}
+
 class SocialRepository {
   final FirebaseFirestore? firestore;
   final FirebaseAuth? auth;
   SocialRepository({this.firestore, this.auth});
   FirebaseFirestore get _db => firestore ?? FirebaseFirestore.instance;
   String? get currentUserId => (auth ?? FirebaseAuth.instance).currentUser?.uid;
+
+  Future<PeoplePage> searchPeople(
+    String text, {
+    DocumentSnapshot? after,
+  }) async {
+    final prefix = text.trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
+    if (prefix.isEmpty) return const PeoplePage([]);
+    var query = _db
+        .collection('users')
+        .orderBy('username_lower')
+        .startAt([prefix])
+        .endAt(['$prefix\uf8ff']);
+    if (after != null) query = query.startAfterDocument(after);
+    final result = await query.limit(21).get();
+    final page = result.docs.take(20).toList();
+    return PeoplePage(
+      page.map(UserModel.fromFirestore).toList(),
+      next: result.docs.length > 20 ? page.last : null,
+    );
+  }
 
   Stream<Set<String>> connections(String uid, {required bool followers}) => _db
       .collection('users')

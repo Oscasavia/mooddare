@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { before, after, beforeEach, test } from 'node:test';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, setDoc, getDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, Timestamp, collection, collectionGroup, query, where, orderBy, getDocs, getCountFromServer } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, Timestamp, collection, collectionGroup, query, where, orderBy, startAt, endAt, limit, getDocs, getCountFromServer } from 'firebase/firestore';
 import { ref, uploadBytes, deleteObject, listAll } from 'firebase/storage';
 let env;
 before(async () => {
@@ -90,6 +90,21 @@ test('a username cannot be released while the profile still claims it', async ()
 
 const comment = (uid = 'bob', text = 'Love this!') => ({authorId: uid, text, createdAt: serverTimestamp()});
 for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
+  test(`${policy}: username discovery allows signed-in prefix queries but denies signed-out requests`, async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({projectId: 'demo-mooddare',
+      firestore: {rules: await readFile(new URL(`../../${policy}`, import.meta.url), 'utf8')},
+      storage: {rules: await readFile(new URL('../../storage.rules', import.meta.url), 'utf8')},
+    });
+    await env.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), 'users/alice'), {id:'alice', username:'Alice', username_lower:'alice'});
+    });
+    const search = client => query(collection(client, 'users'), orderBy('username_lower'), startAt('al'), endAt('al\uf8ff'), limit(21));
+    const result = await assertSucceeds(getDocs(search(db('bob'))));
+    if (result.docs.length !== 1) throw new Error('Expected matching public profile');
+    await assertFails(getDocs(search(env.unauthenticatedContext().firestore())));
+  });
+
   test(`${policy}: comments enforce identity, content, parent and deletion permissions`, async () => {
     await env.cleanup();
     env = await initializeTestEnvironment({projectId: 'demo-mooddare',

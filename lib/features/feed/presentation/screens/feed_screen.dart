@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:mooddare/features/profile/data/social_repository.dart';
+import 'package:mooddare/features/profile/presentation/screens/find_people_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mooddare/features/dares/data/repositories/dares_repository.dart';
@@ -24,7 +26,7 @@ class _FeedScreenState extends State<FeedScreen> {
   StreamSubscription<Set<String>>? _blocks;
   Set<String> _blocked = {};
   int _index = 0;
-  String? _moodId;
+  String? _moodId, _moodName;
   final List<PostModel> _loaded = [];
   final _moodOptions = <String, String>{};
   bool _exitArmed = false;
@@ -81,9 +83,20 @@ class _FeedScreenState extends State<FeedScreen> {
       builder: (_) => MoodFilterSheet(moods: moods, selectedId: _moodId),
     );
     if (!mounted || selected == null) return;
+    _selectMood(
+      selected.isEmpty ? null : selected,
+      name: selected.isEmpty
+          ? null
+          : moods.firstWhere((mood) => mood.key == selected).value,
+    );
+  }
+
+  void _selectMood(String? id, {String? name}) {
+    _disarmExit();
     if (_pages.hasClients) _pages.jumpToPage(0);
     setState(() {
-      _moodId = selected.isEmpty ? null : selected;
+      _moodId = id;
+      _moodName = name;
       _index = 0;
       _posts = _repository.getPosts(moodId: _moodId);
     });
@@ -142,7 +155,48 @@ class _FeedScreenState extends State<FeedScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('mooddare'),
+          bottom: _moodId == null
+              ? null
+              : PreferredSize(
+                  preferredSize: const Size.fromHeight(48),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: InputChip(
+                        key: const ValueKey('active_mood_filter'),
+                        label: Text(
+                          _moodName ?? _moodId!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: .14),
+                        side: BorderSide.none,
+                        onPressed: _filters,
+                        onDeleted: () => _selectMood(null),
+                        deleteIcon: const Icon(Icons.close_rounded, size: 16),
+                        deleteButtonTooltipMessage: 'Clear mood filter',
+                      ),
+                    ),
+                  ),
+                ),
           actions: [
+            IconButton(
+              tooltip: 'Find people',
+              icon: const Icon(Icons.person_search_rounded),
+              onPressed: () {
+                _disarmExit();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        FindPeopleScreen(repository: SocialRepository()),
+                  ),
+                );
+              },
+            ),
             IconButton(
               tooltip: 'Filter by mood',
               onPressed: _filters,
@@ -188,11 +242,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   title: 'No moments in this mood yet',
                   message: 'Try another mood or see what everyone is sharing.',
                   actionLabel: 'Show all moods',
-                  onAction: () => setState(() {
-                    _moodId = null;
-                    _index = 0;
-                    _posts = _repository.getPosts();
-                  }),
+                  onAction: () => _selectMood(null),
                 );
               }
               return const AppEmptyState(

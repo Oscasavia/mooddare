@@ -1,3 +1,4 @@
+import 'package:mooddare/core/comment_time.dart';
 import 'package:mooddare/core/app_theme.dart';
 import 'package:mooddare/core/widgets/stable_popup_menu.dart';
 import 'dart:async';
@@ -54,11 +55,15 @@ class _CommentsSheetState extends State<CommentsSheet> {
   String _commentId = const Uuid().v4();
   String? _error;
   bool _sending = false;
+  Timer? _clock;
 
   @override
   void initState() {
     super.initState();
     _comments = widget.repository.getComments(widget.post.id);
+    _clock = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
     _blocks = widget.repository.blockedAuthors().listen(
       (ids) {
         if (mounted) setState(() => _blocked = ids);
@@ -76,6 +81,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
 
   @override
   void dispose() {
+    _clock?.cancel();
     _blocks?.cancel();
     _focus.dispose();
     _text.dispose();
@@ -278,6 +284,33 @@ class _CommentsSheetState extends State<CommentsSheet> {
                   ),
                 ),
               ),
+              if (comment.createdAt != null)
+                Flexible(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8, right: 4),
+                    child: Builder(
+                      builder: (context) {
+                        final local = comment.createdAt!.toLocal();
+                        final labels = MaterialLocalizations.of(context);
+                        final exact =
+                            '${labels.formatFullDate(local)}, ${labels.formatTimeOfDay(TimeOfDay.fromDateTime(local))}';
+                        return Tooltip(
+                          message: exact,
+                          excludeFromSemantics: true,
+                          child: Text(
+                            commentTime(local, DateTime.now()),
+                            key: ValueKey('comment_time_${comment.id}'),
+                            semanticsLabel: 'Posted $exact',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: Colors.white60),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
               if (uid != null &&
                   (uid == comment.authorId || uid == widget.post.authorId))
                 StablePopupMenu<String>(
