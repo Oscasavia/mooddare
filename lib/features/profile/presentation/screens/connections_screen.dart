@@ -1,3 +1,4 @@
+import 'package:mooddare/core/widgets/stable_popup_menu.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mooddare/core/app_routes.dart';
@@ -200,7 +201,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                                 userId: user.id,
                                 repository: widget.repository,
                               ),
-                              PopupMenuButton<String>(
+                              StablePopupMenu<String>(
                                 tooltip: 'Account options',
                                 onSelected: (_) => _block(user),
                                 itemBuilder: (_) => [

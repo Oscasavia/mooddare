@@ -1,3 +1,4 @@
+import 'package:mooddare/core/widgets/stable_popup_menu.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
@@ -241,7 +242,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
               ),
               if (uid != null &&
                   (uid == comment.authorId || uid == widget.post.authorId))
-                PopupMenuButton<String>(
+                StablePopupMenu<String>(
                   enabled: !_sending && !_deleting.contains(comment.id),
                   key: ValueKey('comment_menu_${comment.id}'),
                   tooltip: 'Comment options',

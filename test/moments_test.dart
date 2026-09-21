@@ -474,7 +474,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.likes, 1);
     expect(find.byType(PostDetailsScreen), findsNothing);
-    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.tap(find.byTooltip('Moment options'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Report moment'));
     await tester.pumpAndSettle();
@@ -518,7 +518,7 @@ void main() {
   ) async {
     await openFeed(tester, MemoryPosts([moment('hide')]));
     await tapMedia(tester);
-    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.tap(find.byTooltip('Moment options'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Hide for now'));
     await tester.pumpAndSettle();

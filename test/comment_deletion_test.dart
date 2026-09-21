@@ -1,3 +1,4 @@
+import 'package:mooddare/core/widgets/stable_popup_menu.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -121,7 +122,7 @@ void main() {
       await deleteMenu(tester);
       expect(
         tester
-            .widget<PopupMenuButton<String>>(
+            .widget<StablePopupMenu<String>>(
               find.byKey(const ValueKey('comment_menu_c')),
             )
             .enabled,

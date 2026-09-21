@@ -1,3 +1,4 @@
+import 'package:mooddare/core/widgets/stable_popup_menu.dart';
 import 'package:mooddare/core/widgets/share_icon.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -454,7 +455,7 @@ class _DareProofCardState extends State<DareProofCard>
                                 ),
                               ),
                             ),
-                          PopupMenuButton<String>(
+                          StablePopupMenu<String>(
                             tooltip: 'Moment options',
                             icon: const Icon(
                               Icons.more_vert,
