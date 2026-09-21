@@ -35,7 +35,11 @@ class DareProofCard extends StatefulWidget {
 }
 
 class _DareProofCardState extends State<DareProofCard>
-    with WidgetsBindingObserver, RouteAware {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver, RouteAware {
+  late final _heart = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+  );
   late final PostRepository _repository;
   late Future<UserModel?> _author;
   late Future<int> _commentCount;
@@ -206,6 +210,7 @@ class _DareProofCardState extends State<DareProofCard>
     WidgetsBinding.instance.removeObserver(this);
     appRouteObserver.unsubscribe(this);
     _timer?.cancel();
+    _heart.dispose();
     unawaited(_video?.dispose());
     super.dispose();
   }
@@ -254,6 +259,12 @@ class _DareProofCardState extends State<DareProofCard>
     if (widget.isFullScreen && mounted) Navigator.pop(context);
   }
 
+  void _doubleTapLike() {
+    if (_uid == null || (_liking && !_liked)) return;
+    _heart.forward(from: 0);
+    if (!_liked) _like();
+  }
+
   Future<void> _like() async {
     final uid = _uid;
     if (uid == null || _liking) return;
@@ -268,6 +279,7 @@ class _DareProofCardState extends State<DareProofCard>
     } catch (_) {
       if (mounted) {
         setState(() {
+          _heart.reset();
           _liked = wasLiked;
           _likes += wasLiked ? 1 : -1;
         });
@@ -408,9 +420,7 @@ class _DareProofCardState extends State<DareProofCard>
                   behavior: HitTestBehavior.opaque,
                   // Resolve single and double media taps in the same detector.
                   onTap: _openMoment,
-                  onDoubleTap: () {
-                    if (!_liked) _like();
-                  },
+                  onDoubleTap: _doubleTapLike,
                   child: _media(),
                 ),
                 const IgnorePointer(
@@ -633,6 +643,43 @@ class _DareProofCardState extends State<DareProofCard>
                           : const SizedBox.shrink(),
                     ),
                   ),
+                IgnorePointer(
+                  child: ExcludeSemantics(
+                    child: AnimatedBuilder(
+                      animation: _heart,
+                      builder: (context, _) {
+                        if (!_heart.isAnimating) return const SizedBox.shrink();
+                        final t = _heart.value;
+                        final reduced = MediaQuery.disableAnimationsOf(context);
+                        final opacity = t < .65 ? 1.0 : (1 - t) / .35;
+                        final scale = reduced
+                            ? 1.0
+                            : .65 +
+                                  .35 *
+                                      Curves.easeOutBack.transform(
+                                        (t / .4).clamp(0.0, 1.0),
+                                      );
+                        return Center(
+                          child: Opacity(
+                            opacity: opacity.clamp(0.0, 1.0),
+                            child: Transform.scale(
+                              scale: scale,
+                              child: const Icon(
+                                Icons.favorite,
+                                key: ValueKey('double_tap_heart'),
+                                size: 96,
+                                color: AppTheme.likedHeart,
+                                shadows: [
+                                  Shadow(color: Colors.black38, blurRadius: 16),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

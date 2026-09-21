@@ -2,6 +2,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:mooddare/models/user_model.dart';
 
+enum UserReportReason {
+  spam('Spam'),
+  harassment('Bullying or harassment'),
+  hate('Hate speech'),
+  sexualContent('Sexual content'),
+  violence('Violence or threats'),
+  impersonation('Impersonation'),
+  other('Something else');
+
+  final String label;
+  const UserReportReason(this.label);
+}
+
 class SocialRepository {
   final FirebaseFirestore? firestore;
   final FirebaseAuth? auth;
@@ -77,6 +90,22 @@ class SocialRepository {
       batch.delete(_db.doc('users/${pair.$2}/followers/${pair.$1}'));
     }
     await batch.commit();
+  }
+
+  Future<void> reportUser(String target, UserReportReason reason) async {
+    final uid = currentUserId;
+    if (uid == null ||
+        target.isEmpty ||
+        target == uid ||
+        target.contains('/')) {
+      throw StateError('Invalid account.');
+    }
+    await _db.doc('reports/${uid}_user_$target').set({
+      'userId': target,
+      'reporterId': uid,
+      'reason': reason.name,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 
   Future<void> removeConnections(String uid) async {

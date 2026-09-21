@@ -20,6 +20,34 @@ void main() {
     posts = PostRepository(firestore: db, auth: auth, storage: storage);
     social = SocialRepository(firestore: db, auth: auth);
   });
+  test(
+    'user reports save authenticated identity, reason, server time and reuse one record',
+    () async {
+      await social.reportUser('bob', UserReportReason.harassment);
+      await social.reportUser('bob', UserReportReason.spam);
+      final reports = (await db.collection('reports').get()).docs;
+      expect(reports, hasLength(1));
+      expect(reports.single.id, 'alice_user_bob');
+      expect(reports.single.data(), {
+        'userId': 'bob',
+        'reporterId': 'alice',
+        'reason': 'spam',
+        'createdAt': isA<Timestamp>(),
+      });
+      for (final target in ['alice', '', 'users/bob']) {
+        await expectLater(
+          social.reportUser(target, UserReportReason.other),
+          throwsStateError,
+        );
+      }
+      await auth.signOut();
+      await expectLater(
+        social.reportUser('bob', UserReportReason.other),
+        throwsStateError,
+      );
+    },
+  );
+
   Future<void> seed() async {
     await db.doc('posts/p').set({
       'authorId': 'alice',

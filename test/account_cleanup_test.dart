@@ -84,6 +84,11 @@ void main() {
         'createdAt': Timestamp.now(),
       });
       await db.doc('reports/alice_other').set({'reporterId': 'alice'});
+      await db.doc('reports/alice_user_bob').set({
+        'reporterId': 'alice',
+        'userId': 'bob',
+        'reason': 'spam',
+      });
       await AccountRepository(
         firestore: db,
         auth: auth,

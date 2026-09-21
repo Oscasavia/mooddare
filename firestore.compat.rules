@@ -7,9 +7,9 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function owner(uid) { return signedIn() && request.auth.uid == uid; }
     match /{collection}/{id} {
-      allow read, write: if signedIn() && collection != 'posts';
+      allow read, write: if signedIn() && !(collection in ['posts', 'reports']);
       match /{subcollection}/{document=**} {
-        allow read, write: if signedIn() && collection != 'posts' && !(subcollection in ['comments', 'replies', 'following', 'followers', 'blocked']);
+        allow read, write: if signedIn() && !(collection in ['posts', 'reports']) && !(subcollection in ['comments', 'replies', 'following', 'followers', 'blocked']);
       }
     }
     match /users/{uid}/blocked/{authorId} {
@@ -164,13 +164,29 @@ service cloud.firestore {
       allow read, delete: if signedIn() && (resource.data.authorId == request.auth.uid || resource.data.rootAuthorId == request.auth.uid);
     }
     match /reports/{id} {
-      allow create, update: if signedIn()
-        && request.resource.data.keys().hasOnly(['postId','reporterId','reason','createdAt'])
+      function validPostReport() {
+        return request.resource.data.keys().hasOnly(['postId','reporterId','reason','createdAt'])
+          && request.resource.data.postId is string
+          && id == request.auth.uid + '_' + request.resource.data.postId
+          && request.resource.data.reason == 'inappropriate';
+      }
+      function validUserReport() {
+        let data = request.resource.data;
+        return data.keys().hasOnly(['userId','reporterId','reason','createdAt'])
+          && data.userId is string && data.userId != request.auth.uid
+          && id == request.auth.uid + '_user_' + data.userId
+          && exists(/databases/$(database)/documents/users/$(data.userId))
+          && data.reason in ['spam','harassment','hate','sexualContent','violence','impersonation','other'];
+      }
+      function validReport() {
+        return signedIn()
         && request.resource.data.reporterId == request.auth.uid
-        && request.resource.data.postId is string
-        && id == request.auth.uid + '_' + request.resource.data.postId
-        && request.resource.data.reason == 'inappropriate'
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.createdAt == request.time
+        && (validUserReport() || validPostReport());
+      }
+      allow create: if validReport();
+      allow update: if validReport() && owner(resource.data.reporterId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reason','createdAt']);
       allow read, delete: if owner(resource.data.reporterId);
     }
   }

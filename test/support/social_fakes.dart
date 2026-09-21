@@ -11,6 +11,15 @@ class MemorySocial implements SocialRepository {
   final changed = StreamController<void>.broadcast();
   bool fail = false, failPeople = false;
   int writes = 0;
+  final reports = <(String, UserReportReason)>[];
+  Completer<void>? reportGate;
+  @override
+  Future<void> reportUser(String target, UserReportReason reason) async {
+    if (reportGate != null) await reportGate!.future;
+    if (fail) throw StateError('Offline');
+    reports.add((target, reason));
+  }
+
   final blockedIds = <String>{};
   @override
   Stream<Set<String>> blocked() async* {

@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'package:mooddare/core/widgets/stable_popup_menu.dart';
+import '../widgets/report_user_sheet.dart';
 import '../../data/social_repository.dart';
 import '../widgets/profile_connections.dart';
 import '../widgets/follow_button.dart';
@@ -43,6 +46,70 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool get _self => _displayUserId == _userRepository.currentUserId;
   late Stream<UserProfileData> _profileData;
   late String _displayUserId;
+  bool _blocked = false, _blocking = false;
+  StreamSubscription<Set<String>>? _blocks;
+  bool get _canManage =>
+      !_self &&
+      !widget.isGuest &&
+      _displayUserId.isNotEmpty &&
+      _userRepository.currentUserId != null;
+
+  Future<void> _reportUser() async {
+    final sent = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (_) =>
+          ReportUserSheet(userId: _displayUserId, repository: _social),
+    );
+    if (mounted && sent == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Report submitted. Thank you for letting us know.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _blockUser() async {
+    if (_blocking || _blocked) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Block this account?'),
+        content: const Text(
+          'You will unfollow each other. You can unblock this account in Settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Block'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    setState(() => _blocking = true);
+    try {
+      await _social.block(_displayUserId);
+      if (mounted) setState(() => _blocked = true);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not block this account. Please try again.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _blocking = false);
+    }
+  }
 
   @override
   void initState() {
@@ -50,6 +117,16 @@ class _ProfileScreenState extends State<ProfileScreen>
     _tabController = TabController(length: 2, vsync: this);
     _displayUserId = widget.userId ?? _userRepository.currentUserId ?? '';
     _profileData = _loadProfileData();
+    if (_canManage) {
+      _blocks = _social.blocked().listen(
+        (ids) {
+          if (mounted) setState(() => _blocked = ids.contains(_displayUserId));
+        },
+        onError: (Object _) {
+          // Keep the last known state; block writes still surface their errors.
+        },
+      );
+    }
   }
 
   Stream<UserProfileData> _loadProfileData() {
@@ -70,6 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   @override
   void dispose() {
+    _blocks?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -112,81 +190,117 @@ class _ProfileScreenState extends State<ProfileScreen>
                   },
                 ),
               ]
+            : _canManage
+            ? [
+                StablePopupMenu<String>(
+                  tooltip: 'Profile options',
+                  enabled: !_blocking,
+                  onSelected: (action) {
+                    if (action == 'report') _reportUser();
+                    if (action == 'block') _blockUser();
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'report',
+                      child: Text('Report user'),
+                    ),
+                    PopupMenuItem(
+                      value: 'block',
+                      enabled: !_blocked,
+                      child: Text(_blocked ? 'Blocked' : 'Block user'),
+                    ),
+                  ],
+                ),
+              ]
             : [],
         backgroundColor: const Color(0xFF0A0A0D),
         elevation: 0,
       ),
-      body: StreamBuilder<UserProfileData>(
-        stream: _profileData,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: TextButton(
-                onPressed: _refreshProfileData,
-                child: const Text('Could not load your profile. Tap to retry.'),
-              ),
-            );
-          }
-          if (!snapshot.hasData || snapshot.data?.user == null) {
-            return const Center(child: Text('User not found.'));
-          }
-          final user = snapshot.data!.user!;
-          final stats = snapshot.data!.stats;
-
-          return NestedScrollView(
-            headerSliverBuilder: (context, innerBoxIsScrolled) {
-              return [
-                SliverToBoxAdapter(child: _buildProfileHeader(user, stats)),
-              ];
-            },
-            body: Column(
-              children: [
-                TabBar(
-                  splashFactory: NoSplash.splashFactory,
-                  overlayColor: WidgetStateProperty.resolveWith(
-                    (states) => states.contains(WidgetState.pressed)
-                        ? Colors.transparent
-                        : null,
-                  ),
-                  controller: _tabController,
-                  dividerColor: Colors.transparent,
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  indicatorPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 5,
-                  ),
-                  indicator: BoxDecoration(
-                    color: Colors.white10,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  tabs: [
-                    _buildTab("Dares", Icons.grid_on_outlined),
-                    _buildTab("Stats", Icons.bar_chart_outlined),
-                  ],
+      body: _blocked
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'You blocked this account. You can unblock it in Settings.',
+                  textAlign: TextAlign.center,
                 ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      MyDaresGrid(
-                        userId: _displayUserId,
-                        repository: _postRepository,
+              ),
+            )
+          : StreamBuilder<UserProfileData>(
+              stream: _profileData,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(
+                    child: TextButton(
+                      onPressed: _refreshProfileData,
+                      child: const Text(
+                        'Could not load your profile. Tap to retry.',
                       ),
-                      StatsAndBadges(
-                        daresCompleted: stats['daresCompleted'] ?? 0,
-                        totalLikes: stats['totalLikes'] ?? 0,
+                    ),
+                  );
+                }
+                if (!snapshot.hasData || snapshot.data?.user == null) {
+                  return const Center(child: Text('User not found.'));
+                }
+                final user = snapshot.data!.user!;
+                final stats = snapshot.data!.stats;
+
+                return NestedScrollView(
+                  headerSliverBuilder: (context, innerBoxIsScrolled) {
+                    return [
+                      SliverToBoxAdapter(
+                        child: _buildProfileHeader(user, stats),
+                      ),
+                    ];
+                  },
+                  body: Column(
+                    children: [
+                      TabBar(
+                        splashFactory: NoSplash.splashFactory,
+                        overlayColor: WidgetStateProperty.resolveWith(
+                          (states) => states.contains(WidgetState.pressed)
+                              ? Colors.transparent
+                              : null,
+                        ),
+                        controller: _tabController,
+                        dividerColor: Colors.transparent,
+                        indicatorSize: TabBarIndicatorSize.tab,
+                        indicatorPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 5,
+                        ),
+                        indicator: BoxDecoration(
+                          color: Colors.white10,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        tabs: [
+                          _buildTab("Dares", Icons.grid_on_outlined),
+                          _buildTab("Stats", Icons.bar_chart_outlined),
+                        ],
+                      ),
+                      Expanded(
+                        child: TabBarView(
+                          controller: _tabController,
+                          children: [
+                            MyDaresGrid(
+                              userId: _displayUserId,
+                              repository: _postRepository,
+                            ),
+                            StatsAndBadges(
+                              daresCompleted: stats['daresCompleted'] ?? 0,
+                              totalLikes: stats['totalLikes'] ?? 0,
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                ),
-              ],
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 

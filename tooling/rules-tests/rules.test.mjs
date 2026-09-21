@@ -210,6 +210,33 @@ for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
       storage: {rules: await readFile(new URL('../../storage.rules', import.meta.url), 'utf8')},
     });
   }
+  test(`${policy}: user reports validate targets and reasons, stay private, and cannot be forged or retargeted`, async () => {
+    await loadSocialPolicy();
+    for (const uid of ['alice','bob','charlie']) await setDoc(doc(db(uid), `users/${uid}`), {id: uid, createdAt: serverTimestamp()});
+    const data = {userId: 'bob', reporterId: 'alice', reason: 'harassment', createdAt: serverTimestamp()};
+    const path = 'reports/alice_user_bob';
+    await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), path), data));
+    await assertFails(setDoc(doc(db('bob'), path), data));
+    await assertFails(setDoc(doc(db('alice'), path), {...data, reason: 'invalid'}));
+    await assertFails(setDoc(doc(db('alice'), path), {...data, reviewed: true}));
+    await assertFails(setDoc(doc(db('alice'), path), {...data, createdAt: Timestamp.fromMillis(1)}));
+    await assertFails(setDoc(doc(db('alice'), 'reports/wrong'), data));
+    await assertFails(setDoc(doc(db('alice'), 'reports/alice_user_alice'), {...data, userId:'alice'}));
+    await assertFails(setDoc(doc(db('alice'), 'reports/alice_user_missing'), {...data, userId:'missing'}));
+    await assertSucceeds(setDoc(doc(db('alice'), path), data));
+    await assertSucceeds(getDoc(doc(db('alice'), path)));
+    for (const reason of ['spam','hate','sexualContent','violence','impersonation','other']) {
+      await assertSucceeds(setDoc(doc(db('alice'), path), {...data, reason}));
+    }
+    await assertFails(getDoc(doc(db('bob'), path)));
+    await assertFails(getDoc(doc(db('charlie'), path)));
+    await assertFails(updateDoc(doc(db('charlie'), path), {reason:'spam',createdAt:serverTimestamp()}));
+    await assertFails(updateDoc(doc(db('alice'), path), {userId:'charlie',createdAt:serverTimestamp()}));
+    await assertFails(setDoc(doc(db('alice'), path), {postId:'user_bob',reporterId:'alice',reason:'inappropriate',createdAt:serverTimestamp()}));
+    await assertFails(deleteDoc(doc(db('bob'), path)));
+    await assertSucceeds(deleteDoc(doc(db('alice'), path)));
+    await assertSucceeds(setDoc(doc(db('alice'), 'reports/alice_one'), {postId:'one',reporterId:'alice',reason:'inappropriate',createdAt:serverTimestamp()}));
+  });
   const edge = (client, follower, target, remove = false) => {
     const batch = writeBatch(client);
     for (const path of [`users/${follower}/following/${target}`, `users/${target}/followers/${follower}`]) {
