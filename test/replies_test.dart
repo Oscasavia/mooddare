@@ -285,6 +285,12 @@ void main() {
           matching: find.byType(CircleAvatar),
         );
         expect(tester.getSize(avatar), const Size(28, 28));
+        if (id == 'child') {
+          expect(
+            tester.getTopLeft(avatar).dx,
+            closeTo(tester.getTopLeft(find.text('Hide replies')).dx, .1),
+          );
+        }
         expect(
           tester.getTopLeft(name).dx - tester.getTopRight(avatar).dx,
           closeTo(6, .1),

@@ -682,7 +682,10 @@ class _ReplyThreadState extends State<_ReplyThread> {
           ),
           if (widget.expanded)
             Padding(
-              padding: const EdgeInsets.only(left: 24),
+              // The compact avatar starts 16px inside its touch target.
+              padding: const EdgeInsets.only(
+                left: AuthorIdentity.textInset - 16,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
