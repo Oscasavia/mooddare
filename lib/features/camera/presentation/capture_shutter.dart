@@ -7,6 +7,7 @@ import 'package:flutter/semantics.dart';
 /// Recording itself remains owned by the camera so lifecycle/limits still apply.
 class CaptureShutter extends StatefulWidget {
   final bool enabled, recording, active;
+  final bool timedVideo;
   final int elapsedMillis;
   final Widget lens;
   final Future<void> Function() onPhoto, onStop;
@@ -15,6 +16,7 @@ class CaptureShutter extends StatefulWidget {
 
   const CaptureShutter({
     super.key,
+    this.timedVideo = false,
     required this.enabled,
     required this.recording,
     required this.active,
@@ -49,8 +51,8 @@ class _CaptureShutterState extends State<CaptureShutter> {
   Future<void> _start({bool handsFree = false}) async {
     if (!widget.enabled || _starting || widget.recording || _stopping) return;
     setState(() {
-      _held = !handsFree;
-      _locked = handsFree;
+      _held = !handsFree && !widget.timedVideo;
+      _locked = handsFree || widget.timedVideo;
       _starting = true;
     });
     HapticFeedback.mediumImpact();
@@ -161,6 +163,8 @@ class _CaptureShutterState extends State<CaptureShutter> {
               label: recording ? 'Stop recording' : 'Capture photo',
               hint: recording
                   ? 'Tap to finish video'
+                  : widget.timedVideo
+                  ? 'Tap for a timed photo. Hold for a timed hands-free video.'
                   : 'Tap for photo. Hold for video. Slide up to lock.',
               onTap: _tap,
               onLongPress: () => unawaited(_start(handsFree: true)),
@@ -260,7 +264,13 @@ class _CaptureShutterState extends State<CaptureShutter> {
             child: IgnorePointer(
               child: Text(
                 recording || holding
-                    ? (_locked ? 'Tap to stop' : 'Slide up to lock')
+                    ? (_starting && widget.timedVideo
+                          ? 'Get ready…'
+                          : _locked
+                          ? 'Tap to stop'
+                          : 'Slide up to lock')
+                    : widget.timedVideo
+                    ? 'Tap photo · hold timed video'
                     : 'Tap photo · hold video',
                 textAlign: TextAlign.center,
                 maxLines: 1,

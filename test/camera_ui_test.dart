@@ -8,7 +8,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('mooddare/live_beauty');
   double? sentAspect;
-  var captures = 0;
+  var captures = 0, videoStarts = 0, videoStops = 0;
+  var allowRecording = false, nativeRecording = false, microphoneAllowed = true;
   final lightRequests = <bool>[];
   final looks = <Map<String, dynamic>>[];
   Map<String, dynamic>? captureLook;
@@ -16,7 +17,9 @@ void main() {
   var geometryAvailable = false;
   setUp(() {
     sentAspect = null;
-    captures = 0;
+    captures = videoStarts = videoStops = 0;
+    allowRecording = nativeRecording = false;
+    microphoneAllowed = true;
     lightRequests.clear();
     looks.clear();
     captureLook = null;
@@ -39,8 +42,17 @@ void main() {
               message: 'Capture interrupted',
             );
           }
+          if (call.method == 'stopRecording') {
+            videoStops++;
+            nativeRecording = false;
+          }
           if (call.method == 'startRecording') {
             videoLook = looks.last;
+            videoStarts++;
+            if (allowRecording) {
+              nativeRecording = true;
+              return null;
+            }
             throw PlatformException(
               code: 'recording',
               message: 'Recording interrupted',
@@ -48,10 +60,11 @@ void main() {
           }
           return switch (call.method) {
             'requestCamera' => true,
-            'requestMicrophone' => true,
+            'requestMicrophone' => microphoneAllowed,
             'start' => {'textureId': 1},
             'status' => {
               'ready': true,
+              'recording': nativeRecording,
               'width': 960,
               'height': 1280,
               'faceDetected': true,
@@ -65,6 +78,179 @@ void main() {
     () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null),
   );
+
+  Future<void> openTimerCamera(WidgetTester tester, {int seconds = 3}) async {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.build(),
+        home: const LiveBeautyScreen(dareText: 'Timer test'),
+      ),
+    );
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 250));
+    }
+    if (seconds != 0) {
+      final timer = find.byKey(const ValueKey('camera_timer'));
+      expect(
+        tester.getTopLeft(timer).dy,
+        greaterThan(
+          tester.getBottomLeft(find.byTooltip('Screen flash off')).dy,
+        ),
+      );
+      expect(
+        tester.getTopLeft(timer).dy,
+        lessThan(tester.getTopLeft(find.byTooltip('Adjust lens')).dy),
+      );
+      await tester.tap(timer);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.ancestor(
+          of: find.text('$seconds seconds'),
+          matching: find.byType(CheckedPopupMenuItem<int>),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+  }
+
+  Future<void> closeTimerCamera(WidgetTester tester) async {
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  }
+
+  for (final seconds in [3, 10]) {
+    testWidgets(
+      '$seconds second photo timer counts down once, delays flash and preserves the selected delay',
+      (tester) async {
+        await openTimerCamera(tester, seconds: seconds);
+        await tester.tap(find.byTooltip('Screen flash off'));
+        await tester.pump();
+        final shutter = find.byKey(const ValueKey('capture_shutter'));
+        await tester.tap(shutter);
+        await tester.pump();
+        expect(find.text('$seconds'), findsOneWidget);
+        await tester.tap(shutter);
+        await tester.pump();
+        for (var remaining = seconds - 1; remaining >= 1; remaining--) {
+          await tester.pump(const Duration(seconds: 1));
+          expect(find.text('$remaining'), findsOneWidget);
+          expect(captures, 0);
+          expect(lightRequests, isEmpty);
+        }
+        await tester.pump(const Duration(seconds: 1));
+        await tester.pump();
+        expect(find.byKey(const ValueKey('capture_countdown')), findsNothing);
+        expect(lightRequests, [true]);
+        await tester.pump(const Duration(milliseconds: 700));
+        await tester.pumpAndSettle();
+        expect(captures, 1);
+        expect(lightRequests, [true, false]);
+        expect(find.byTooltip('Timer: $seconds seconds'), findsOneWidget);
+        await closeTimerCamera(tester);
+      },
+    );
+  }
+  for (final action in ['cancel', 'back', 'close', 'background', 'dispose']) {
+    testWidgets('photo countdown cancels safely on $action', (tester) async {
+      await openTimerCamera(tester);
+      await tester.tap(find.byKey(const ValueKey('capture_shutter')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      switch (action) {
+        case 'cancel':
+          await tester.tap(find.text('Cancel timer'));
+        case 'back':
+          await tester.binding.handlePopRoute();
+        case 'close':
+          await tester.tap(find.byTooltip('Close camera'));
+        case 'background':
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.inactive,
+          );
+        case 'dispose':
+          await tester.pumpWidget(const SizedBox());
+      }
+      await tester.pump(const Duration(seconds: 12));
+      await tester.pump();
+      expect(captures, 0);
+      expect(lightRequests, isEmpty);
+      expect(find.byKey(const ValueKey('capture_countdown')), findsNothing);
+      expect(tester.takeException(), isNull);
+      await closeTimerCamera(tester);
+    });
+  }
+  testWidgets('timer can be turned off and capture is immediate again', (
+    tester,
+  ) async {
+    await openTimerCamera(tester);
+    await tester.tap(find.byKey(const ValueKey('camera_timer')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.ancestor(
+        of: find.text('Off'),
+        matching: find.byType(CheckedPopupMenuItem<int>),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('capture_shutter')));
+    await tester.pumpAndSettle();
+    expect(captures, 1);
+    expect(find.byKey(const ValueKey('capture_countdown')), findsNothing);
+    await closeTimerCamera(tester);
+  });
+  testWidgets(
+    'timed video starts hands-free after release and stops immediately on tap',
+    (tester) async {
+      allowRecording = true;
+      await openTimerCamera(tester);
+      final shutter = find.byKey(const ValueKey('capture_shutter'));
+      final finger = await tester.startGesture(tester.getCenter(shutter));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump();
+      expect(find.text('3'), findsOneWidget);
+      await finger.up();
+      await tester.pump(const Duration(seconds: 2));
+      expect(videoStarts, 0);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+      expect(videoStarts, 1);
+      expect(nativeRecording, isTrue);
+      expect(find.text('Tap to stop'), findsOneWidget);
+      await tester.tap(shutter);
+      await tester.pumpAndSettle();
+      expect(videoStops, 1);
+      expect(nativeRecording, isFalse);
+      expect(captures, 0);
+      await closeTimerCamera(tester);
+    },
+  );
+  for (final action in ['cancel', 'background', 'permission denied']) {
+    testWidgets('timed video does not record after $action', (tester) async {
+      allowRecording = true;
+      microphoneAllowed = action != 'permission denied';
+      await openTimerCamera(tester);
+      final finger = await tester.startGesture(
+        tester.getCenter(find.byKey(const ValueKey('capture_shutter'))),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump();
+      await finger.up();
+      if (action == 'cancel') await tester.tap(find.text('Cancel timer'));
+      if (action == 'background') {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+      }
+      await tester.pump(const Duration(seconds: 12));
+      await tester.pump();
+      expect(videoStarts, 0);
+      expect(captures, 0);
+      expect(find.byKey(const ValueKey('capture_countdown')), findsNothing);
+      await closeTimerCamera(tester);
+    });
+  }
 
   testWidgets(
     'Rosy guides missing geometry and clears makeup when switching looks',

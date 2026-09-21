@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'preview_screen.dart';
 import '../../../camera/presentation/live_beauty_screen.dart';
+import '../../../camera/presentation/capture_timer.dart';
 
 class CameraScreen extends StatelessWidget {
   final String dareText;
@@ -52,6 +53,8 @@ class _CameraScreenState extends State<BasicCameraScreen>
   bool _appActive = true;
   String? _error;
   Timer? _timer;
+  final _countdown = CaptureCountdown();
+  int _timerSeconds = 0;
   int _seconds = 0;
   int _generation = 0;
   Future<void> _releasing = Future<void>.value();
@@ -60,7 +63,12 @@ class _CameraScreenState extends State<BasicCameraScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _countdown.addListener(_countdownChanged);
     _initialize();
+  }
+
+  void _countdownChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _initialize() async {
@@ -129,6 +137,7 @@ class _CameraScreenState extends State<BasicCameraScreen>
     _appActive = state == AppLifecycleState.resumed;
     if (!_appActive) {
       ++_generation;
+      _countdown.cancel();
       _timer?.cancel();
       _recording = false;
       unawaited(_releaseCamera());
@@ -139,10 +148,23 @@ class _CameraScreenState extends State<BasicCameraScreen>
 
   Future<void> _capture() async {
     final camera = _camera;
-    if (_busy || camera == null || !camera.value.isInitialized) return;
+    if (_busy || !_appActive || camera == null || !camera.value.isInitialized) {
+      return;
+    }
     setState(() => _busy = true);
     HapticFeedback.lightImpact();
     try {
+      if (!_recording) {
+        final completed = await _countdown.start(
+          _timerSeconds,
+          canContinue: () =>
+              mounted &&
+              _appActive &&
+              camera == _camera &&
+              camera.value.isInitialized,
+        );
+        if (!completed || !mounted || !_appActive || camera != _camera) return;
+      }
       if (_videoMode && !_recording) {
         await camera.startVideoRecording();
         if (!mounted || camera != _camera) return;
@@ -262,6 +284,8 @@ class _CameraScreenState extends State<BasicCameraScreen>
     ++_generation;
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
+    _countdown.removeListener(_countdownChanged);
+    _countdown.dispose();
     unawaited(_camera?.dispose());
     super.dispose();
   }
@@ -271,6 +295,9 @@ class _CameraScreenState extends State<BasicCameraScreen>
     final ready = _camera?.value.isInitialized ?? false;
     return PopScope(
       canPop: !_recording && !_busy,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _countdown.running) _countdown.cancel();
+      },
       child: Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
@@ -285,7 +312,9 @@ class _CameraScreenState extends State<BasicCameraScreen>
                   children: [
                     IconButton(
                       tooltip: 'Close camera',
-                      onPressed: _recording || _busy
+                      onPressed: _countdown.running
+                          ? _countdown.cancel
+                          : _recording || _busy
                           ? null
                           : () => Navigator.pop(context),
                       icon: const Icon(Icons.close),
@@ -299,7 +328,7 @@ class _CameraScreenState extends State<BasicCameraScreen>
                     ),
                     IconButton(
                       tooltip: 'Toggle flash',
-                      onPressed: ready && !_recording ? _flash : null,
+                      onPressed: ready && !_recording && !_busy ? _flash : null,
                       icon: Icon(
                         _camera?.value.flashMode == FlashMode.auto
                             ? Icons.flash_auto
@@ -363,6 +392,23 @@ class _CameraScreenState extends State<BasicCameraScreen>
                               ),
                             ),
                           ),
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: CaptureTimerButton(
+                              seconds: _timerSeconds,
+                              enabled: ready && !_busy && !_recording,
+                              onChanged: (value) {
+                                if (_busy || _recording) return;
+                                setState(() => _timerSeconds = value);
+                              },
+                            ),
+                          ),
+                          if (_countdown.remaining != null)
+                            CaptureCountdownOverlay(
+                              remaining: _countdown.remaining!,
+                              onCancel: _countdown.cancel,
+                            ),
                           if (_recording)
                             Positioned(
                               bottom: 16,

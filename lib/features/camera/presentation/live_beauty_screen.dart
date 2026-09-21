@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../../feed/presentation/screens/preview_screen.dart';
 import '../domain/beauty_lens.dart';
 import 'capture_shutter.dart';
+import 'capture_timer.dart';
 import 'custom_beauty_panel.dart';
 
 enum _CameraFrame {
@@ -41,6 +42,8 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   );
   Future<void> _operations = Future<void>.value();
   Timer? _poll, _lookDebounce;
+  final _countdown = CaptureCountdown();
+  int _timerSeconds = 0;
   int? _texture;
   int _generation = 0, _selected = 0;
   double _strength = .65, _aspect = .75;
@@ -70,7 +73,12 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _countdown.addListener(_countdownChanged);
     _start();
+  }
+
+  void _countdownChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<T> _enqueue<T>(Future<T> Function() operation) {
@@ -205,6 +213,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   }
 
   Future<void> _stop() async {
+    _countdown.cancel();
     ++_generation;
     _poll?.cancel();
     _lookDebounce?.cancel();
@@ -250,13 +259,25 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   }
 
   Future<void> _capture() async {
-    if (!_ready || _busy) return;
+    if (!_ready || _busy || !_active || _recording || _error != null) return;
     final generation = _generation;
     final useFlash = _flash && (_front || _hasFlash);
     setState(() => _busy = true);
     HapticFeedback.lightImpact();
     File? captured;
     try {
+      final completed = await _countdown.start(
+        _timerSeconds,
+        canContinue: () =>
+            mounted &&
+            _active &&
+            _ready &&
+            _error == null &&
+            generation == _generation,
+      );
+      if (!completed || !mounted || !_active || generation != _generation) {
+        return;
+      }
       _lookDebounce?.cancel();
       await _sendLook();
       try {
@@ -350,7 +371,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   }
 
   Future<bool> _beginVideo(bool Function() stillHeld) async {
-    if (!_ready || _busy || !_active) return false;
+    if (!_ready || _busy || !_active || _error != null) return false;
     final generation = _generation;
     setState(() {
       _busy = true;
@@ -373,6 +394,23 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
       // Permission dialogs release the finger and interrupt the camera. Never
       // start recording automatically after the dialog has been dismissed.
       if (generation != _generation || !_active || !stillHeld()) return false;
+      final completed = await _countdown.start(
+        _timerSeconds,
+        canContinue: () =>
+            mounted &&
+            _active &&
+            _ready &&
+            _error == null &&
+            generation == _generation &&
+            stillHeld(),
+      );
+      if (!completed ||
+          !mounted ||
+          !_active ||
+          generation != _generation ||
+          !stillHeld()) {
+        return false;
+      }
       _lookDebounce?.cancel();
       await _sendLook();
       if (!stillHeld() || generation != _generation) return false;
@@ -446,6 +484,8 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     WidgetsBinding.instance.removeObserver(this);
     _poll?.cancel();
     _lookDebounce?.cancel();
+    _countdown.removeListener(_countdownChanged);
+    _countdown.dispose();
     _carousel.dispose();
     final abandoned = _interruptedClip;
     if (abandoned != null) {
@@ -574,6 +614,9 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
       ),
       child: PopScope(
         canPop: !_busy && !_recording,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && _countdown.running) _countdown.cancel();
+        },
         child: Scaffold(
           backgroundColor: Colors.black,
           body: Stack(
@@ -660,7 +703,9 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                         _floatingButton(
                           'Close camera',
                           Icons.close,
-                          _busy || _recording
+                          _countdown.running
+                              ? _countdown.cancel
+                              : _busy || _recording
                               ? null
                               : () => Navigator.pop(context),
                         ),
@@ -776,6 +821,15 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                                 selected: _flash && (_front || _hasFlash),
                               ),
                               const SizedBox(height: 8),
+                              CaptureTimerButton(
+                                seconds: _timerSeconds,
+                                enabled: enabled,
+                                onChanged: (value) {
+                                  if (!enabled || _recording) return;
+                                  setState(() => _timerSeconds = value);
+                                },
+                              ),
+                              const SizedBox(height: 8),
                               _floatingButton(
                                 'Adjust lens',
                                 Icons.tune_rounded,
@@ -799,7 +853,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                 Positioned(
                   top: MediaQuery.paddingOf(context).top + 232,
                   left: 24,
-                  right: 24,
+                  right: 76,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -992,6 +1046,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                           ),
                           // Only the shutter/lock have hit regions; the wheel remains scrollable beside them.
                           CaptureShutter(
+                            timedVideo: _timerSeconds > 0,
                             enabled: enabled,
                             recording: _recording,
                             active: _active,
@@ -1010,6 +1065,11 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                   ),
                 ),
               ),
+              if (_countdown.remaining != null)
+                CaptureCountdownOverlay(
+                  remaining: _countdown.remaining!,
+                  onCancel: _countdown.cancel,
+                ),
               if (_screenFlash)
                 const Positioned.fill(
                   child: AbsorbPointer(
