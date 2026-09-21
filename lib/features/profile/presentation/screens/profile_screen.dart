@@ -1,3 +1,6 @@
+import '../../data/social_repository.dart';
+import '../widgets/profile_connections.dart';
+import '../widgets/follow_button.dart';
 // lib/features/profile/presentation/screens/profile_screen.dart
 import 'package:flutter/material.dart';
 import 'package:mooddare/models/user_model.dart';
@@ -5,7 +8,6 @@ import 'package:mooddare/features/user/data/repositories/user_repository.dart';
 import 'package:mooddare/features/feed/data/repositories/post_repository.dart';
 import 'package:mooddare/features/profile/presentation/widgets/stats_and_badges.dart';
 import 'package:mooddare/features/profile/presentation/widgets/my_dares_grid.dart';
-import 'package:mooddare/features/profile/presentation/widgets/follow_stat.dart';
 import 'package:mooddare/features/profile/presentation/widgets/sign_in_prompt_card.dart';
 import 'package:mooddare/features/profile/presentation/screens/edit_profile_screen.dart';
 import 'package:mooddare/features/profile/presentation/screens/settings_screen.dart';
@@ -16,6 +18,7 @@ class ProfileScreen extends StatefulWidget {
   final VoidCallback? onProfileUpdated;
   final UserRepository? repository;
   final PostRepository? postRepository;
+  final SocialRepository? socialRepository;
 
   const ProfileScreen({
     super.key,
@@ -24,6 +27,7 @@ class ProfileScreen extends StatefulWidget {
     this.onProfileUpdated,
     this.repository,
     this.postRepository,
+    this.socialRepository,
   });
 
   @override
@@ -35,6 +39,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   late TabController _tabController;
   late final _userRepository = widget.repository ?? UserRepository();
   late final _postRepository = widget.postRepository ?? PostRepository();
+  late final _social = widget.socialRepository ?? SocialRepository();
+  bool get _self => _displayUserId == _userRepository.currentUserId;
   late Stream<UserProfileData> _profileData;
   late String _displayUserId;
 
@@ -72,8 +78,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.userId == null ? 'My Profile' : ''),
-        actions: widget.userId == null
+        title: Text(_self ? 'My profile' : 'Profile'),
+        actions: _self
             ? [
                 IconButton(
                   icon: const Icon(Icons.edit_outlined),
@@ -140,11 +146,15 @@ class _ProfileScreenState extends State<ProfileScreen>
               children: [
                 TabBar(
                   controller: _tabController,
-                  indicator: UnderlineTabIndicator(
-                    borderSide: BorderSide(
-                      width: 3.0,
-                      color: Theme.of(context).primaryColor,
-                    ),
+                  dividerColor: Colors.transparent,
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  indicatorPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 5,
+                  ),
+                  indicator: BoxDecoration(
+                    color: Colors.white10,
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   tabs: [
                     _buildTab("Dares", Icons.grid_on_outlined),
@@ -178,19 +188,47 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Column(
       children: [
         const SizedBox(height: 16),
-        CircleAvatar(
-          radius: 50,
-          backgroundColor: Colors.white10, // Added to match edit screen style
-          backgroundImage: user.photoUrl != null
-              ? NetworkImage(user.photoUrl!)
-              : null,
-          child: user.photoUrl == null
-              ? const Icon(
-                  Icons.person_outline,
-                  size: 50,
-                  color: Colors.white54,
-                )
-              : null,
+        GestureDetector(
+          key: const ValueKey('profile_photo'),
+          onTap: user.photoUrl?.isNotEmpty != true
+              ? null
+              : () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => Scaffold(
+                      appBar: AppBar(
+                        title: Text('@${user.username ?? 'member'}'),
+                      ),
+                      body: Center(
+                        child: InteractiveViewer(
+                          minScale: .5,
+                          maxScale: 5,
+                          child: Image.network(
+                            user.photoUrl!,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, _, _) =>
+                                const Text('This picture is unavailable.'),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+          child: CircleAvatar(
+            radius: 50,
+            backgroundColor: Colors.white10,
+            foregroundImage: user.photoUrl?.isNotEmpty == true
+                ? NetworkImage(user.photoUrl!)
+                : null,
+            onForegroundImageError: user.photoUrl?.isNotEmpty == true
+                ? (_, _) {}
+                : null,
+            child: const Icon(
+              Icons.person_outline,
+              size: 50,
+              color: Colors.white54,
+            ),
+          ),
         ),
         const SizedBox(height: 10),
         if (user.name?.trim().isNotEmpty ?? false) ...[
@@ -203,7 +241,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         ],
         Text(
           '@${user.username ?? 'member'}',
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          style: const TextStyle(fontSize: 16, color: Colors.white70),
         ),
         if (user.bio?.isNotEmpty ?? false)
           Padding(
@@ -215,34 +253,26 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
           ),
         const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            FollowStat(
-              count: '${stats['daresCompleted'] ?? 0}',
-              label: 'Moments',
-            ),
-            const SizedBox(width: 40),
-            FollowStat(count: '${stats['totalLikes'] ?? 0}', label: 'Likes'),
-          ],
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: ProfileConnections(
+            userId: user.id,
+            moments: stats['daresCompleted'] ?? 0,
+            repository: _social,
+          ),
         ),
+        if (!_self)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: FollowButton(userId: user.id, repository: _social),
+          ),
         const SizedBox(height: 16),
         if (widget.isGuest && widget.userId == null) const SignInPromptCard(),
       ],
     );
   }
 
-  Widget _buildTab(String text, IconData icon) {
-    return Tab(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [Icon(icon), const SizedBox(width: 8), Text(text)],
-        ),
-      ),
-    );
-  }
+  Widget _buildTab(String text, IconData icon) => Tab(text: text);
 }
 
 // Helper class to hold combined profile data

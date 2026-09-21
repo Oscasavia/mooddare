@@ -4,6 +4,8 @@ class CommentModel {
   final String id, authorId, text;
   final DateTime? createdAt, editedAt;
   final List<String> likedBy;
+  final String? parentId;
+  final bool deleting;
   const CommentModel({
     required this.id,
     required this.authorId,
@@ -11,6 +13,8 @@ class CommentModel {
     this.createdAt,
     this.editedAt,
     this.likedBy = const [],
+    this.parentId,
+    this.deleting = false,
   });
 
   factory CommentModel.fromFirestore(
@@ -19,6 +23,8 @@ class CommentModel {
     final data = doc.data()!;
     return CommentModel(
       id: doc.id,
+      parentId: data['parentId'] as String?,
+      deleting: data['deleting'] == true,
       authorId: data['authorId'] as String,
       text: data['text'] as String,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),

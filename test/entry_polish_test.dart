@@ -312,11 +312,11 @@ void main() {
         '  hApP  ',
       );
       await tester.pumpAndSettle();
-      expect(find.text('Happy'), findsOneWidget);
+      expect(find.widgetWithText(ListTile, 'Happy'), findsOneWidget);
       expect(find.text('Calm'), findsNothing);
       expect(find.text('All moods'), findsOneWidget);
       expect(repo.reads, reads);
-      await tester.tap(find.text('Happy'));
+      await tester.tap(find.widgetWithText(ListTile, 'Happy'));
       await tester.pumpAndSettle();
       expect(repo.selectedMood, 'happy');
       await tester.tap(find.byTooltip('Filter by mood'));
@@ -343,7 +343,7 @@ void main() {
       expect(find.text('No matching moods. Try another name.'), findsOneWidget);
       await tester.tap(find.byTooltip('Clear mood search'));
       await tester.pumpAndSettle();
-      expect(find.text('Happy'), findsOneWidget);
+      expect(find.widgetWithText(ListTile, 'Happy'), findsOneWidget);
       await tester.tap(find.text('All moods'));
       await tester.pumpAndSettle();
       expect(repo.selectedMood, isNull);

@@ -201,3 +201,108 @@ for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
     await assertSucceeds(deleteDoc(doc(db('bob'), 'posts/one/comments/c')));
   });
 }
+
+for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
+  async function loadSocialPolicy() {
+    await env.cleanup();
+    env = await initializeTestEnvironment({projectId: 'demo-mooddare',
+      firestore: {rules: await readFile(new URL(`../../${policy}`, import.meta.url), 'utf8')},
+      storage: {rules: await readFile(new URL('../../storage.rules', import.meta.url), 'utf8')},
+    });
+  }
+  const edge = (client, follower, target, remove = false) => {
+    const batch = writeBatch(client);
+    for (const path of [`users/${follower}/following/${target}`, `users/${target}/followers/${follower}`]) {
+      if (remove) batch.delete(doc(client, path));
+      else batch.set(doc(client, path), {createdAt: serverTimestamp()});
+    }
+    return batch;
+  };
+  test(`${policy}: following requires paired edges, own identity, existing profiles and no self-follow`, async () => {
+    await loadSocialPolicy();
+    for (const uid of ['alice', 'bob']) await setDoc(doc(db(uid), `users/${uid}`), {id: uid, createdAt: serverTimestamp()});
+    await assertFails(setDoc(doc(db('alice'), 'users/alice/following/bob'), {createdAt: serverTimestamp()}));
+    await assertFails(edge(db('bob'), 'alice', 'bob').commit());
+    await assertFails(edge(db('alice'), 'alice', 'alice').commit());
+    await assertFails(edge(db('alice'), 'alice', 'missing').commit());
+    await assertSucceeds(edge(db('alice'), 'alice', 'bob').commit());
+    await assertSucceeds(getCountFromServer(collection(db('bob'), 'users/bob/followers')));
+    await assertFails(getDocs(collection(env.unauthenticatedContext().firestore(), 'users/bob/followers')));
+    await assertFails(updateDoc(doc(db('alice'), 'users/alice/following/bob'), {createdAt: serverTimestamp()}));
+    await assertFails(deleteDoc(doc(db('alice'), 'users/alice/following/bob')));
+    await assertFails(edge(db('charlie'), 'alice', 'bob', true).commit());
+    await assertSucceeds(edge(db('alice'), 'alice', 'bob', true).commit());
+    await assertSucceeds(edge(db('alice'), 'alice', 'bob').commit());
+    await assertSucceeds(edge(db('bob'), 'alice', 'bob', true).commit());
+  });
+  test(`${policy}: blocking removes both directions atomically and blocks new follows from either side`, async () => {
+    await loadSocialPolicy();
+    for (const uid of ['alice', 'bob']) await setDoc(doc(db(uid), `users/${uid}`), {id: uid, createdAt: serverTimestamp()});
+    await edge(db('alice'), 'alice', 'bob').commit();
+    await edge(db('bob'), 'bob', 'alice').commit();
+    const client = db('alice'), batch = writeBatch(client);
+    batch.set(doc(client, 'users/alice/blocked/bob'), {createdAt: serverTimestamp()});
+    for (const path of ['users/alice/following/bob', 'users/bob/followers/alice', 'users/bob/following/alice', 'users/alice/followers/bob']) batch.delete(doc(client, path));
+    await assertSucceeds(batch.commit());
+    await assertFails(getDoc(doc(db('bob'), 'users/alice/blocked/bob')));
+    await assertFails(edge(db('alice'), 'alice', 'bob').commit());
+    await assertFails(edge(db('bob'), 'bob', 'alice').commit());
+    await deleteDoc(doc(client, 'users/alice/blocked/bob'));
+    await assertSucceeds(edge(db('bob'), 'bob', 'alice').commit());
+  });
+  test(`${policy}: replies require a live root and cannot be forged, reparented or written to another post`, async () => {
+    await loadSocialPolicy();
+    await setDoc(doc(db('alice'), 'posts/one'), post());
+    await setDoc(doc(db('bob'), 'posts/one/comments/root'), comment());
+    const value = {...comment('charlie'), parentId: 'root', rootAuthorId: 'bob'};
+    const reply = doc(db('charlie'), 'posts/one/replies/reply');
+    await assertFails(setDoc(reply, {...value, authorId: 'bob'}));
+    await assertFails(setDoc(reply, {...value, rootAuthorId: 'charlie'}));
+    await assertFails(setDoc(reply, {...value, parentId: 'missing'}));
+    await assertFails(setDoc(reply, {...value, likedBy: ['alice']}));
+    await assertFails(setDoc(doc(db('charlie'), 'posts/missing/replies/reply'), value));
+    for (const text of ['', '   ', 'x'.repeat(501)]) await assertFails(setDoc(reply, {...value, text}));
+    await assertSucceeds(setDoc(reply, value));
+    await assertSucceeds(getDocs(query(collection(db('alice'), 'posts/one/replies'), where('parentId', '==', 'root'), orderBy('createdAt'))));
+    await assertSucceeds(getCountFromServer(collection(db('alice'), 'posts/one/replies')));
+    await assertFails(updateDoc(reply, {parentId: 'other', editedAt: serverTimestamp()}));
+    await assertFails(updateDoc(reply, {rootAuthorId: 'charlie'}));
+    await assertFails(updateDoc(doc(db('bob'), 'posts/one/replies/reply'), {text: 'Changed', editedAt: serverTimestamp()}));
+    await assertSucceeds(updateDoc(reply, {text: 'Edited reply', editedAt: serverTimestamp()}));
+    await assertSucceeds(updateDoc(doc(db('bob'), 'posts/one/replies/reply'), {likedBy: ['bob']}));
+    await assertFails(updateDoc(reply, {likedBy: []}));
+    await assertFails(updateDoc(reply, {likedBy: ['bob', 'charlie', 'charlie']}));
+    await assertSucceeds(updateDoc(reply, {likedBy: ['bob', 'charlie']}));
+    await assertFails(deleteDoc(doc(db('dana'), 'posts/one/replies/reply')));
+    await assertSucceeds(deleteDoc(doc(db('bob'), 'posts/one/replies/reply')));
+    await assertSucceeds(setDoc(reply, value));
+    await assertSucceeds(deleteDoc(doc(db('alice'), 'posts/one/replies/reply')));
+    await assertSucceeds(setDoc(reply, value));
+    await assertSucceeds(deleteDoc(reply));
+    await assertFails(updateDoc(doc(db('charlie'), 'posts/one/comments/root'), {deleting: true}));
+    await assertSucceeds(updateDoc(doc(db('bob'), 'posts/one/comments/root'), {deleting: true}));
+    await assertFails(setDoc(reply, value));
+    await assertFails(updateDoc(doc(db('bob'), 'posts/one/comments/root'), {deleting: false}));
+  });
+  test(`${policy}: own reply collection-group cleanup cannot inspect others' replies`, async () => {
+    await loadSocialPolicy();
+    await setDoc(doc(db('alice'), 'posts/one'), post());
+    await setDoc(doc(db('bob'), 'posts/one/comments/root'), comment());
+    await setDoc(doc(db('charlie'), 'posts/one/replies/r'), {...comment('charlie'), parentId: 'root', rootAuthorId: 'bob'});
+    await deleteDoc(doc(db('alice'), 'posts/one'));
+    await assertSucceeds(getDocs(query(collectionGroup(db('charlie'), 'replies'), where('authorId', '==', 'charlie'))));
+    await assertFails(getDocs(query(collectionGroup(db('bob'), 'replies'), where('authorId', '==', 'charlie'))));
+    await assertSucceeds(deleteDoc(doc(db('charlie'), 'posts/one/replies/r')));
+  });
+}
+
+test('post deletion rejects new root comments and replies while allowing cleanup', async () => {
+  await setDoc(doc(db('alice'), 'posts/one'), post());
+  await setDoc(doc(db('bob'), 'posts/one/comments/root'), comment());
+  await assertFails(updateDoc(doc(db('bob'), 'posts/one'), {deleting: true}));
+  await assertSucceeds(updateDoc(doc(db('alice'), 'posts/one'), {deleting: true}));
+  await assertFails(setDoc(doc(db('bob'), 'posts/one/comments/new'), comment()));
+  await assertFails(setDoc(doc(db('bob'), 'posts/one/replies/r'), {...comment(), parentId: 'root', rootAuthorId: 'bob'}));
+  await assertSucceeds(deleteDoc(doc(db('alice'), 'posts/one/comments/root')));
+  await assertSucceeds(deleteDoc(doc(db('alice'), 'posts/one')));
+});

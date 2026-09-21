@@ -1,3 +1,4 @@
+import 'support/social_fakes.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -92,7 +93,12 @@ void main() {
   tearDown(() => repo.updates.close());
   Future<void> open(WidgetTester tester) => mount(
     tester,
-    ProfileScreen(isGuest: false, repository: repo, postRepository: posts),
+    ProfileScreen(
+      isGuest: false,
+      repository: repo,
+      postRepository: posts,
+      socialRepository: MemorySocial(),
+    ),
     size: const Size(390, 844),
   );
 
@@ -184,7 +190,7 @@ void main() {
       repo.current = profile(photo: first);
       await open(tester);
       expect(
-        (tester.widget<CircleAvatar>(find.byType(CircleAvatar)).backgroundImage
+        (tester.widget<CircleAvatar>(find.byType(CircleAvatar)).foregroundImage
                 as NetworkImage)
             .url,
         first,
@@ -192,7 +198,7 @@ void main() {
       repo.publish(profile(photo: next));
       await tester.pumpAndSettle();
       expect(
-        (tester.widget<CircleAvatar>(find.byType(CircleAvatar)).backgroundImage
+        (tester.widget<CircleAvatar>(find.byType(CircleAvatar)).foregroundImage
                 as NetworkImage)
             .url,
         next,
@@ -200,7 +206,7 @@ void main() {
       repo.publish(profile());
       await tester.pumpAndSettle();
       expect(
-        tester.widget<CircleAvatar>(find.byType(CircleAvatar)).backgroundImage,
+        tester.widget<CircleAvatar>(find.byType(CircleAvatar)).foregroundImage,
         isNull,
       );
       expect(tester.takeException(), isNull);

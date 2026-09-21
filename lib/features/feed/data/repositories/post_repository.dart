@@ -1,3 +1,6 @@
+import 'package:mooddare/features/profile/data/social_repository.dart';
+import 'package:gal/gal.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:mooddare/models/comment_model.dart';
 import 'package:mooddare/features/dares/data/repositories/dares_repository.dart';
@@ -12,10 +15,12 @@ class PostRepository {
   final FirebaseFirestore _firestore;
   final FirebaseStorage _storage;
   final FirebaseAuth _auth;
+  final Future<void> Function(Reference, File)? downloadFile;
   PostRepository({
     FirebaseFirestore? firestore,
     FirebaseStorage? storage,
     FirebaseAuth? auth,
+    this.downloadFile,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
        _storage = storage ?? FirebaseStorage.instance,
        _auth = auth ?? FirebaseAuth.instance;
@@ -141,16 +146,103 @@ class PostRepository {
         (snapshot) => snapshot.docs.map(CommentModel.fromFirestore).toList(),
       );
 
-  // Aggregate over every comment, not just the latest 100 shown in the sheet.
-  Future<int> getCommentCount(String postId) async =>
-      (await _firestore
-              .collection('posts')
-              .doc(postId)
-              .collection('comments')
-              .count()
-              .get())
-          .count ??
-      0;
+  Future<int> getCommentCount(String postId) async {
+    final post = _firestore.collection('posts').doc(postId);
+    final counts = await Future.wait([
+      post.collection('comments').count().get(),
+      post.collection('replies').count().get(),
+    ]);
+    return counts.fold<int>(0, (total, result) => total + (result.count ?? 0));
+  }
+
+  Stream<List<CommentModel>> getReplies(String postId, String parentId) =>
+      _firestore
+          .collection('posts')
+          .doc(postId)
+          .collection('replies')
+          .where('parentId', isEqualTo: parentId)
+          .orderBy('createdAt')
+          .snapshots()
+          .map((s) => s.docs.map(CommentModel.fromFirestore).toList());
+
+  Future<void> addReply(
+    String postId,
+    String parentId,
+    String replyId,
+    String text,
+  ) async {
+    final uid = currentUserId;
+    text = text.trim();
+    if (uid == null) throw StateError('Sign in to reply.');
+    if (text.isEmpty || text.length > 500) {
+      throw const FormatException('Write a reply of 1–500 characters.');
+    }
+    final post = _firestore.collection('posts').doc(postId);
+    final reply = post.collection('replies').doc(replyId);
+    await _firestore.runTransaction((tx) async {
+      final root = await tx.get(post.collection('comments').doc(parentId));
+      final existing = await tx.get(reply);
+      if (!root.exists || root.data()?['deleting'] == true) {
+        throw StateError('This comment was deleted.');
+      }
+      if (existing.exists) return;
+      tx.set(reply, {
+        'parentId': parentId,
+        'rootAuthorId': root.data()!['authorId'],
+        'authorId': uid,
+        'text': text,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  Future<void> editReply(String postId, String replyId, String text) async {
+    text = text.trim();
+    if (text.isEmpty || text.length > 500) {
+      throw const FormatException('Write a reply of 1–500 characters.');
+    }
+    final ref = _firestore
+        .collection('posts')
+        .doc(postId)
+        .collection('replies')
+        .doc(replyId);
+    await _firestore.runTransaction((tx) async {
+      final doc = await tx.get(ref);
+      if (!doc.exists || doc.data()?['authorId'] != currentUserId) {
+        throw StateError('You can only edit your own reply.');
+      }
+      tx.update(ref, {'text': text, 'editedAt': FieldValue.serverTimestamp()});
+    });
+  }
+
+  Future<void> toggleReplyLike(String postId, String replyId) async {
+    final uid = currentUserId;
+    if (uid == null) throw StateError('Sign in to like replies.');
+    final ref = _firestore
+        .collection('posts')
+        .doc(postId)
+        .collection('replies')
+        .doc(replyId);
+    await _firestore.runTransaction((tx) async {
+      final doc = await tx.get(ref);
+      if (!doc.exists) throw StateError('This reply was deleted.');
+      final liked = List<String>.from(
+        doc.data()?['likedBy'] ?? [],
+      ).contains(uid);
+      tx.update(ref, {
+        'likedBy': liked
+            ? FieldValue.arrayRemove([uid])
+            : FieldValue.arrayUnion([uid]),
+      });
+    });
+  }
+
+  Future<void> deleteReply(String postId, String replyId) => _firestore
+      .collection('posts')
+      .doc(postId)
+      .collection('replies')
+      .doc(replyId)
+      .delete();
 
   Future<void> editComment(String postId, String commentId, String text) async {
     final uid = currentUserId;
@@ -218,12 +310,35 @@ class PostRepository {
     });
   }
 
-  Future<void> deleteComment(String postId, String commentId) => _firestore
-      .collection('posts')
-      .doc(postId)
-      .collection('comments')
-      .doc(commentId)
-      .delete();
+  Future<void> deleteComment(String postId, String commentId) async {
+    final post = _firestore.collection('posts').doc(postId);
+    final ref = post.collection('comments').doc(commentId);
+    final exists = await _firestore.runTransaction((tx) async {
+      final doc = await tx.get(ref);
+      if (!doc.exists) return false;
+      // Stop concurrent replies before cleaning up the thread. Retrying a
+      // failed deletion resumes from the remaining replies.
+      tx.update(ref, {'deleting': true});
+      return true;
+    });
+    if (!exists) return;
+    await _deleteQuery(
+      post.collection('replies').where('parentId', isEqualTo: commentId),
+    );
+    await ref.delete();
+  }
+
+  Future<void> _deleteQuery(Query<Map<String, dynamic>> query) async {
+    while (true) {
+      final page = await query.limit(100).get();
+      if (page.docs.isEmpty) return;
+      final batch = _firestore.batch();
+      for (final doc in page.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    }
+  }
 
   Future<void> toggleLike(String postId, String userId) async {
     if (_auth.currentUser?.uid != userId) {
@@ -249,12 +364,14 @@ class PostRepository {
     if (doc.data()?['authorId'] != _auth.currentUser?.uid) {
       throw StateError('You can only delete your own posts.');
     }
+    await ref.update({'deleting': true});
     // Use the stored URL, never an arbitrary URL supplied by the caller.
     try {
       await _storage.refFromURL(doc.data()!['mediaUrl'] as String).delete();
     } on FirebaseException catch (e) {
       if (e.code != 'object-not-found') rethrow;
     }
+    await _deleteQuery(ref.collection('replies'));
     // Firestore does not cascade deletion to subcollections.
     while (true) {
       final page = await ref.collection('comments').limit(100).get();
@@ -279,16 +396,8 @@ class PostRepository {
         .map((snapshot) => snapshot.docs.map((doc) => doc.id).toSet());
   }
 
-  Future<void> blockAuthor(String authorId) async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null || uid == authorId) throw StateError('Invalid account');
-    await _firestore
-        .collection('users')
-        .doc(uid)
-        .collection('blocked')
-        .doc(authorId)
-        .set({'createdAt': FieldValue.serverTimestamp()});
-  }
+  Future<void> blockAuthor(String authorId) =>
+      SocialRepository(firestore: _firestore, auth: _auth).block(authorId);
 
   Future<void> unblockAuthor(String authorId) async {
     final uid = _auth.currentUser?.uid;
@@ -299,6 +408,43 @@ class PostRepository {
         .collection('blocked')
         .doc(authorId)
         .delete();
+  }
+
+  Future<void> downloadPost(PostModel post) async {
+    if (!await Gal.hasAccess() && !await Gal.requestAccess()) {
+      throw StateError('Allow photo library access to save this moment.');
+    }
+    final directory = await Directory(
+      (await getTemporaryDirectory()).path,
+    ).createTemp('moment-download-');
+    try {
+      final ref = _storage.refFromURL(post.mediaUrl);
+      final metadata = await ref.getMetadata();
+      if ((metadata.size ?? 0) > 30 * 1024 * 1024) {
+        throw StateError('This moment is too large to download.');
+      }
+      final file = File(
+        '${directory.path}/moment.${post.mediaType == 'video' ? 'mp4' : 'jpg'}',
+      );
+      if (downloadFile != null) {
+        await downloadFile!(ref, file);
+      } else {
+        final task = ref.writeToFile(file);
+        try {
+          await task.timeout(const Duration(minutes: 2));
+        } catch (_) {
+          await task.cancel();
+          rethrow;
+        }
+      }
+      if (post.mediaType == 'video') {
+        await Gal.putVideo(file.path);
+      } else {
+        await Gal.putImage(file.path);
+      }
+    } finally {
+      await directory.delete(recursive: true);
+    }
   }
 
   Future<void> reportPost(String postId) async {

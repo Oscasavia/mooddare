@@ -24,6 +24,14 @@ Edit profile saves from the top-right toolbar. Save stays disabled while loading
 
 Profile details subscribe to saved changes, so the display name, username, bio and photo update without restarting or reopening the page. New avatar uploads use unique object URLs to avoid reusing a cached photo; the bottom navigation follows the same live profile document. Older avatar objects remain until account cleanup.
 
+## Social profiles and video edits
+
+Profiles show Moments, Followers and Following, with searchable people lists, follow/unfollow, blocking and an expandable profile picture. Reply threads expand under comments; replies support editing, likes and deletion. Each thread initially shows five replies, with more available on demand. Posts display their saved mood and offer Download in the overflow menu. The shared paper-plane icon points northeast, and tapping outside a text field dismisses focus on mobile.
+
+In **Your moment**, Edit video opens floating **Trim & sound** controls. Start/end handles choose a clip; muting removes the audio track from the exported MP4. Posting, saving and sharing all use that same edited file, so a subsequent download preserves the trim and silence. Android uses Media3 Transformer 1.5.1, matching the player's Media3 version; iOS uses AVFoundation. Trimming does not use MP4 edit lists to hide excluded footage. Original captures remain unchanged for Reset.
+
+GitHub Actions runs Flutter tests with coverage and enforces a 75% executable Dart line minimum using `python3 tooling/check_coverage.py`. Native export and camera behavior have separate Android integration tests; Firestore permissions have emulator tests for both rule sets.
+
 ## Settings
 
 Settings groups account details, privacy/preferences, help and app information into borderless cards. Sign out and Delete account are the final two rows and both require confirmation; pending operations prevent repeated requests and Back navigation. Google provider cleanup failures no longer report a failed sign-out after the Firebase session has already ended.

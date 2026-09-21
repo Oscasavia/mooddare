@@ -63,6 +63,7 @@ flutter {
 }
 
 dependencies {
+    implementation("androidx.media3:media3-transformer:1.5.1")
     testImplementation("junit:junit:4.13.2")
     // Bundled detector works offline, including on the first launch.
     implementation("com.google.mlkit:face-detection:16.1.7")

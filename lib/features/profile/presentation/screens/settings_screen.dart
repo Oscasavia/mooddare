@@ -1,3 +1,4 @@
+import 'package:mooddare/core/widgets/share_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:mooddare/core/user_message.dart';
 import 'package:mooddare/features/auth/presentation/auth_gate.dart';
@@ -174,12 +175,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     bool danger = false,
   }) => ListTile(
     contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-    leading: Icon(
-      icon,
-      color: danger
-          ? Theme.of(context).colorScheme.error
-          : Theme.of(context).colorScheme.primary,
-    ),
+    leading: icon == Icons.ios_share_rounded
+        ? ShareIcon(color: Theme.of(context).colorScheme.primary)
+        : Icon(
+            icon,
+            color: danger
+                ? Theme.of(context).colorScheme.error
+                : Theme.of(context).colorScheme.primary,
+          ),
     title: Text(
       title,
       style: danger

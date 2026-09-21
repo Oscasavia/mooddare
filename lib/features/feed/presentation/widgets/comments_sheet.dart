@@ -40,6 +40,8 @@ class _CommentsSheetState extends State<CommentsSheet> {
   final _liking = <String>{};
   final _deleting = <String>{};
   CommentModel? _editing;
+  CommentModel? _replying;
+  final _expanded = <String>{};
   String _draft = "";
   final _authors = <String, Future<UserModel?>>{};
   late Stream<List<CommentModel>> _comments;
@@ -92,10 +94,23 @@ class _CommentsSheetState extends State<CommentsSheet> {
     });
     try {
       final editing = _editing;
-      if (editing == null) {
+      if (editing == null && _replying != null) {
+        await widget.repository.addReply(
+          widget.post.id,
+          _replying!.id,
+          _commentId,
+          text,
+        );
+        _expanded.add(_replying!.id);
+        _replying = null;
+      } else if (editing == null) {
         await widget.repository.addComment(widget.post.id, _commentId, text);
       } else {
-        await widget.repository.editComment(widget.post.id, editing.id, text);
+        if (editing.parentId == null) {
+          await widget.repository.editComment(widget.post.id, editing.id, text);
+        } else {
+          await widget.repository.editReply(widget.post.id, editing.id, text);
+        }
       }
       if (!mounted) return;
       if (_editing != null) {
@@ -154,7 +169,11 @@ class _CommentsSheetState extends State<CommentsSheet> {
       _error = null;
     });
     try {
-      await widget.repository.toggleCommentLike(widget.post.id, comment.id);
+      if (comment.parentId == null) {
+        await widget.repository.toggleCommentLike(widget.post.id, comment.id);
+      } else {
+        await widget.repository.toggleReplyLike(widget.post.id, comment.id);
+      }
     } catch (_) {
       if (mounted) {
         setState(() => _error = 'Could not update your like. Try again.');
@@ -171,7 +190,14 @@ class _CommentsSheetState extends State<CommentsSheet> {
       _error = null;
     });
     try {
-      await widget.repository.deleteComment(widget.post.id, comment.id);
+      if (comment.parentId == null) {
+        await widget.repository.deleteComment(widget.post.id, comment.id);
+      } else {
+        await widget.repository.deleteReply(widget.post.id, comment.id);
+      }
+      if (mounted && _replying?.id == comment.id) {
+        setState(() => _replying = null);
+      }
       if (mounted && _editing?.id == comment.id) _cancelEdit();
     } catch (_) {
       if (mounted) {
@@ -180,6 +206,164 @@ class _CommentsSheetState extends State<CommentsSheet> {
     } finally {
       if (mounted) setState(() => _deleting.remove(comment.id));
     }
+  }
+
+  Widget _comment(CommentModel comment) {
+    final uid = widget.repository.currentUserId;
+    return Padding(
+      key: ValueKey(comment.id),
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: FutureBuilder<UserModel?>(
+                  future: _authors.putIfAbsent(
+                    comment.authorId,
+                    () => widget.repository.getAuthor(comment.authorId),
+                  ),
+                  builder: (context, snapshot) => AuthorIdentity(
+                    user: snapshot.data,
+                    avatarKey: ValueKey('comment_avatar_${comment.id}'),
+                    nameKey: ValueKey('comment_author_${comment.id}'),
+                    onPressed: () {
+                      _focus.unfocus();
+                      Navigator.pushNamed(
+                        context,
+                        profileRoute,
+                        arguments: comment.authorId,
+                      );
+                    },
+                  ),
+                ),
+              ),
+              if (uid != null &&
+                  (uid == comment.authorId || uid == widget.post.authorId))
+                PopupMenuButton<String>(
+                  enabled: !_sending && !_deleting.contains(comment.id),
+                  key: ValueKey('comment_menu_${comment.id}'),
+                  tooltip: 'Comment options',
+                  onSelected: (action) {
+                    if (action == 'edit') {
+                      _edit(comment);
+                    } else {
+                      _delete(comment);
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    if (uid == comment.authorId)
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Text('Edit comment'),
+                      ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Text('Delete comment'),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 12, top: 4),
+            child: Text(
+              comment.text,
+              key: ValueKey('comment_text_${comment.id}'),
+            ),
+          ),
+          Row(
+            children: [
+              Tooltip(
+                message: comment.likedBy.contains(uid)
+                    ? 'Unlike comment'
+                    : 'Like comment',
+                child: TextButton.icon(
+                  key: ValueKey('comment_like_${comment.id}'),
+                  onPressed:
+                      uid == null ||
+                          _deleting.contains(comment.id) ||
+                          _liking.contains(comment.id)
+                      ? null
+                      : () => _like(comment),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    minimumSize: const Size(48, 48),
+                  ),
+                  icon: Icon(
+                    comment.likedBy.contains(uid)
+                        ? Icons.favorite
+                        : Icons.favorite_outline,
+                    size: 22,
+                  ),
+                  label: Text(
+                    compactCount(comment.likedBy.length),
+                    key: ValueKey('comment_count_${comment.id}'),
+                    semanticsLabel: '${comment.likedBy.length} likes',
+                  ),
+                ),
+              ),
+              if (comment.parentId == null && !comment.deleting)
+                TextButton(
+                  onPressed: uid == null || _sending
+                      ? null
+                      : () {
+                          if (_editing != null) _cancelEdit();
+                          setState(() {
+                            _replying = comment;
+                            _error = null;
+                          });
+                          _focus.requestFocus();
+                        },
+                  child: const Text('Reply'),
+                ),
+              if (comment.editedAt != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text(
+                    'Edited',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(color: Colors.white60),
+                  ),
+                ),
+            ],
+          ),
+          if (comment.parentId == null && !comment.deleting) ...[
+            TextButton(
+              key: ValueKey('replies_${comment.id}'),
+              onPressed: () => setState(() {
+                if (!_expanded.remove(comment.id)) _expanded.add(comment.id);
+              }),
+              child: Text(
+                _expanded.contains(comment.id)
+                    ? 'Hide replies'
+                    : 'View replies',
+              ),
+            ),
+            if (_expanded.contains(comment.id))
+              Padding(
+                padding: const EdgeInsets.only(left: 24),
+                child: _ReplyThread(
+                  key: ValueKey('thread_${comment.id}'),
+                  repository: widget.repository,
+                  postId: widget.post.id,
+                  parentId: comment.id,
+                  blocked: _blocked,
+                  buildComment: _comment,
+                ),
+              ),
+          ],
+          if (comment.deleting)
+            const Text(
+              'Thread deletion interrupted. Use Delete comment to retry.',
+              style: TextStyle(color: Colors.white54),
+            ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -272,150 +456,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                             itemCount: comments.length,
                             itemBuilder: (context, index) {
                               final comment = comments[index];
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: FutureBuilder<UserModel?>(
-                                            future: _authors.putIfAbsent(
-                                              comment.authorId,
-                                              () => widget.repository.getAuthor(
-                                                comment.authorId,
-                                              ),
-                                            ),
-                                            builder: (context, snapshot) =>
-                                                AuthorIdentity(
-                                                  user: snapshot.data,
-                                                  avatarKey: ValueKey(
-                                                    'comment_avatar_${comment.id}',
-                                                  ),
-                                                  nameKey: ValueKey(
-                                                    'comment_author_${comment.id}',
-                                                  ),
-                                                  onPressed: () {
-                                                    _focus.unfocus();
-                                                    Navigator.pushNamed(
-                                                      context,
-                                                      profileRoute,
-                                                      arguments:
-                                                          comment.authorId,
-                                                    );
-                                                  },
-                                                ),
-                                          ),
-                                        ),
-                                        if (uid != null &&
-                                            (uid == comment.authorId ||
-                                                uid == widget.post.authorId))
-                                          PopupMenuButton<String>(
-                                            enabled:
-                                                !_sending &&
-                                                !_deleting.contains(comment.id),
-                                            key: ValueKey(
-                                              'comment_menu_${comment.id}',
-                                            ),
-                                            tooltip: 'Comment options',
-                                            onSelected: (action) {
-                                              if (action == 'edit') {
-                                                _edit(comment);
-                                              } else {
-                                                _delete(comment);
-                                              }
-                                            },
-                                            itemBuilder: (_) => [
-                                              if (uid == comment.authorId)
-                                                const PopupMenuItem(
-                                                  value: 'edit',
-                                                  child: Text('Edit comment'),
-                                                ),
-                                              const PopupMenuItem(
-                                                value: 'delete',
-                                                child: Text('Delete comment'),
-                                              ),
-                                            ],
-                                          ),
-                                      ],
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                        right: 12,
-                                        top: 4,
-                                      ),
-                                      child: Text(
-                                        comment.text,
-                                        key: ValueKey(
-                                          'comment_text_${comment.id}',
-                                        ),
-                                      ),
-                                    ),
-                                    Row(
-                                      children: [
-                                        Tooltip(
-                                          message: comment.likedBy.contains(uid)
-                                              ? 'Unlike comment'
-                                              : 'Like comment',
-                                          child: TextButton.icon(
-                                            key: ValueKey(
-                                              'comment_like_${comment.id}',
-                                            ),
-                                            onPressed:
-                                                uid == null ||
-                                                    _deleting.contains(
-                                                      comment.id,
-                                                    ) ||
-                                                    _liking.contains(comment.id)
-                                                ? null
-                                                : () => _like(comment),
-                                            style: TextButton.styleFrom(
-                                              foregroundColor: Colors.white,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 6,
-                                                  ),
-                                              minimumSize: const Size(48, 48),
-                                            ),
-                                            icon: Icon(
-                                              comment.likedBy.contains(uid)
-                                                  ? Icons.favorite
-                                                  : Icons.favorite_outline,
-                                              size: 22,
-                                            ),
-                                            label: Text(
-                                              compactCount(
-                                                comment.likedBy.length,
-                                              ),
-                                              key: ValueKey(
-                                                'comment_count_${comment.id}',
-                                              ),
-                                              semanticsLabel:
-                                                  '${comment.likedBy.length} likes',
-                                            ),
-                                          ),
-                                        ),
-                                        if (comment.editedAt != null)
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                              left: 8,
-                                            ),
-                                            child: Text(
-                                              'Edited',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .labelSmall
-                                                  ?.copyWith(
-                                                    color: Colors.white60,
-                                                  ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              );
+                              return _comment(comment);
                             },
                           );
                         },
@@ -424,6 +465,36 @@ class _CommentsSheetState extends State<CommentsSheet> {
                   ],
                 ),
               ),
+              if (_replying != null && _editing == null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: FutureBuilder<UserModel?>(
+                          future: _authors.putIfAbsent(
+                            _replying!.authorId,
+                            () => widget.repository.getAuthor(
+                              _replying!.authorId,
+                            ),
+                          ),
+                          builder: (_, snapshot) => Text(
+                            'Replying to @${snapshot.data?.username ?? 'member'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Cancel reply',
+                        onPressed: _sending
+                            ? null
+                            : () => setState(() => _replying = null),
+                        icon: const Icon(Icons.close, size: 18),
+                      ),
+                    ],
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 8, 12),
                 child: uid == null
@@ -485,4 +556,67 @@ class _CommentsSheetState extends State<CommentsSheet> {
       ),
     );
   }
+}
+
+class _ReplyThread extends StatefulWidget {
+  final PostRepository repository;
+  final String postId, parentId;
+  final Set<String> blocked;
+  final Widget Function(CommentModel) buildComment;
+  const _ReplyThread({
+    super.key,
+    required this.repository,
+    required this.postId,
+    required this.parentId,
+    required this.blocked,
+    required this.buildComment,
+  });
+  @override
+  State<_ReplyThread> createState() => _ReplyThreadState();
+}
+
+class _ReplyThreadState extends State<_ReplyThread> {
+  int _visible = 5;
+  late Stream<List<CommentModel>> _stream = widget.repository.getReplies(
+    widget.postId,
+    widget.parentId,
+  );
+  @override
+  Widget build(BuildContext context) => StreamBuilder<List<CommentModel>>(
+    stream: _stream,
+    builder: (_, snapshot) {
+      if (snapshot.hasError) {
+        return TextButton(
+          onPressed: () => setState(() {
+            _stream = widget.repository.getReplies(
+              widget.postId,
+              widget.parentId,
+            );
+          }),
+          child: const Text('Could not load replies. Retry'),
+        );
+      }
+      if (!snapshot.hasData) return const LinearProgressIndicator();
+      final replies = snapshot.data!
+          .where((r) => !widget.blocked.contains(r.authorId))
+          .toList();
+      if (replies.isEmpty) {
+        return const Text(
+          'No replies yet',
+          style: TextStyle(color: Colors.white54),
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ...replies.take(_visible).map(widget.buildComment),
+          if (replies.length > _visible)
+            TextButton(
+              onPressed: () => setState(() => _visible += 5),
+              child: Text('View ${replies.length - _visible} more replies'),
+            ),
+        ],
+      );
+    },
+  );
 }

@@ -114,3 +114,16 @@ No iOS build/device validation has been completed. Native iOS face detection and
 ## Source backup
 
 A snapshot of the original source/configuration was saved locally at `/private/tmp/mooddare-before-refresh.tar.gz` before editing. It is not a durable backup or part of GitHub. The repository remote is `https://github.com/Oscasavia/mooddare.git`.
+
+
+## Social and video editing validation — 2026-09-20
+
+Implemented a shared northeast share icon, global mobile tap-outside focus dismissal, mood labels and gallery downloads on feed/viewer cards, one-level collapsible replies, searchable follower/following lists, follow/unfollow/block actions, expanded profile photos, and video trim/mute export from Your moment. Android export follows [Media3 track removal and clipping](https://developer.android.com/media/media3/transformer/transformations); iOS uses an AVMutableComposition with only the requested tracks/time range. All outbound editor actions share the export path. No lens rendering or capture gesture changes were made.
+
+Firestore replies live at `posts/{post}/replies/{reply}` with immutable `parentId` and validated `rootAuthorId`. Root comments remain compatible with legacy documents. Aggregate post comment counts include replies. Root/post deletion marks `deleting: true` before cleanup so new replies/comments are refused. Interrupted deletions can resume; account deletion also removes own replies and orphaned replies to the caller's threads. Trusted server cleanup is still needed for clients that never resume deletion.
+
+Follows use atomic mirrored `users/{follower}/following/{target}` and `users/{target}/followers/{follower}` records. Rules reject self/forged/one-sided follows, require profiles, and check blocks in both directions. Block removes both directions; account deletion removes paired relationships. Counts derive from records, never client-supplied counters. The compatibility policy now excludes replies/follows/blocks from its legacy broad subcollection allowance. The existing profile/username migration above remains a production release requirement.
+
+Validation: 168 Flutter tests passed; executable Dart line coverage was 3692/4707 (78.44%), with no coverage exclusions. GitHub Actions now enforces 75%. Twenty-eight Firestore/Storage emulator tests passed. Coverage is a Dart line metric, not a substitute for native or device tests. Added regression cases cover thread collapse/reopen, reply retries/edit/like/delete, multi-page cleanup, paired follow cleanup, permission denial, gallery download byte preservation, expanded avatars/large text, trim/reset/error handling, and the same edited bytes reaching save/share/post. The real Android MP4 test checks clip duration, audio-track absence/restoration, frame dimensions, playback and retained lens pixels, including that excluded initial footage is absent.
+
+The compatibility rules and reply indexes were deployed to `mooddare` on 2026-09-20. Storage rules were unchanged. Android emulator fixtures use a public test image; no private camera footage is uploaded by these tests. iOS export needs physical-device validation before an iOS release.

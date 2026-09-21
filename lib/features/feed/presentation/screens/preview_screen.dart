@@ -1,3 +1,6 @@
+import '../../../camera/data/video_editor.dart';
+import '../../../camera/presentation/video_adjustments_panel.dart';
+import 'package:mooddare/core/widgets/share_icon.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -18,12 +21,14 @@ class PreviewScreen extends StatefulWidget {
   final String dareText;
   final String? moodId, moodName;
   final String? liveLens;
+  final PostRepository? repository;
   const PreviewScreen({
     super.key,
     required this.mediaFile,
     required this.mediaType,
     required this.dareText,
     this.liveLens,
+    this.repository,
     this.moodId,
     this.moodName,
   });
@@ -36,6 +41,10 @@ class _PreviewScreenState extends State<PreviewScreen>
   final _postId = const Uuid().v4();
   VideoPlayerController? _video;
   PhotoEditor? _editor;
+  VideoEditor? _videoEditor;
+  VideoEdits? _videoEdits;
+  bool _seekingTrim = false;
+  bool _showVideoEdits = false;
   Uint8List? _rendered;
   PhotoAdjustments _settings = const PhotoAdjustments();
   bool _loading = true, _busy = false, _rendering = false, _original = false;
@@ -76,6 +85,15 @@ class _PreviewScreenState extends State<PreviewScreen>
         _video = video;
         await video.initialize();
         if (!mounted) return;
+        _videoEditor = VideoEditor(
+          widget.mediaFile,
+          video.value.duration.inMilliseconds,
+        );
+        _videoEdits = VideoEdits(
+          startMs: 0,
+          endMs: video.value.duration.inMilliseconds,
+        );
+        video.addListener(_loopTrim);
         await video.setLooping(true);
         await video.play();
       }
@@ -134,9 +152,9 @@ class _PreviewScreenState extends State<PreviewScreen>
     try {
       final file = _isPhoto
           ? await _editor!.export(_rendered!)
-          : widget.mediaFile;
+          : await _videoEditor!.export(_videoEdits!);
       if (action == 'post') {
-        await PostRepository().createPost(
+        await (widget.repository ?? PostRepository()).createPost(
           dareText: widget.dareText,
           moodId: widget.moodId,
           moodName: widget.moodName,
@@ -194,9 +212,35 @@ class _PreviewScreenState extends State<PreviewScreen>
     WidgetsBinding.instance.removeObserver(this);
     _debounce?.cancel();
     _revision++;
+    _video?.removeListener(_loopTrim);
     unawaited(_video?.dispose());
+    unawaited(_videoEditor?.dispose());
     unawaited(_editor?.dispose());
     super.dispose();
+  }
+
+  void _loopTrim() {
+    final video = _video;
+    final edits = _videoEdits;
+    if (video == null ||
+        edits == null ||
+        _seekingTrim ||
+        !video.value.isPlaying) {
+      return;
+    }
+    final position = video.value.position.inMilliseconds;
+    if (position < edits.startMs || position >= edits.endMs) {
+      _seekingTrim = true;
+      video
+          .seekTo(Duration(milliseconds: edits.startMs))
+          .whenComplete(() => _seekingTrim = false);
+    }
+  }
+
+  void _editVideo(VideoEdits edits) {
+    setState(() => _videoEdits = edits);
+    _video?.setVolume(edits.muted ? 0 : 1);
+    _video?.seekTo(Duration(milliseconds: edits.startMs));
   }
 
   void _reset() {
@@ -361,7 +405,7 @@ class _PreviewScreenState extends State<PreviewScreen>
                   value: 'share',
                   child: ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.ios_share),
+                    leading: ShareIcon(),
                     title: Text('Share capture'),
                   ),
                 ),
@@ -405,6 +449,20 @@ class _PreviewScreenState extends State<PreviewScreen>
                                           : 'Captured')
                                     : 'Compare',
                               ),
+                            ),
+                          ),
+                        if (_showVideoEdits && _videoEdits != null)
+                          Positioned(
+                            left: 8,
+                            right: 8,
+                            bottom: 8,
+                            child: VideoAdjustmentsPanel(
+                              edits: _videoEdits!,
+                              durationMs: _videoEditor!.durationMs,
+                              enabled: !_busy,
+                              onChanged: _editVideo,
+                              onDone: () =>
+                                  setState(() => _showVideoEdits = false),
                             ),
                           ),
                         if (_rendering || _busy)
@@ -455,6 +513,18 @@ class _PreviewScreenState extends State<PreviewScreen>
                       ),
                       Row(
                         children: [
+                          if (!_isPhoto && !_loading && _error == null) ...[
+                            IconButton.filledTonal(
+                              tooltip: 'Edit video',
+                              onPressed: _busy
+                                  ? null
+                                  : () => setState(
+                                      () => _showVideoEdits = !_showVideoEdits,
+                                    ),
+                              icon: const Icon(Icons.tune),
+                            ),
+                            const SizedBox(width: 12),
+                          ],
                           if (canAdjust) ...[
                             IconButton.filledTonal(
                               tooltip: _showAdjustments

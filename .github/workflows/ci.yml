@@ -18,7 +18,8 @@ jobs:
       - run: flutter pub get
       - run: dart format --output=none --set-exit-if-changed lib test integration_test
       - run: flutter analyze
-      - run: flutter test
+      - run: flutter test --coverage
+      - run: python3 tooling/check_coverage.py --minimum 75
       - run: flutter build apk --debug --target-platform android-arm64
       - run: ./gradlew :app:testDebugUnitTest -Ptarget-platform=android-arm64
         working-directory: android

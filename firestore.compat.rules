@@ -9,8 +9,37 @@ service cloud.firestore {
     match /{collection}/{id} {
       allow read, write: if signedIn() && collection != 'posts';
       match /{subcollection}/{document=**} {
-        allow read, write: if signedIn() && collection != 'posts' && subcollection != 'comments';
+        allow read, write: if signedIn() && collection != 'posts' && !(subcollection in ['comments', 'replies', 'following', 'followers', 'blocked']);
       }
+    }
+    match /users/{uid}/blocked/{authorId} {
+      allow read, delete: if owner(uid);
+      allow create, update: if owner(uid) && uid != authorId
+        && request.resource.data.keys().hasOnly(['createdAt'])
+        && request.resource.data.createdAt == request.time;
+    }
+    function canFollow(follower, target) {
+      return signedIn() && request.auth.uid == follower && follower != target
+        && exists(/databases/$(database)/documents/users/$(follower))
+        && exists(/databases/$(database)/documents/users/$(target))
+        && !existsAfter(/databases/$(database)/documents/users/$(follower)/blocked/$(target))
+        && !existsAfter(/databases/$(database)/documents/users/$(target)/blocked/$(follower))
+        && request.resource.data.keys().hasOnly(['createdAt'])
+        && request.resource.data.createdAt == request.time;
+    }
+    match /users/{follower}/following/{target} {
+      allow read: if signedIn();
+      allow create: if canFollow(follower, target)
+        && getAfter(/databases/$(database)/documents/users/$(target)/followers/$(follower)).data.createdAt == request.time;
+      allow delete: if signedIn() && (request.auth.uid == follower || request.auth.uid == target)
+        && !existsAfter(/databases/$(database)/documents/users/$(target)/followers/$(follower));
+    }
+    match /users/{target}/followers/{follower} {
+      allow read: if signedIn();
+      allow create: if canFollow(follower, target)
+        && getAfter(/databases/$(database)/documents/users/$(follower)/following/$(target)).data.createdAt == request.time;
+      allow delete: if signedIn() && (request.auth.uid == follower || request.auth.uid == target)
+        && !existsAfter(/databases/$(database)/documents/users/$(follower)/following/$(target));
     }
     match /posts/{id} {
       allow read: if signedIn();
@@ -32,12 +61,13 @@ service cloud.firestore {
         && request.resource.data.expiresAt <= request.time + duration.value(25, 'h')
         && request.resource.data.likedBy == [];
       allow update: if signedIn()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy'])
+        && ((owner(resource.data.authorId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deleting']) && request.resource.data.deleting == true)
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy'])
         && request.resource.data.likedBy is list
         && request.resource.data.likedBy.size() <= 10000
         && request.resource.data.likedBy.size() == request.resource.data.likedBy.toSet().size()
         && request.resource.data.likedBy.toSet().difference(resource.data.likedBy.toSet()).hasOnly([request.auth.uid])
-        && resource.data.likedBy.toSet().difference(request.resource.data.likedBy.toSet()).hasOnly([request.auth.uid]);
+        && resource.data.likedBy.toSet().difference(request.resource.data.likedBy.toSet()).hasOnly([request.auth.uid])));
       allow delete: if owner(resource.data.authorId);
       match /comments/{commentId} {
         function validText() {
@@ -56,6 +86,7 @@ service cloud.firestore {
         }
         allow read: if signedIn() && exists(/databases/$(database)/documents/posts/$(id));
         allow create: if signedIn() && exists(/databases/$(database)/documents/posts/$(id))
+          && get(/databases/$(database)/documents/posts/$(id)).data.get('deleting', false) == false
           && request.resource.data.keys().hasOnly(['authorId', 'text', 'createdAt', 'likedBy'])
           && request.resource.data.authorId == request.auth.uid && validText()
           && request.resource.data.get('likedBy', []) == []
@@ -64,8 +95,46 @@ service cloud.firestore {
           && ((owner(resource.data.authorId)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
             && validText() && request.resource.data.editedAt == request.time)
+            || ownLikeOnly()
+            || ((owner(resource.data.authorId) || get(/databases/$(database)/documents/posts/$(id)).data.authorId == request.auth.uid)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deleting'])
+              && request.resource.data.deleting == true));
+        allow delete: if signedIn() && (resource.data.authorId == request.auth.uid
+          || get(/databases/$(database)/documents/posts/$(id)).data.authorId == request.auth.uid);
+      }
+      match /replies/{replyId} {
+        function validText() {
+          return request.resource.data.text is string
+            && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 500
+            && request.resource.data.text.matches('(?s).*[^\\s].*');
+        }
+        function ownLikeOnly() {
+          let before = resource.data.get('likedBy', []);
+          let after = request.resource.data.likedBy;
+          return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy'])
+            && after is list && after.size() <= 10000
+            && after.size() == after.toSet().size()
+            && after.toSet().difference(before.toSet()).hasOnly([request.auth.uid])
+            && before.toSet().difference(after.toSet()).hasOnly([request.auth.uid]);
+        }
+        allow read: if signedIn() && exists(/databases/$(database)/documents/posts/$(id));
+        allow create: if signedIn() && exists(/databases/$(database)/documents/posts/$(id))
+          && get(/databases/$(database)/documents/posts/$(id)).data.get('deleting', false) == false
+          && request.resource.data.keys().hasOnly(['authorId', 'text', 'createdAt', 'likedBy', 'parentId', 'rootAuthorId'])
+          && request.resource.data.authorId == request.auth.uid && validText()
+          && request.resource.data.parentId is string
+          && exists(/databases/$(database)/documents/posts/$(id)/comments/$(request.resource.data.parentId))
+          && get(/databases/$(database)/documents/posts/$(id)/comments/$(request.resource.data.parentId)).data.get('deleting', false) == false
+          && request.resource.data.rootAuthorId == get(/databases/$(database)/documents/posts/$(id)/comments/$(request.resource.data.parentId)).data.authorId
+          && request.resource.data.get('likedBy', []) == []
+          && request.resource.data.createdAt == request.time;
+        allow update: if signedIn() && exists(/databases/$(database)/documents/posts/$(id))
+          && ((owner(resource.data.authorId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
+            && validText() && request.resource.data.editedAt == request.time)
             || ownLikeOnly());
         allow delete: if signedIn() && (resource.data.authorId == request.auth.uid
+          || resource.data.rootAuthorId == request.auth.uid
           || get(/databases/$(database)/documents/posts/$(id)).data.authorId == request.auth.uid);
       }
 
@@ -74,6 +143,22 @@ service cloud.firestore {
     // including comments whose parent was removed during an interrupted cleanup.
     match /{path=**}/comments/{commentId} {
       allow read, delete: if signedIn() && resource.data.authorId == request.auth.uid;
+      allow update: if signedIn() && resource.data.authorId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deleting'])
+        && request.resource.data.deleting == true;
+    }
+    match /{path=**}/replies/{replyId} {
+      allow read, delete: if signedIn() && (resource.data.authorId == request.auth.uid || resource.data.rootAuthorId == request.auth.uid);
+    }
+    match /reports/{id} {
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasOnly(['postId','reporterId','reason','createdAt'])
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.postId is string
+        && id == request.auth.uid + '_' + request.resource.data.postId
+        && request.resource.data.reason == 'inappropriate'
+        && request.resource.data.createdAt == request.time;
+      allow read, delete: if owner(resource.data.reporterId);
     }
   }
 }

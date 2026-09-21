@@ -96,8 +96,8 @@ void main() {
           '  hApP ',
         );
         await tester.pumpAndSettle();
-        expect(find.text('Happy'), findsOneWidget);
-        await tester.tap(find.text('Happy'));
+        expect(find.widgetWithText(ListTile, 'Happy'), findsOneWidget);
+        await tester.tap(find.widgetWithText(ListTile, 'Happy'));
         await tester.pumpAndSettle();
         expect(repository.selectedMood, 'happy');
         expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.cover);

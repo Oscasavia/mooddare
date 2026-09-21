@@ -1,3 +1,4 @@
+import 'social_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -6,8 +7,12 @@ import 'package:mooddare/features/feed/data/repositories/post_repository.dart';
 /// Client cleanup is retryable while the auth account still exists. Production
 /// should additionally run trusted server cleanup for interrupted deletions.
 class AccountRepository {
+  final FirebaseFirestore? firestore;
+  final FirebaseAuth? auth;
+  final FirebaseStorage? storage;
+  AccountRepository({this.firestore, this.auth, this.storage});
   Future<void> deleteAccount() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = (auth ?? FirebaseAuth.instance).currentUser;
     if (user == null) throw StateError('Not signed in');
     final token = await user.getIdTokenResult(true);
     final signedIn = token.authTime;
@@ -16,8 +21,12 @@ class AccountRepository {
             DateTime.now().difference(signedIn) > const Duration(minutes: 4))) {
       throw FirebaseAuthException(code: 'requires-recent-login');
     }
-    final db = FirebaseFirestore.instance;
-    final posts = PostRepository();
+    final db = firestore ?? FirebaseFirestore.instance;
+    final posts = PostRepository(
+      firestore: db,
+      auth: auth,
+      storage: this.storage,
+    );
     while (true) {
       final page = await db
           .collection('posts')
@@ -51,13 +60,35 @@ class AccountRepository {
           .limit(100)
           .get();
       if (comments.docs.isEmpty) break;
-      final batch = db.batch();
       for (final comment in comments.docs) {
-        batch.delete(comment.reference);
+        final post = comment.reference.parent.parent!;
+        if ((await post.get()).exists) {
+          await posts.deleteComment(post.id, comment.id);
+        } else {
+          await comment.reference.delete();
+        }
       }
-      await batch.commit();
     }
-    final storage = FirebaseStorage.instance;
+    for (final field in ['authorId', 'rootAuthorId']) {
+      while (true) {
+        final replies = await db
+            .collectionGroup('replies')
+            .where(field, isEqualTo: user.uid)
+            .limit(100)
+            .get();
+        if (replies.docs.isEmpty) break;
+        final batch = db.batch();
+        for (final reply in replies.docs) {
+          batch.delete(reply.reference);
+        }
+        await batch.commit();
+      }
+    }
+    await SocialRepository(
+      firestore: db,
+      auth: auth,
+    ).removeConnections(user.uid);
+    final storage = this.storage ?? FirebaseStorage.instance;
     // Remove current and legacy avatar locations, plus unfinished uploads.
     for (final folder in [
       'posts/${user.uid}',

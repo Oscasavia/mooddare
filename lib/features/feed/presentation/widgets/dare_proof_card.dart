@@ -1,3 +1,4 @@
+import 'package:mooddare/core/widgets/share_icon.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
@@ -50,6 +51,7 @@ class _DareProofCardState extends State<DareProofCard>
       _commenting = false,
       _viewingLikes = false;
   int _likes = 0;
+  bool _downloading = false;
   String? get _uid => _repository.currentUserId;
   bool get _shouldPlay =>
       widget.isActive &&
@@ -276,6 +278,21 @@ class _DareProofCardState extends State<DareProofCard>
 
   Future<void> _action(String action) async {
     if (!mounted) return;
+    if (action == 'download') {
+      if (_downloading) return;
+      setState(() => _downloading = true);
+      try {
+        await _repository.downloadPost(widget.post);
+        _message('Saved to your device.');
+      } catch (_) {
+        _message(
+          'Could not save this moment. Check your connection and photo library permission, then try again.',
+        );
+      } finally {
+        if (mounted) setState(() => _downloading = false);
+      }
+      return;
+    }
     if (action == 'hide') {
       _hide();
       return;
@@ -446,6 +463,13 @@ class _DareProofCardState extends State<DareProofCard>
                             ),
                             onSelected: _action,
                             itemBuilder: (_) => [
+                              PopupMenuItem(
+                                value: 'download',
+                                enabled: !_downloading,
+                                child: Text(
+                                  _downloading ? 'Saving…' : 'Download moment',
+                                ),
+                              ),
                               if (widget.post.authorId == _uid)
                                 const PopupMenuItem(
                                   value: 'delete',
@@ -483,6 +507,18 @@ class _DareProofCardState extends State<DareProofCard>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (widget.post.moodName?.trim().isNotEmpty ?? false) ...[
+                        Text(
+                          widget.post.moodName!,
+                          key: const ValueKey('moment_mood'),
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                      ],
                       Text(
                         widget.post.dareText,
                         style: const TextStyle(
@@ -559,8 +595,7 @@ class _DareProofCardState extends State<DareProofCard>
                           IconButton(
                             tooltip: 'Share moment',
                             onPressed: _share,
-                            icon: const Icon(
-                              Icons.send_outlined,
+                            icon: const ShareIcon(
                               color: Colors.white,
                               size: 22,
                             ),

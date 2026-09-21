@@ -5,6 +5,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    private var videoEdit: VideoEditPlugin? = null
     private var beauty: BeautyPlugin? = null
     private var liveBeauty: LiveBeautyPlugin? = null
     override fun onPause() {
@@ -19,6 +20,9 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mooddare/settings")
             .setMethodCallHandler(SettingsPlugin(this))
+        videoEdit = VideoEditPlugin(applicationContext)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mooddare/video_edit")
+            .setMethodCallHandler(videoEdit)
         beauty = BeautyPlugin(applicationContext)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mooddare/beauty")
             .setMethodCallHandler(beauty)
@@ -37,6 +41,8 @@ class MainActivity : FlutterActivity() {
         beauty = null
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mooddare/settings")
             .setMethodCallHandler(null)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mooddare/video_edit").setMethodCallHandler(null)
+        videoEdit?.close(); videoEdit = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }

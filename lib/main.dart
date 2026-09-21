@@ -1,3 +1,4 @@
+import 'core/widgets/dismiss_keyboard.dart';
 import 'package:flutter/material.dart';
 import 'core/app_routes.dart';
 import 'package:flutter/services.dart';
@@ -28,6 +29,8 @@ class MoodDareApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'MoodDare',
+    builder: (_, child) =>
+        DismissKeyboard(child: child ?? const SizedBox.shrink()),
     theme: AppTheme.build(),
     debugShowCheckedModeBanner: false,
     navigatorObservers: [appRouteObserver],
@@ -47,7 +50,7 @@ class _StartupState extends State<_Startup> {
   @override
   void initState() {
     super.initState();
-    _ready = _initialize();
+    _ready = _initialize()..ignore();
   }
 
   Future<void> _initialize() async {
@@ -70,7 +73,10 @@ class _StartupState extends State<_Startup> {
             message:
                 'MoodDare could not start. Check your connection and try again.',
             actionLabel: 'Retry',
-            onAction: () => setState(() => _ready = _initialize()),
+            onAction: () => setState(() {
+              // Observe immediate platform failures until FutureBuilder attaches.
+              _ready = _initialize()..ignore();
+            }),
           ),
         );
       }
