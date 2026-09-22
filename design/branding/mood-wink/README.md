@@ -44,6 +44,19 @@ selected. The navigation label remains visible and accessible. Login and signup
 share a compact 64px wink above the 128px wordmark. These are static accents;
 only startup animates.
 
+The landing page uses a larger original wink with smaller Thinking and Talking
+expressions in a restrained lavender composition. All three are drawn directly
+from MoodWinkGeometry. Narrow screens stack artwork and account options; at
+760px and above the artwork sits beside the wordmark, headline, and buttons.
+Both account paths remain scrollable at large text sizes, with no new animation
+or network-loaded illustration.
+
+The empty blocked-account list uses `angrySmile`: inward-slanting eyes inspired
+by the user's reference, with the original outline and smile unchanged. This
+is an empty-list illustration; loading failures continue to use the `x_x` error
+face. Tests cover empty/error/populated transitions and failed/successful unblock
+actions as well as the geometry's unchanged outline and mouth.
+
 Find people uses the wink to invite a first search and a thinking expression
 for no matches: an upward glance, raised eyebrow, and small slanted mouth.
 The `x_x` expression with a flat mouth is reserved for errors. The shared

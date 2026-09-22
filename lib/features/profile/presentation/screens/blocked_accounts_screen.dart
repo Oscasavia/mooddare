@@ -3,15 +3,19 @@ import 'package:mooddare/features/feed/data/repositories/post_repository.dart';
 import 'package:mooddare/features/user/data/repositories/user_repository.dart';
 import 'package:mooddare/models/user_model.dart';
 import 'package:mooddare/core/widgets/app_empty_state.dart';
+import 'package:mooddare/core/branding/mood_wink.dart';
 
 class BlockedAccountsScreen extends StatefulWidget {
-  const BlockedAccountsScreen({super.key});
+  final PostRepository? repository;
+  final UserRepository? users;
+  const BlockedAccountsScreen({super.key, this.repository, this.users});
   @override
   State<BlockedAccountsScreen> createState() => _BlockedAccountsScreenState();
 }
 
 class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
-  final _repo = PostRepository();
+  late final _repo = widget.repository ?? PostRepository();
+  late final _users = widget.users ?? UserRepository();
   late final _blocked = _repo.blockedAuthors();
   final _profiles = <String, Future<UserModel?>>{};
   String? _busy;
@@ -33,7 +37,10 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
         final ids = snapshot.data!.toList();
         if (ids.isEmpty) {
           return const AppEmptyState(
-            icon: Icons.block,
+            illustration: MoodWink(
+              size: 80,
+              expression: MoodWinkExpression.angrySmile,
+            ),
             title: 'No blocked accounts',
             message: 'You can block an account from the menu on their moment.',
           );
@@ -43,10 +50,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
           itemBuilder: (context, index) {
             final id = ids[index];
             return FutureBuilder<UserModel?>(
-              future: _profiles.putIfAbsent(
-                id,
-                () => UserRepository().getUserModel(id),
-              ),
+              future: _profiles.putIfAbsent(id, () => _users.getUserModel(id)),
               builder: (context, user) => ListTile(
                 leading: const CircleAvatar(child: Icon(Icons.person_outline)),
                 title: Text(

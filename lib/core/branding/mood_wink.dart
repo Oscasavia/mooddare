@@ -2,7 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../app_theme.dart';
 
-enum MoodWinkExpression { wink, smile, talking, thinking, error }
+enum MoodWinkExpression { wink, smile, talking, thinking, angrySmile, error }
 
 /// Clean vector reconstruction of the approved Mood Wink concept. Contours
 /// are shared by Flutter and the native-resource exporter (M, C, Z commands).
@@ -62,6 +62,25 @@ class MoodWinkGeometry {
     [],
   ];
 
+  static const angryLeftEye = <List<double>>[
+    [24, 34],
+    [30, 36, 38, 41, 45, 43],
+    [48, 44, 48, 40, 49, 42],
+    [49, 51, 43, 57, 35, 56],
+    [26, 55, 21, 47, 22, 37],
+    [22, 34, 23, 33, 24, 34],
+    [],
+  ];
+  static const angryRightEye = <List<double>>[
+    [78, 31],
+    [72, 33, 64, 39, 57, 41],
+    [54, 42, 54, 38, 53, 40],
+    [53, 49, 59, 55, 67, 54],
+    [76, 53, 81, 45, 80, 34],
+    [80, 31, 79, 30, 78, 31],
+    [],
+  ];
+
   static List<List<double>> rightEye(double wink) => [
     for (var i = 0; i < openEye.length; i++)
       [
@@ -79,9 +98,12 @@ class MoodWinkGeometry {
       face,
       if (expression == MoodWinkExpression.wink ||
           expression == MoodWinkExpression.smile ||
-          expression == MoodWinkExpression.talking) ...[
-        leftEye,
-        rightEye(expression == MoodWinkExpression.wink ? wink : 0),
+          expression == MoodWinkExpression.talking ||
+          expression == MoodWinkExpression.angrySmile) ...[
+        expression == MoodWinkExpression.angrySmile ? angryLeftEye : leftEye,
+        expression == MoodWinkExpression.angrySmile
+            ? angryRightEye
+            : rightEye(expression == MoodWinkExpression.wink ? wink : 0),
         expression == MoodWinkExpression.talking ? talkingMouth : smile,
       ],
     ]) {
