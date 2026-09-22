@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mooddare/core/branding/mood_wink.dart';
 import 'package:mooddare/features/dares/presentation/screens/dares_screen.dart';
 import 'package:mooddare/features/feed/presentation/screens/feed_screen.dart';
 import 'package:mooddare/features/profile/presentation/screens/profile_screen.dart';
@@ -31,8 +32,8 @@ class _MainScreenState extends State<MainScreen> {
           label: 'Moments',
         ),
         const NavigationDestination(
-          icon: Icon(Icons.explore_outlined),
-          selectedIcon: Icon(Icons.explore),
+          icon: MoodWink(size: 26, wink: 0, color: Colors.white60),
+          selectedIcon: MoodWink(size: 26),
           label: 'Discover',
         ),
         NavigationDestination(

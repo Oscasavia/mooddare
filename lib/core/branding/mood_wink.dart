@@ -2,6 +2,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../app_theme.dart';
 
+enum MoodWinkExpression { wink, noResults }
+
 /// Clean vector reconstruction of the approved Mood Wink concept. Contours
 /// are shared by Flutter and the native-resource exporter (M, C, Z commands).
 class MoodWinkGeometry {
@@ -59,9 +61,19 @@ class MoodWinkGeometry {
       ],
   ];
 
-  static Path path(double wink) {
+  static Path path(
+    double wink, {
+    MoodWinkExpression expression = MoodWinkExpression.wink,
+  }) {
     final result = Path()..fillType = PathFillType.evenOdd;
-    for (final contour in [face, leftEye, rightEye(wink), smile]) {
+    for (final contour in [
+      face,
+      if (expression == MoodWinkExpression.wink) ...[
+        leftEye,
+        rightEye(wink),
+        smile,
+      ],
+    ]) {
       for (final command in contour) {
         if (command.isEmpty) {
           result.close();
@@ -79,6 +91,35 @@ class MoodWinkGeometry {
         }
       }
     }
+    if (expression == MoodWinkExpression.noResults) {
+      final features = Path();
+      for (final center in [const Offset(33, 44), const Offset(69, 41)]) {
+        features.addPolygon([
+          for (final point in const [
+            Offset(-7, -10),
+            Offset(0, -3),
+            Offset(7, -10),
+            Offset(10, -7),
+            Offset(3, 0),
+            Offset(10, 7),
+            Offset(7, 10),
+            Offset(0, 3),
+            Offset(-7, 10),
+            Offset(-10, 7),
+            Offset(-3, 0),
+            Offset(-10, -7),
+          ])
+            center + point,
+        ], true);
+      }
+      features.addRRect(
+        RRect.fromRectAndRadius(
+          const Rect.fromLTWH(41, 70, 25, 6),
+          const Radius.circular(3),
+        ),
+      );
+      return Path.combine(PathOperation.difference, result, features);
+    }
     return result;
   }
 }
@@ -87,11 +128,13 @@ class MoodWink extends StatelessWidget {
   final double size;
   final double wink;
   final Color color;
+  final MoodWinkExpression expression;
   const MoodWink({
     super.key,
     this.size = 128,
     this.wink = 1,
     this.color = AppTheme.accent,
+    this.expression = MoodWinkExpression.wink,
   });
 
   @override
@@ -99,7 +142,11 @@ class MoodWink extends StatelessWidget {
     child: RepaintBoundary(
       child: CustomPaint(
         size: Size.square(size),
-        painter: MoodWinkPainter(wink: wink, color: color),
+        painter: MoodWinkPainter(
+          wink: wink,
+          color: color,
+          expression: expression,
+        ),
       ),
     ),
   );
@@ -108,17 +155,27 @@ class MoodWink extends StatelessWidget {
 class MoodWinkPainter extends CustomPainter {
   final double wink;
   final Color color;
-  const MoodWinkPainter({required this.wink, required this.color});
+  final MoodWinkExpression expression;
+  const MoodWinkPainter({
+    required this.wink,
+    required this.color,
+    this.expression = MoodWinkExpression.wink,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.scale(size.width / 100, size.height / 100);
-    canvas.drawPath(MoodWinkGeometry.path(wink), Paint()..color = color);
+    canvas.drawPath(
+      MoodWinkGeometry.path(wink, expression: expression),
+      Paint()..color = color,
+    );
     canvas.restore();
   }
 
   @override
   bool shouldRepaint(MoodWinkPainter oldDelegate) =>
-      wink != oldDelegate.wink || color != oldDelegate.color;
+      wink != oldDelegate.wink ||
+      color != oldDelegate.color ||
+      expression != oldDelegate.expression;
 }

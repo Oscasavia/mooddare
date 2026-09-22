@@ -31,3 +31,18 @@ and saved sessions still use the existing AuthGate.
 Regression tests in `test/branded_startup_test.dart` cover timing, failure and
 retry, initialization races, reduced motion, disposal, resizing, eye-only
 deformation, adaptive mask safety, and iOS icon sizes/opacity.
+
+## In-app personality
+
+Discover uses a 26px open-eyed mark when inactive and the lavender wink when
+selected. The navigation label remains visible and accessible. Login and signup
+share a compact 64px wink above the 128px wordmark. These are static accents;
+only startup animates.
+
+Find people uses the wink to invite a first search and an `x_x` expression for
+no matches, with a flat mouth and the original silhouette. Loading, errors and
+search results retain their distinct behavior. `AppEmptyState.illustration`
+allows other screens to opt into branded artwork without replacing useful
+status icons everywhere. Keyboard/large-text layouts, search transitions and
+geometry are covered in `test/brand_personality_test.dart` and the existing
+entry/search suites.

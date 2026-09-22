@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:mooddare/core/user_message.dart';
+import 'package:mooddare/core/widgets/mooddare_brand_header.dart';
 import '../../data/repositories/auth_repository.dart';
 import 'forgot_password_screen.dart';
 
@@ -82,6 +83,8 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      const MoodDareBrandHeader(),
+                      const SizedBox(height: 28),
                       Text(
                         _signUp ? 'Your next chapter.' : 'Welcome back.',
                         style: const TextStyle(

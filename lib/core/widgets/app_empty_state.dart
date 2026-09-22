@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
 
 class AppEmptyState extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+  final Widget? illustration;
   final String title;
   final String message;
   final String? actionLabel;
   final VoidCallback? onAction;
   const AppEmptyState({
     super.key,
-    required this.icon,
+    this.icon,
+    this.illustration,
     required this.title,
     required this.message,
     this.actionLabel,
     this.onAction,
-  });
+  }) : assert(icon != null || illustration != null);
   @override
   Widget build(BuildContext context) => Center(
     child: SingleChildScrollView(
@@ -21,20 +23,21 @@ class AppEmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              color: Theme.of(
-                context,
-              ).colorScheme.primary.withValues(alpha: .1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              icon,
-              size: 36,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
+          illustration ??
+              Container(
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: .1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  size: 36,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
           const SizedBox(height: 20),
           Text(
             title,

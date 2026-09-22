@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mooddare/core/app_routes.dart';
+import 'package:mooddare/core/branding/mood_wink.dart';
+import 'package:mooddare/core/widgets/app_empty_state.dart';
 import 'package:mooddare/features/feed/presentation/widgets/author_identity.dart';
 import 'package:mooddare/models/user_model.dart';
 import '../../data/social_repository.dart';
@@ -107,12 +109,10 @@ class _FindPeopleScreenState extends State<FindPeopleScreen> {
           child: const Text('Could not load recent searches. Retry'),
         ),
       if (_recent.isEmpty)
-        const Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'Find your people\nSearch a username to connect and follow along.',
-            textAlign: TextAlign.center,
-          ),
+        const AppEmptyState(
+          illustration: MoodWink(size: 80),
+          title: 'Find your people',
+          message: 'Search a username to connect and follow along.',
         )
       else ...[
         Row(
@@ -334,12 +334,14 @@ class _FindPeopleScreenState extends State<FindPeopleScreen> {
                           ),
                         )
                       else if (people.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Text(
-                            'No matching people',
-                            textAlign: TextAlign.center,
+                        const AppEmptyState(
+                          illustration: MoodWink(
+                            size: 80,
+                            expression: MoodWinkExpression.noResults,
                           ),
+                          title: 'No matching people',
+                          message:
+                              'Try another username or check the spelling.',
                         ),
                       if (!_busy && !_error && _page?.next != null)
                         Center(

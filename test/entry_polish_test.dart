@@ -191,6 +191,8 @@ void main() {
           () => precacheImage(logo.image, tester.element(button)),
         );
         expect(find.byIcon(Icons.login), findsNothing);
+        await tester.ensureVisible(button);
+        await tester.pumpAndSettle();
         await tester.tap(button);
         await tester.pump();
         expect(repo.googleCalls, 1);
@@ -200,6 +202,8 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(AuthFormScreen), findsOneWidget);
         repo.fail = true;
+        await tester.ensureVisible(button);
+        await tester.pumpAndSettle();
         await tester.tap(button);
         await tester.pumpAndSettle();
         expect(

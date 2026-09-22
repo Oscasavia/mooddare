@@ -5,6 +5,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mooddare/core/app_theme.dart';
+import 'package:mooddare/core/branding/mood_wink.dart';
 import 'package:mooddare/features/profile/data/social_repository.dart';
 import 'package:mooddare/features/profile/presentation/screens/find_people_screen.dart';
 import 'package:mooddare/models/user_model.dart';
@@ -102,6 +103,42 @@ void main() {
     await tester.enterText(find.byType(TextField), text);
     await tester.pump(const Duration(milliseconds: 301));
   }
+
+  testWidgets(
+    'mascot distinguishes discovery, loading, no results and errors',
+    (tester) async {
+      await open(tester, scale: 2);
+      expect(
+        tester.widget<MoodWink>(find.byType(MoodWink)).expression,
+        MoodWinkExpression.wink,
+      );
+      await search(tester, 'missing');
+      expect(find.byType(MoodWink), findsNothing);
+      repo.pending.last.complete(const PeoplePage([]));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<MoodWink>(find.byType(MoodWink)).expression,
+        MoodWinkExpression.noResults,
+      );
+      expect(find.text('No matching people'), findsOneWidget);
+      expect(
+        find.text('Try another username or check the spelling.'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await search(tester, 'offline');
+      repo.pending.last.completeError(StateError('offline'));
+      await tester.pumpAndSettle();
+      expect(find.byType(MoodWink), findsNothing);
+      expect(find.text('Could not search people. Retry'), findsOneWidget);
+      await tester.tap(find.byTooltip('Clear search'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<MoodWink>(find.byType(MoodWink)).expression,
+        MoodWinkExpression.wink,
+      );
+    },
+  );
 
   testWidgets(
     'debounces, ignores stale results, clears pending searches and safely disposes',
