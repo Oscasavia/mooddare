@@ -24,10 +24,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
-    }
-
     defaultConfig {
         // Keep in sync with Firebase. Choose the store application ID before release.
         applicationId = "com.example.mooddare"
@@ -56,6 +52,12 @@ android {
         }
     }
 
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+    }
 }
 
 flutter {
