@@ -15,6 +15,9 @@ class AccountRepository {
     final user = (auth ?? FirebaseAuth.instance).currentUser;
     if (user == null) throw StateError('Not signed in');
     final token = await user.getIdTokenResult(true);
+    if ((auth ?? FirebaseAuth.instance).currentUser?.uid != user.uid) {
+      throw FirebaseAuthException(code: 'user-mismatch');
+    }
     final signedIn = token.authTime;
     if (!user.isAnonymous &&
         (signedIn == null ||

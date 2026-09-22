@@ -640,7 +640,7 @@ class _DareProofCardState extends State<DareProofCard>
                           value.isInitialized && !value.isPlaying && !_scrubbing
                           ? const Center(
                               child: Icon(
-                                Icons.play_circle_outline,
+                                Icons.play_arrow_rounded,
                                 size: 60,
                                 color: Colors.white70,
                               ),

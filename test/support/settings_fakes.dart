@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/widgets.dart';
 import 'package:mooddare/features/settings/data/settings_repository.dart';
 
@@ -44,9 +45,26 @@ class MemorySettings implements SettingsRepository {
     if (failAction) throw StateError('Offline');
   }
 
+  bool needsVerification = false,
+      rejectVerification = false,
+      cancelVerification = false;
+  int verifications = 0;
+  @override
+  Future<bool> reauthenticateForDeletion({String? password}) async {
+    verifications++;
+    currentPassword = password;
+    if (cancelVerification) return false;
+    if (rejectVerification) throw FirebaseAuthException(code: 'wrong-password');
+    needsVerification = false;
+    return true;
+  }
+
   @override
   Future<void> deleteAccount() async {
     deletions++;
+    if (needsVerification) {
+      throw FirebaseAuthException(code: 'requires-recent-login');
+    }
     await actionGate;
     if (failAction) throw StateError('Offline');
   }

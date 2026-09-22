@@ -6,7 +6,8 @@ import '../../data/repositories/auth_repository.dart';
 
 class UsernameScreen extends StatefulWidget {
   final bool isGuest;
-  const UsernameScreen({super.key, required this.isGuest});
+  final Future<void> Function(String)? saveUsername;
+  const UsernameScreen({super.key, required this.isGuest, this.saveUsername});
   @override
   State<UsernameScreen> createState() => _UsernameScreenState();
 }
@@ -23,7 +24,11 @@ class _UsernameScreenState extends State<UsernameScreen> {
       _error = null;
     });
     try {
-      await UserRepository().saveProfile(username: _controller.text);
+      if (widget.saveUsername != null) {
+        await widget.saveUsername!(_controller.text.trim());
+      } else {
+        await UserRepository().saveProfile(username: _controller.text);
+      }
     } catch (e) {
       if (mounted) setState(() => _error = userMessage(e));
     } finally {
@@ -50,8 +55,6 @@ class _UsernameScreenState extends State<UsernameScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.alternate_email, size: 52),
-                  const SizedBox(height: 24),
                   const Text(
                     'Make a name\nfor yourself.',
                     style: TextStyle(
@@ -75,6 +78,7 @@ class _UsernameScreenState extends State<UsernameScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Username',
                       prefixText: '@',
+                      errorMaxLines: 3,
                     ),
                     onFieldSubmitted: (_) => _save(),
                   ),

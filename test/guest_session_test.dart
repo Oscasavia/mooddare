@@ -18,7 +18,7 @@ class SessionUser implements User {
 class SessionAuth implements FirebaseAuth {
   @override
   User? currentUser;
-  final changes = StreamController<User?>();
+  final changes = StreamController<User?>.broadcast();
   Completer<void>? signOutGate;
   bool failSignOut = false;
   int signOuts = 0;
@@ -128,6 +128,48 @@ void main() {
     expect(admitted, ['email-member', 'google-member']);
     expect(auth.signOuts, 0);
   });
+
+  testWidgets(
+    'member session survives backgrounding, auth refresh and rebuilt app UI',
+    (tester) async {
+      await mount(tester);
+      final member = SessionUser('member');
+      auth.emit(member);
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      auth.emit(member);
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox());
+      await mount(tester);
+      auth.emit(auth.currentUser);
+      await tester.pumpAndSettle();
+      expect(find.text('Member feed'), findsOneWidget);
+      expect(auth.signOuts, 0);
+      await auth.signOut();
+      await tester.pumpAndSettle();
+      expect(find.text('Find your next dare'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'session stream errors show retry without signing out or presenting login',
+    (tester) async {
+      await mount(tester);
+      auth.emit(SessionUser('member'));
+      await tester.pumpAndSettle();
+      auth.changes.addError(StateError('offline'));
+      await tester.pumpAndSettle();
+      expect(find.text('Could not restore your session'), findsOneWidget);
+      expect(find.text('Find your next dare'), findsNothing);
+      expect(auth.signOuts, 0);
+      await tester.tap(find.text('Retry'));
+      await tester.pump();
+      auth.emit(auth.currentUser);
+      await tester.pumpAndSettle();
+      expect(find.text('Member feed'), findsOneWidget);
+    },
+  );
 
   testWidgets('new member can sign in after an old guest is cleared', (
     tester,

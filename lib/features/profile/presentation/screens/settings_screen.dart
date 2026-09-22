@@ -6,6 +6,7 @@ import 'package:mooddare/features/settings/data/settings_repository.dart';
 import 'package:mooddare/features/settings/presentation/password_screen.dart';
 import 'package:mooddare/features/settings/presentation/help_screen.dart';
 import 'blocked_accounts_screen.dart';
+import 'package:mooddare/features/settings/presentation/delete_account_screen.dart';
 import 'edit_profile_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -81,15 +82,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _accountAction({bool delete = false}) async {
     if (_busy || _confirming) return;
+    if (delete) {
+      _open(
+        DeleteAccountScreen(
+          repository: _repo,
+          signedOutBuilder: widget.signedOutBuilder,
+        ),
+      );
+      return;
+    }
     _confirming = true;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(delete ? 'Delete your account?' : 'Sign out of MoodDare?'),
+        title: const Text('Sign out of MoodDare?'),
         content: Text(
-          delete
-              ? 'Your profile, posts, uploaded media, post likes and comments will be removed. This cannot be undone. You may need to sign in again first.'
-              : _repo.account.guest
+          _repo.account.guest
               ? 'This guest account has no sign-in method. Signing out can lose access to its moments. Create an account from your profile first if you want to keep them.'
               : 'You can sign back in whenever you’re ready.',
         ),
@@ -99,14 +107,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            style: delete
-                ? FilledButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.error,
-                    foregroundColor: Theme.of(context).colorScheme.onError,
-                  )
-                : null,
             onPressed: () => Navigator.pop(context, true),
-            child: Text(delete ? 'Delete account' : 'Sign out'),
+            child: const Text('Sign out'),
           ),
         ],
       ),
@@ -115,11 +117,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirmed != true || !mounted) return;
     setState(() => _busy = true);
     try {
-      if (delete) {
-        await _repo.deleteAccount();
-      } else {
-        await _repo.signOut();
-      }
+      await _repo.signOut();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(

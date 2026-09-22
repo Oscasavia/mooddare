@@ -563,7 +563,8 @@ void main() {
         );
         await tapMedia(tester);
         expect(video.playing[2], isFalse);
-        expect(find.byIcon(Icons.play_circle_outline), findsOneWidget);
+        expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+        expect(find.byIcon(Icons.play_circle_outline), findsNothing);
         tester.binding.handleAppLifecycleStateChanged(
           AppLifecycleState.inactive,
         );

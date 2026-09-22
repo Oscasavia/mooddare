@@ -16,13 +16,24 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   late final _firebaseAuth = widget.auth ?? FirebaseAuth.instance;
-  late final _auth = _firebaseAuth.userChanges();
+  late Stream<User?> _auth = _firebaseAuth.userChanges();
   @override
   Widget build(BuildContext context) => StreamBuilder<User?>(
     stream: _auth,
     builder: (context, snapshot) {
       if (snapshot.connectionState == ConnectionState.waiting) {
         return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+      if (snapshot.hasError) {
+        return Scaffold(
+          body: AppEmptyState(
+            icon: Icons.cloud_off_outlined,
+            title: 'Could not restore your session',
+            message: 'Check your connection and try again.',
+            actionLabel: 'Retry',
+            onAction: () => setState(() => _auth = _firebaseAuth.userChanges()),
+          ),
+        );
       }
       final user = snapshot.data;
       if (user == null) return const WelcomeScreen();

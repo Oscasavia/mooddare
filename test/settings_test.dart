@@ -82,7 +82,7 @@ void main() {
       },
     );
   }
-  for (final delete in [false, true]) {
+  for (final delete in [false]) {
     final label = delete ? 'Delete account' : 'Sign out';
     testWidgets(
       '$label cancels safely, failure can retry, and pending action blocks duplicates/back',

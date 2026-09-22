@@ -90,6 +90,29 @@ test('a username cannot be released while the profile still claims it', async ()
 
 const comment = (uid = 'bob', text = 'Love this!') => ({authorId: uid, text, createdAt: serverTimestamp()});
 for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
+  test(`${policy}: usernames reject punctuation-only, numeric-only and ambiguous underscores while preserving unchanged legacy handles`, async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({projectId: 'demo-mooddare',
+      firestore: {rules: await readFile(new URL(`../../${policy}`, import.meta.url), 'utf8')},
+      storage: {rules: await readFile(new URL('../../storage.rules', import.meta.url), 'utf8')},
+    });
+    const alice = db('alice');
+    const save = name => {
+      const batch = writeBatch(alice);
+      batch.set(doc(alice, 'users/alice'), {id:'alice', username:name, username_lower:name.toLowerCase(), createdAt:serverTimestamp()});
+      batch.set(doc(alice, `usernames/${name.toLowerCase()}`), {uid:'alice'});
+      return batch.commit();
+    };
+    for (const name of ['___','123','a__b','_alice','alice_','a.b','a-b','@alice','ab','a'.repeat(21)]) await assertFails(save(name));
+    await assertSucceeds(save('Mood_123'));
+    await assertFails(updateDoc(doc(db('alice'), 'users/alice'), {username:'___', username_lower:'___'}));
+    await env.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), 'users/legacy'), {id:'legacy', username:'___', username_lower:'___', createdAt:Timestamp.now()});
+      await setDoc(doc(context.firestore(), 'usernames/___'), {uid:'legacy'});
+    });
+    await assertSucceeds(updateDoc(doc(db('legacy'), 'users/legacy'), {bio:'Still here'}));
+  });
+
   test(`${policy}: username discovery allows signed-in prefix queries but denies signed-out requests`, async () => {
     await env.cleanup();
     env = await initializeTestEnvironment({projectId: 'demo-mooddare',
