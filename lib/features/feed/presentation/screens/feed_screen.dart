@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mooddare/features/dares/data/repositories/dares_repository.dart';
 import 'package:mooddare/core/widgets/app_empty_state.dart';
+import 'package:mooddare/core/widgets/mooddare_wordmark.dart';
 import 'package:mooddare/models/post_model.dart';
 import '../../data/repositories/post_repository.dart';
 import '../widgets/dare_proof_card.dart';
@@ -154,7 +155,7 @@ class _FeedScreenState extends State<FeedScreen> {
       onPointerUp: (_) => _disarmExit(),
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('mooddare'),
+          title: const MoodDareWordmark(),
           bottom: _moodId == null
               ? null
               : PreferredSize(

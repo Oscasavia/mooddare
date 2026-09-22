@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mooddare/core/app_theme.dart';
+import 'package:mooddare/core/widgets/mooddare_wordmark.dart';
 import 'package:mooddare/features/auth/data/repositories/auth_repository.dart';
 import 'package:mooddare/features/auth/presentation/screens/auth_form_screen.dart';
 import 'package:mooddare/features/auth/presentation/screens/welcome_screen.dart';
@@ -140,6 +141,8 @@ void main() {
         expect(find.text('Explore as a guest'), findsNothing);
         expect(find.text('📸'), findsNothing);
         expect(find.byType(WelcomeArtwork), findsOneWidget);
+        expect(find.byType(MoodDareWordmark), findsOneWidget);
+        expect(find.text('MOODDARE'), findsNothing);
         expect(find.text('A little dare.\nA great story.'), findsOneWidget);
         expect(find.byType(FilledButton), findsOneWidget);
         expect(find.byType(OutlinedButton), findsOneWidget);

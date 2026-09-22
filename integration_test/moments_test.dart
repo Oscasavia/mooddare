@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:mooddare/core/widgets/mooddare_wordmark.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
@@ -88,7 +89,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('mooddare'), findsOneWidget);
+        expect(find.byType(MoodDareWordmark), findsOneWidget);
         await tester.tap(find.byTooltip('Filter by mood'));
         await tester.pumpAndSettle();
         await tester.enterText(
@@ -100,7 +101,16 @@ void main() {
         await tester.tap(find.widgetWithText(ListTile, 'Happy'));
         await tester.pumpAndSettle();
         expect(repository.selectedMood, 'happy');
-        expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.cover);
+        expect(
+          tester
+              .widget<Image>(
+                find.byWidgetPredicate(
+                  (widget) => widget is Image && widget.image is NetworkImage,
+                ),
+              )
+              .fit,
+          BoxFit.cover,
+        );
         for (
           var i = 0;
           i < 50 && find.byType(RawImage).evaluate().isEmpty;
@@ -112,7 +122,16 @@ void main() {
         await tester.tap(find.text(photo.dareText));
         await tester.pumpAndSettle();
         expect(find.byType(PostDetailsScreen), findsOneWidget);
-        expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.contain);
+        expect(
+          tester
+              .widget<Image>(
+                find.byWidgetPredicate(
+                  (widget) => widget is Image && widget.image is NetworkImage,
+                ),
+              )
+              .fit,
+          BoxFit.contain,
+        );
         await tester.pageBack();
         await tester.pumpAndSettle();
         await tester.drag(find.byType(PageView), const Offset(0, -650));

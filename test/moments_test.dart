@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mooddare/core/widgets/mooddare_wordmark.dart';
 import 'package:flutter/services.dart';
 import 'package:mooddare/features/feed/presentation/video_sound.dart';
 import 'package:mooddare/features/feed/presentation/widgets/comments_sheet.dart';
@@ -422,6 +423,9 @@ void main() {
     final repo = MemoryPosts([moment('accessible')])..failSending = true;
     addTearDown(repo.commentChanges.close);
     await openFeed(tester, repo, size: const Size(320, 700), textScale: 2);
+    final branding = tester.getRect(find.byType(MoodDareWordmark));
+    final people = tester.getRect(find.byTooltip('Find people'));
+    expect(branding.right, lessThanOrEqualTo(people.left));
     expect(tester.takeException(), isNull);
     await tester.tap(find.byTooltip('Comments'));
     await tester.pumpAndSettle();
@@ -441,16 +445,34 @@ void main() {
     (tester) async {
       final post = moment('photo');
       await openFeed(tester, MemoryPosts([post]));
-      expect(find.text('mooddare'), findsOneWidget);
+      expect(find.byType(MoodDareWordmark), findsOneWidget);
       expect(find.text('Little moments'), findsNothing);
-      expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.cover);
+      expect(
+        tester
+            .widget<Image>(
+              find.byWidgetPredicate(
+                (widget) => widget is Image && widget.image is NetworkImage,
+              ),
+            )
+            .fit,
+        BoxFit.cover,
+      );
       await tapMedia(tester);
       expect(find.byType(PostDetailsScreen), findsOneWidget);
       expect(
         tester.widget<PostDetailsScreen>(find.byType(PostDetailsScreen)).post,
         same(post),
       );
-      expect(tester.widget<Image>(find.byType(Image)).fit, BoxFit.contain);
+      expect(
+        tester
+            .widget<Image>(
+              find.byWidgetPredicate(
+                (widget) => widget is Image && widget.image is NetworkImage,
+              ),
+            )
+            .fit,
+        BoxFit.contain,
+      );
       await tapMedia(tester);
       expect(
         find.byType(PostDetailsScreen),
@@ -459,7 +481,7 @@ void main() {
       );
       await tester.pageBack();
       await tester.pumpAndSettle();
-      expect(find.text('mooddare'), findsOneWidget);
+      expect(find.byType(MoodDareWordmark), findsOneWidget);
       expect(find.byType(PostDetailsScreen), findsNothing);
     },
   );

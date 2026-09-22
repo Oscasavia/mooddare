@@ -40,3 +40,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/google-g.png
+    - assets/branding/mooddare-wordmark.png

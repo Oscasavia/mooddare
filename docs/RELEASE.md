@@ -221,3 +221,9 @@ The clean GitHub build exposed a missed toolchain dependency in the Auth upgrade
 Validation: `./gradlew :app:assembleDebug :app:testDebugUnitTest -Ptarget-platform=android-arm64 --rerun-tasks --no-build-cache` passed with all 341 tasks executed, ensuring native compilation was not reused from the earlier local build. Compatibility reference: [Android Gradle Plugin 8.13.2 release notes](https://developer.android.com/build/releases/agp-8-13-0-release-notes).
 
 The broader Flutter APK build also builds library modules. Its stricter AAR validation exposed API 33 declarations in the pinned image-cropper and video-thumbnail plugins despite their AndroidX dependencies requiring API 34+. Library compile SDKs now have an API 35 floor matching the app, with higher declarations preserved and minimum/target SDKs unchanged. The Flutter probe APK built successfully and the native session restart/sign-out probe passed with the aligned toolchain. All 24 native unit tests passed in the forced build.
+
+## Approved wordmark on Moments and Welcome — 2026-09-22
+
+The approved custom lowercase MoodDare lettering replaces the Moments title and Welcome brand label. Both use one local source and shared widget, with uniform lavender, a transparent painted background and a MoodDare accessibility heading. The existing launcher icon and Welcome artwork remain pending further icon design.
+
+Validation: all 253 Flutter tests passed, Dart line coverage 4707/5712 (82.41%), clean analysis and formatting gate. The new render test loads the actual asset, verifies brand semantics, visible lavender lettering and background removal against a contrasting surface. Existing entry navigation and narrow/large-text Moments checks pass; media-fit assertions now distinguish post photos from branding. Android APK built and installed in place on Samsung, with Moments visually checked there and Welcome checked on the emulator. No Firebase policy changes were needed.

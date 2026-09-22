@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mooddare/core/widgets/mooddare_wordmark.dart';
 import '../widgets/welcome_artwork.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
@@ -16,12 +17,9 @@ class WelcomeScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'MOODDARE',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 4,
-                  ),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: MoodDareWordmark(width: 280),
                 ),
                 const SizedBox(height: 48),
                 const WelcomeArtwork(),
