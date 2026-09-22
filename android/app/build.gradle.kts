@@ -63,6 +63,9 @@ flutter {
 }
 
 dependencies {
+    // FlutterFire 5.x otherwise selects Auth 23.2.1, whose encrypted session
+    // persistence has a documented regression. Keep Auth on the repaired line.
+    implementation("com.google.firebase:firebase-auth:24.2.0")
     implementation("androidx.media3:media3-transformer:1.5.1")
     testImplementation("junit:junit:4.13.2")
     // Bundled detector works offline, including on the first launch.

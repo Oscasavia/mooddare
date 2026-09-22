@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Auth preferences contain encrypted device-bound keys. Restoring them on
+     another installation can make future sign-ins impossible to persist. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="." />
+</full-backup-content>
