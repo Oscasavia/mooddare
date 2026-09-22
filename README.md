@@ -82,6 +82,16 @@ Premium previews are presentation only, not a paid-content security boundary. Se
 
 ## Camera and photo studio
 
+On **Make it yours**, Crop photo opens an on-device crop editor with Free,
+Original, Square, 3:4 and 9:16 framing. Drag the corners to resize or drag inside
+to reposition. Done applies the selection; Back cancels. Reset crop restores the
+entire capture without removing beauty adjustments. Reopening always uses the
+full adjusted capture, avoiding cumulative cropping and JPEG recompression.
+Cropping happens after beauty processing, so face masks and baked live lenses
+stay aligned. Compare keeps the chosen crop; Save, Share and Post all export the
+same cropped result. Run `flutter test test/photo_cropping_test.dart` and the
+device check `flutter test integration_test/photo_crop_test.dart -d emulator-5554`.
+
 Choose Discover → mood → Open camera. The selected mood has its own color treatment and a focused dare card; tap the shuffle icon for another dare. Long dares scroll while the camera action stays visible. Android opens directly into the live-lens camera with floating controls. Framing starts at **9:16**; tap the ratio button beneath camera flip to choose **3:4** or **Full** (the screen shape). Tap the shutter for a photo. After capture, the review screen gives the photo most of the space. Tap the sliders button to open Adjust, swipe the circular icon wheel (or tap a neighboring icon) to choose Smooth, Light or Warmth, and use the slider below it. The wheel wraps in both directions, shows the selected effect name above it, and preserves each adjustment when switching. Controls float over a shaded lower part of the photo; opening them never changes the photo framing or rounded corners. Effect icons have no tap splash. Reset is inside Adjust; Compare appears after an edit. Save and Share are in the top-right menu, and Post dare is the primary action. Smoothing starts at zero. The strongest usable front-facing face is processed; eyes, mouth and nose are protected with a feathered mask. If no suitable face is found, smoothing is disabled and color adjustments remain available.
 
 The implementation combines **free on-device ML Kit face detection on Android** with our own edge-preserving pixel processing in a Dart isolate. ML Kit is a Google SDK, not an open-source beauty engine. No camera frames are uploaded for processing. Photos are normalized upright and limited to a 2048-pixel longest edge to bound memory and processing cost. Save, share and post use the same edited JPEG.

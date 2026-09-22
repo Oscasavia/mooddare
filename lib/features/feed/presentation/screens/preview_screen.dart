@@ -3,14 +3,16 @@ import '../../../camera/presentation/video_adjustments_panel.dart';
 import 'package:mooddare/core/widgets/share_icon.dart';
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:gal/gal.dart';
 import 'package:uuid/uuid.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 import '../../../camera/data/photo_editor.dart';
 import '../../../camera/domain/photo_processing.dart';
+import '../../../camera/domain/photo_crop.dart';
+import '../../../camera/presentation/photo_crop_screen.dart';
 import '../../../camera/presentation/photo_adjustments_panel.dart';
 import '../../../camera/presentation/photo_review_frame.dart';
 import '../../data/repositories/post_repository.dart';
@@ -49,6 +51,8 @@ class _PreviewScreenState extends State<PreviewScreen>
   Future<void>? _trimLoopSeek;
   bool _showVideoEdits = false;
   Uint8List? _rendered;
+  Uint8List? _fullRendered, _comparison;
+  Rect _crop = fullPhotoCrop;
   PhotoAdjustments _settings = const PhotoAdjustments();
   bool _loading = true, _busy = false, _rendering = false, _original = false;
   String? _error;
@@ -83,6 +87,8 @@ class _PreviewScreenState extends State<PreviewScreen>
         }
         _editor = editor;
         _rendered = editor.original;
+        _fullRendered = editor.original;
+        _comparison = editor.original;
       } else {
         final video = VideoPlayerController.file(widget.mediaFile);
         _video = video;
@@ -123,8 +129,14 @@ class _PreviewScreenState extends State<PreviewScreen>
     _processing = true;
     final revision = _revision;
     try {
-      final bytes = await _editor!.render(_settings);
-      if (mounted && revision == _revision) setState(() => _rendered = bytes);
+      final full = await _editor!.render(_settings);
+      final bytes = await compute(cropPhoto, {'bytes': full, 'crop': _crop});
+      if (mounted && revision == _revision) {
+        setState(() {
+          _fullRendered = full;
+          _rendered = bytes;
+        });
+      }
     } catch (_) {
       if (mounted && revision == _revision) {
         _message('Could not apply these adjustments. Try again.');
@@ -146,6 +158,41 @@ class _PreviewScreenState extends State<PreviewScreen>
   void _message(String text) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    }
+  }
+
+  Future<void> _cropPhoto() async {
+    if (_busy || _loading || _rendering || _error != null) return;
+    setState(() => _busy = true);
+    try {
+      final crop = await Navigator.of(context).push<Rect>(
+        MaterialPageRoute(
+          builder: (_) =>
+              PhotoCropScreen(photo: _fullRendered!, initialCrop: _crop),
+        ),
+      );
+      if (crop == null || !mounted) return;
+      // Keep the full capture and full adjusted render for lossless recropping.
+      // Commit both previews together only after both exports succeed.
+      final rendered = await compute(cropPhoto, {
+        'bytes': _fullRendered!,
+        'crop': crop,
+      });
+      final comparison = await compute(cropPhoto, {
+        'bytes': _editor!.original,
+        'crop': crop,
+      });
+      if (!mounted) return;
+      setState(() {
+        _crop = crop;
+        _rendered = rendered;
+        _comparison = comparison;
+        _original = false;
+      });
+    } catch (_) {
+      _message('Could not crop this photo. Your previous edit is unchanged.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -347,7 +394,7 @@ class _PreviewScreenState extends State<PreviewScreen>
     if (_isPhoto) {
       return PhotoReviewFrame(
         photo: Image.memory(
-          _original ? _editor!.original : _rendered!,
+          _original ? _comparison! : _rendered!,
           key: const ValueKey('capture_preview'),
           fit: BoxFit.contain,
           gaplessPlayback: true,
@@ -581,6 +628,20 @@ class _PreviewScreenState extends State<PreviewScreen>
                             const SizedBox(width: 12),
                           ],
                           if (canAdjust) ...[
+                            IconButton.filledTonal(
+                              tooltip: 'Crop photo',
+                              onPressed: blocked ? null : _cropPhoto,
+                              style: IconButton.styleFrom(
+                                splashFactory: NoSplash.splashFactory,
+                                highlightColor: Colors.transparent,
+                                minimumSize: const Size(48, 52),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              icon: const Icon(Icons.crop),
+                            ),
+                            const SizedBox(width: 8),
                             IconButton.filledTonal(
                               tooltip: _showAdjustments
                                   ? 'Done adjusting'

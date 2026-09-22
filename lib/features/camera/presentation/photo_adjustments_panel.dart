@@ -173,42 +173,54 @@ class _PhotoAdjustmentsPanelState extends State<PhotoAdjustmentsPanel> {
             ),
           ),
         ),
-        Row(
-          children: [
-            Expanded(
-              child: Slider(
-                label: '${_tool.label} ${(value * 100).round()}',
-                semanticFormatterCallback: (value) =>
-                    '${_tool.label} ${(value * 100).round()}',
-                value: value,
-                min: _tool == _PhotoTool.smooth ? 0 : -1,
-                onChanged: widget.enabled && available
-                    ? (value) => widget.onChanged(switch (_tool) {
-                        _PhotoTool.smooth => settings.copyWith(
-                          smoothing: value,
-                        ),
-                        _PhotoTool.light => settings.copyWith(
-                          brightness: value,
-                        ),
-                        _PhotoTool.warmth => settings.copyWith(warmth: value),
-                      })
-                    : null,
-              ),
-            ),
-            SizedBox(
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final slider = Slider(
+              label: '${_tool.label} ${(value * 100).round()}',
+              semanticFormatterCallback: (value) =>
+                  '${_tool.label} ${(value * 100).round()}',
+              value: value,
+              min: _tool == _PhotoTool.smooth ? 0 : -1,
+              onChanged: widget.enabled && available
+                  ? (value) => widget.onChanged(switch (_tool) {
+                      _PhotoTool.smooth => settings.copyWith(smoothing: value),
+                      _PhotoTool.light => settings.copyWith(brightness: value),
+                      _PhotoTool.warmth => settings.copyWith(warmth: value),
+                    })
+                  : null,
+            );
+            final valueLabel = SizedBox(
               width: 44,
               child: Text(
                 '${(value * 100).round()}',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.labelMedium,
               ),
-            ),
-            IconButton(
+            );
+            final reset = IconButton(
               tooltip: 'Reset adjustments',
               onPressed: widget.enabled ? widget.onReset : null,
               icon: const Icon(Icons.restart_alt, size: 22),
-            ),
-          ],
+            );
+            if (constraints.maxWidth < 180) {
+              return Column(
+                children: [
+                  slider,
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    children: [valueLabel, reset],
+                  ),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: slider),
+                valueLabel,
+                reset,
+              ],
+            );
+          },
         ),
         if (!available && widget.notice != null)
           Padding(
