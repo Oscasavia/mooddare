@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101016">
+  <meta name="description" content="Pick a mood. Take a dare. Make a moment worth sharing. Meet MoodDare: everyday adventures, creative camera tools, and your kind of people.">
+  <meta property="og:title" content="MoodDare — A little dare. A great story.">
+  <meta property="og:description" content="Every mood is the start of something. Discover MoodDare, the app for turning everyday energy into little adventures.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="assets/social-preview.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <title>MoodDare — A little dare. A great story.</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header wrap">
+    <a class="brand" href="./" aria-label="MoodDare home"><img src="assets/wordmark.png" width="296" height="49" alt="mooddare"></a>
+    <nav aria-label="Main navigation">
+      <a href="#how-it-works">How it works</a>
+      <a href="#inside">Inside the app</a>
+      <a href="#film">The film</a>
+    </nav>
+    <a class="button button-small button-outline" href="#downloads">Get the app <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow">EVERY MOOD. A NEW POSSIBILITY.</p>
+        <h1 id="hero-title">A little dare.<br>A <span class="handwritten">great story.</span></h1>
+        <p class="hero-description">Follow your curiosity. Capture the unexpected.<br class="desktop-break"> Turn an ordinary day into a moment that’s yours.</p>
+        <div class="hero-actions">
+          <a class="button button-lavender" href="#downloads">Discover MoodDare <span aria-hidden="true">↗</span></a>
+          <a class="text-link" href="#inside">Take a look inside <span aria-hidden="true">↓</span></a>
+        </div>
+        <p class="availability">Coming soon for Android & iOS</p>
+      </div>
+      <div class="hero-art">
+        <div class="orb" aria-hidden="true"></div>
+        <img class="hero-wink" src="assets/mood-wink.svg" width="170" height="170" alt="" aria-hidden="true">
+        <div class="phone hero-phone phone-back"><img src="assets/dare.png" width="780" height="1688" alt="MoodDare’s Creative mood and a dare to draw your mood without lifting your pen."></div>
+        <div class="phone hero-phone phone-front"><img src="assets/discover.png" width="780" height="1688" alt="The MoodDare app’s two-column mood picker with Chill, Creative, Curious, and Energized moods." fetchpriority="high"></div>
+        <p class="art-caption">A mood. A moment. A little more you.</p>
+      </div>
+    </section>
+
+    <div class="chapter-line wrap" aria-hidden="true"><span>MADE FOR YOUR EVERYDAY ADVENTURES</span></div>
+
+    <section class="how-section section-pad" id="how-it-works" aria-labelledby="how-title">
+      <div class="wrap">
+        <div class="section-heading"><p class="eyebrow">SMALL PLANS. GOOD STORIES.</p><h2 id="how-title">Your next moment starts<br>with how you feel.</h2></div>
+        <div class="steps">
+          <article><span class="step-number">01</span><h3>Pick your mood.</h3><p>Feeling creative? A little curious? Find a mood that meets you where you are.</p></article>
+          <article><span class="step-number">02</span><h3>Follow the spark.</h3><p>A fresh perspective. An unexpected idea. A small dare to make the everyday feel different.</p></article>
+          <article><span class="step-number">03</span><h3>Make it a moment.</h3><p>Capture it, put your spin on it, and share it with your kind of people. Or keep the moment for yourself.</p></article>
+        </div>
+        <div class="mood-playground" data-active-mood="creative">
+          <div class="playground-copy"><p class="eyebrow">A TINY TASTE OF MOODDARE</p><h3>So, what’s<br>your mood?</h3><p>Pick one. Your next little adventure might already be here.</p>
+            <div class="mood-buttons" role="group" aria-label="Try a mood">
+              <button type="button" class="mood-button" data-mood="creative" aria-pressed="true">🎨 Creative</button>
+              <button type="button" class="mood-button" data-mood="chill" aria-pressed="false">🌿 Chill</button>
+              <button type="button" class="mood-button" data-mood="curious" aria-pressed="false">🔭 Curious</button>
+              <button type="button" class="mood-button" data-mood="happy" aria-pressed="false">☀️ Happy</button>
+            </div>
+          </div>
+          <div class="sample-dare" aria-live="polite" aria-atomic="true"><span id="sample-mood">YOUR CREATIVE DARE</span><p id="sample-text">Draw your mood without lifting your pen.</p><span class="sample-footnote">A small dare from the app. Make it your own. <span aria-hidden="true">↗</span></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="inside-section section-pad wrap" id="inside" aria-labelledby="inside-title">
+      <div class="inside-heading"><div><p class="eyebrow">CONSIDERED IN EVERY DETAIL</p><h2 id="inside-title">Your world.<br>A little more <span class="handwritten">possibility.</span></h2></div><p>From finding your mood to following a spark. A closer look at the MoodDare experience.</p></div>
+      <div class="screen-gallery">
+        <figure><button class="screen-button" type="button" data-screen="discover" aria-label="Enlarge the Discover screenshot"><span class="phone"><img src="assets/discover.png" alt="Discover: browse moods in a colorful two-column grid." width="780" height="1688" loading="lazy"></span><span class="screen-zoom" aria-hidden="true">↗</span></button><figcaption><span>01</span><div><h3>Find your energy</h3><p>A mood for the day you’re having.</p></div></figcaption></figure>
+        <figure><button class="screen-button" type="button" data-screen="dare" aria-label="Enlarge the Creative dare screenshot"><span class="phone"><img src="assets/dare.png" alt="A Creative dare with a button to open the camera." width="780" height="1688" loading="lazy"></span><span class="screen-zoom" aria-hidden="true">↗</span></button><figcaption><span>02</span><div><h3>Follow a little spark</h3><p>Every dare is a starting point.</p></div></figcaption></figure>
+        <figure><button class="screen-button" type="button" data-screen="welcome" aria-label="Enlarge the Welcome screenshot"><span class="phone"><img src="assets/welcome.png" alt="MoodDare’s Welcome screen with the winking mascot and Get started button." width="780" height="1688" loading="lazy"></span><span class="screen-zoom" aria-hidden="true">↗</span></button><figcaption><span>03</span><div><h3>Make yourself at home</h3><p>Your dares. Your moments. Your people.</p></div></figcaption></figure>
+      </div>
+      <p class="gallery-note">Screens from the app using built-in moods. Tap a screen for a closer look.</p>
+    </section>
+
+    <section class="features-section section-pad" aria-labelledby="features-title"><div class="wrap features-layout">
+      <div class="feature-title"><p class="eyebrow">YOUR MOMENT. YOUR WAY.</p><h2 id="features-title">Add a little<br><span class="handwritten">personality.</span></h2><img src="assets/mood-wink.svg" class="feature-wink" width="150" height="150" alt="" loading="lazy"></div>
+      <div class="feature-list">
+        <article><div><h3>Find a look that feels like you.</h3><p>Explore beauty lenses and fine-tune your look. Smooth, brighten, add warmth, or give your moment a rosy touch.</p><p class="feature-detail">Live beauty lenses are currently available in the Android build.</p></div></article>
+        <article><div><h3>A tap. A hold. A little magic.</h3><p>Tap for a photo. Hold for video. Use the timer, lock a recording hands-free, and trim or mute your clip before posting.</p></div></article>
+        <article><div><h3>Find your kind of people.</h3><p>Discover people, follow their adventures, and turn a comment into a conversation. A little encouragement goes a long way.</p></div></article>
+      </div>
+    </div></section>
+
+    <section class="film-section section-pad wrap" id="film" aria-labelledby="film-title">
+      <div class="film-heading"><p class="eyebrow">MEET THE MOOD</p><h2 id="film-title">A little preview.<br>A lot of personality.</h2></div>
+      <div class="film-frame" id="promo-container">
+        <div class="film-placeholder" id="promo-placeholder" role="img" aria-label="MoodDare promotional video placeholder. Film coming soon.">
+          <span class="film-tag">THE MOODDARE FILM · COMING SOON</span><img src="assets/mood-wink.svg" width="250" height="250" alt="" loading="lazy"><p>Good things take a little dare.<br><strong>Film coming soon.</strong></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="faq-section section-pad wrap" aria-labelledby="faq-title"><div><p class="eyebrow">A FEW LITTLE ANSWERS</p><h2 id="faq-title">Curious?<br>Good.</h2></div><div class="faq-list">
+      <details><summary>What is MoodDare?<span aria-hidden="true">+</span></summary><p>MoodDare is an app for mood-based challenges and shared moments. Choose how you feel, try a dare, and capture a photo or video. You can share it, meet people and join the conversation.</p></details>
+      <details><summary>Can I download it yet?<span aria-hidden="true">+</span></summary><p>Public download links are coming soon. The Android and iOS buttons below will become live when the builds are ready to share publicly.</p></details>
+      <details><summary>Do I have to share every dare?<span aria-hidden="true">+</span></summary><p>No. Sharing is optional, and every dare is an invitation. Skip anything that isn’t right for you. If you post a moment, other members can view, share and download it.</p></details>
+      <details><summary>What happens after 24 hours?<span aria-hidden="true">+</span></summary><p>Moments leave the feed after 24 hours. Your own posts remain on your profile until you delete them. Leaving the feed doesn’t delete the media or copies other people have saved.</p></details>
+      <details><summary>What are Daring and Epic?<span aria-hidden="true">+</span></summary><p>They’re upcoming premium mood collections. For now, they appear as locked previews in the app. No subscriptions are available through this site.</p></details>
+    </div></section>
+
+    <section class="download-section" id="downloads" aria-labelledby="download-title"><div class="wrap download-inner"><p class="eyebrow">MAKE A LITTLE ROOM FOR ADVENTURE</p><h2 id="download-title">Your next story<br>starts with <span class="handwritten">you.</span></h2><p>Bring your mood. We’ll bring the dare.</p><div class="store-links">
+      <button class="store-link" id="android-download" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m7 5-2-3m12 3 2-3M4 11a8 8 0 0 1 16 0v7H4zM8 18v4m8-4v4M1 11v6m22-6v6"/><circle cx="8" cy="8" r=".7" fill="currentColor"/><circle cx="16" cy="8" r=".7" fill="currentColor"/></svg><span><small>Coming soon on</small><strong>Android</strong></span></button>
+      <button class="store-link" id="ios-download" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="5" y="1.5" width="14" height="21" rx="3"/><path d="M9 4h6m-5 15h4"/></svg><span><small>Coming soon on</small><strong>iOS</strong></span></button>
+      </div><p class="download-status" id="download-status">Download links are on their way. No signup needed to explore this site.</p>
+    </div><img src="assets/mood-wink.svg" width="240" height="240" class="download-wink" alt="" loading="lazy"></section>
+  </main>
+
+  <footer class="site-footer wrap"><div><a class="brand" href="./" aria-label="MoodDare home"><img src="assets/wordmark.png" width="296" height="49" alt="mooddare" loading="lazy"></a><p>Stay curious. Be kind. Dare a little.</p></div><nav aria-label="Footer navigation"><a href="privacy.html">Privacy Policy</a><a href="terms.html">Terms of Use</a><a href="mailto:oscasavia@gmail.com">Say hello <span aria-hidden="true">↗</span></a></nav><p class="copyright">© <span id="year">2026</span> MoodDare.</p></footer>
+
+  <dialog id="screen-dialog" aria-labelledby="screen-caption"><button type="button" class="dialog-close" aria-label="Close screenshot">✕</button><img id="screen-image" alt="" width="780" height="1688"><p id="screen-caption"></p></dialog>
+</body>
+</html>

@@ -2,6 +2,15 @@
 
 A Flutter app for mood-based challenges, a photo beauty studio, and shared moments.
 
+## Marketing website
+
+The standalone landing page lives in [`website/`](website/README.md). Preview it
+with `npm --prefix website start` and open http://127.0.0.1:4173. It includes real
+app screenshots, an interactive mood sampler, FAQs, policy pages and clearly
+marked download/video placeholders. Set final HTTPS URLs in `website/config.js`.
+Run `npm --prefix website test` for the Chrome browser checks (Node 22+). The
+separate `firebase.landing.json` prepares Hosting; nothing is deployed automatically.
+
 ## Run locally
 
 Tested with Flutter 3.32.8 / Dart 3.8.1 and Java 17. Android's face detector is bundled in the app; it needs no API key or beauty SDK subscription.
