@@ -151,10 +151,10 @@ void main() {
         expect(find.text('MOODDARE'), findsNothing);
         expect(find.text('A little dare.\nA great story.'), findsOneWidget);
         expect(find.byType(FilledButton), findsOneWidget);
-        expect(find.byType(OutlinedButton), findsOneWidget);
+        expect(find.byType(OutlinedButton), findsNothing);
         for (final signup in [true, false]) {
           final action = find.text(
-            signup ? 'Find your next dare' : 'I already have an account',
+            signup ? 'Get started' : 'Already a member? Sign in',
           );
           await tester.ensureVisible(action);
           await tester.pumpAndSettle();

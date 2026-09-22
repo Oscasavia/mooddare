@@ -48,7 +48,7 @@ void main() {
           expect(find.text('Explore as a guest'), findsNothing);
           for (final signup in [true, false]) {
             final button = find.text(
-              signup ? 'Find your next dare' : 'I already have an account',
+              signup ? 'Get started' : 'Already a member? Sign in',
             );
             await tester.ensureVisible(button);
             await tester.pumpAndSettle();

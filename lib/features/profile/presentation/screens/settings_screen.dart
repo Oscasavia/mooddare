@@ -10,6 +10,7 @@ import 'package:mooddare/features/settings/presentation/delete_account_screen.da
 import 'edit_profile_screen.dart';
 import 'package:mooddare/features/settings/presentation/about_screen.dart';
 import 'package:mooddare/features/settings/presentation/licenses_screen.dart';
+import 'package:mooddare/features/settings/presentation/legal_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final SettingsRepository? repository;
@@ -316,6 +317,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     'Licenses',
                     Icons.description_outlined,
                     () => _open(const LicensesScreen()),
+                  ),
+                  _tile(
+                    'Privacy Policy',
+                    Icons.privacy_tip_outlined,
+                    () => _open(
+                      const LegalScreen(document: LegalDocument.privacy),
+                    ),
+                  ),
+                  _tile(
+                    'Terms of Use',
+                    Icons.article_outlined,
+                    () =>
+                        _open(const LegalScreen(document: LegalDocument.terms)),
                   ),
                 ]),
                 _section('Account actions', [

@@ -76,7 +76,7 @@ void main() {
     await tester.pump();
     expect(auth.signOuts, 1);
     expect(admitted, isEmpty);
-    expect(find.text('Find your next dare'), findsNothing);
+    expect(find.text('Get started'), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     // Repeated SDK events must not launch concurrent sign-outs.
     auth.emit(auth.currentUser);
@@ -85,7 +85,7 @@ void main() {
     auth.signOutGate!.complete();
     await tester.pumpAndSettle();
     expect(auth.currentUser, isNull);
-    expect(find.text('Find your next dare'), findsOneWidget);
+    expect(find.text('Get started'), findsOneWidget);
     expect(admitted, isEmpty);
     expect(tester.takeException(), isNull);
   });
@@ -101,14 +101,14 @@ void main() {
       find.text('Guest access has ended. Try again to finish signing out.'),
       findsOneWidget,
     );
-    expect(find.text('Find your next dare'), findsNothing);
+    expect(find.text('Get started'), findsNothing);
     expect(admitted, isEmpty);
     auth.failSignOut = false;
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
     expect(auth.signOuts, 2);
     expect(auth.currentUser, isNull);
-    expect(find.text('Find your next dare'), findsOneWidget);
+    expect(find.text('Get started'), findsOneWidget);
     expect(admitted, isEmpty);
   });
 
@@ -118,7 +118,7 @@ void main() {
     await mount(tester);
     auth.emit(null);
     await tester.pumpAndSettle();
-    expect(find.text('Find your next dare'), findsOneWidget);
+    expect(find.text('Get started'), findsOneWidget);
     for (final uid in ['email-member', 'google-member']) {
       auth.emit(SessionUser(uid));
       await tester.pumpAndSettle();
@@ -148,7 +148,7 @@ void main() {
       expect(auth.signOuts, 0);
       await auth.signOut();
       await tester.pumpAndSettle();
-      expect(find.text('Find your next dare'), findsOneWidget);
+      expect(find.text('Get started'), findsOneWidget);
     },
   );
 
@@ -161,7 +161,7 @@ void main() {
       auth.changes.addError(StateError('offline'));
       await tester.pumpAndSettle();
       expect(find.text('Could not restore your session'), findsOneWidget);
-      expect(find.text('Find your next dare'), findsNothing);
+      expect(find.text('Get started'), findsNothing);
       expect(auth.signOuts, 0);
       await tester.tap(find.text('Retry'));
       await tester.pump();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:mooddare/core/user_message.dart';
 import 'package:mooddare/core/widgets/mooddare_brand_header.dart';
+import 'package:mooddare/core/widgets/legal_notice.dart';
 import '../../data/repositories/auth_repository.dart';
 import 'forgot_password_screen.dart';
 
@@ -261,6 +262,11 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                           ],
                         ),
                         textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      const LegalNotice(
+                        lead:
+                            'By creating an account or signing in, you agree to our',
                       ),
                     ],
                   ),
