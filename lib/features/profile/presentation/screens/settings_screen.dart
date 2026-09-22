@@ -11,11 +11,18 @@ import 'edit_profile_screen.dart';
 import 'package:mooddare/features/settings/presentation/about_screen.dart';
 import 'package:mooddare/features/settings/presentation/licenses_screen.dart';
 import 'package:mooddare/features/settings/presentation/legal_screen.dart';
+import 'package:mooddare/features/auth/data/welcome_history.dart';
 
 class SettingsScreen extends StatefulWidget {
   final SettingsRepository? repository;
   final WidgetBuilder? signedOutBuilder;
-  const SettingsScreen({super.key, this.repository, this.signedOutBuilder});
+  final WelcomeHistory? welcomeHistory;
+  const SettingsScreen({
+    super.key,
+    this.repository,
+    this.signedOutBuilder,
+    this.welcomeHistory,
+  });
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
@@ -90,6 +97,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         DeleteAccountScreen(
           repository: _repo,
           signedOutBuilder: widget.signedOutBuilder,
+          welcomeHistory: widget.welcomeHistory,
         ),
       );
       return;
@@ -124,7 +132,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
-            builder: widget.signedOutBuilder ?? (_) => const AuthGate(),
+            builder:
+                widget.signedOutBuilder ??
+                (_) => AuthGate(welcomeHistory: widget.welcomeHistory),
           ),
           (_) => false,
         );

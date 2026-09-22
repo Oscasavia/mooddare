@@ -71,7 +71,6 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
     child: Scaffold(
-      appBar: AppBar(),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(

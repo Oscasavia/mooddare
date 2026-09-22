@@ -13,6 +13,21 @@ class SettingsPlugin(private val activity: Activity) : MethodChannel.MethodCallH
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         try {
             when (call.method) {
+                "welcomeSeen" -> result.success(
+                    activity.getSharedPreferences("mooddare_entry", Activity.MODE_PRIVATE)
+                        .getBoolean("welcome_seen", false)
+                )
+                "setWelcomeSeen" -> {
+                    val value = call.arguments as? Boolean
+                    if (value == null) {
+                        result.error("invalid-preference", "Expected a boolean", null)
+                        return
+                    }
+                    val saved = activity.getSharedPreferences("mooddare_entry", Activity.MODE_PRIVATE)
+                        .edit().putBoolean("welcome_seen", value).commit()
+                    if (saved) result.success(null)
+                    else result.error("preference-write", "Could not save entry preference", null)
+                }
                 "version" -> {
                     @Suppress("DEPRECATION")
                     val info = activity.packageManager.getPackageInfo(activity.packageName, 0)

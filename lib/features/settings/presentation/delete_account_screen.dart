@@ -3,14 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:mooddare/core/user_message.dart';
 import 'package:mooddare/features/auth/presentation/auth_gate.dart';
 import '../data/settings_repository.dart';
+import 'package:mooddare/features/auth/data/welcome_history.dart';
 
 class DeleteAccountScreen extends StatefulWidget {
   final SettingsRepository repository;
   final WidgetBuilder? signedOutBuilder;
+  final WelcomeHistory? welcomeHistory;
   const DeleteAccountScreen({
     super.key,
     required this.repository,
     this.signedOutBuilder,
+    this.welcomeHistory,
   });
   @override
   State<DeleteAccountScreen> createState() => _DeleteAccountScreenState();
@@ -70,10 +73,18 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
         _password.clear();
       }
       await widget.repository.deleteAccount();
+      // A local preference failure must not report an already deleted account
+      // as a failed deletion or encourage retrying the destructive operation.
+      final history = widget.welcomeHistory ?? WelcomeHistory.instance;
+      try {
+        await history.resetAfterDeletion();
+      } catch (_) {}
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
-            builder: widget.signedOutBuilder ?? (_) => const AuthGate(),
+            builder:
+                widget.signedOutBuilder ??
+                (_) => AuthGate(welcomeHistory: history, showWelcome: true),
           ),
           (_) => false,
         );

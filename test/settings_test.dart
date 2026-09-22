@@ -7,6 +7,7 @@ import 'package:mooddare/features/settings/data/settings_repository.dart';
 import 'package:mooddare/features/settings/presentation/help_screen.dart';
 import 'package:mooddare/features/settings/presentation/password_screen.dart';
 import 'support/settings_fakes.dart';
+import 'support/welcome_history_fake.dart';
 
 Future<void> openSettings(
   WidgetTester tester,
@@ -28,6 +29,7 @@ Future<void> openSettings(
       ),
       home: SettingsScreen(
         repository: repo,
+        welcomeHistory: MemoryWelcomeHistory()..seen = true,
         signedOutBuilder: (_) =>
             const Scaffold(body: Text('Signed out safely')),
       ),

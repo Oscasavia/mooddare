@@ -19,7 +19,7 @@ Future<void> tapPolicy(WidgetTester tester, String label) async {
   final text = paragraph.text.toPlainText();
   expect(
     text,
-    'By continuing, you agree to our Terms of Use and acknowledge our Privacy Policy.',
+    'By continuing, you agree to our Terms of Use & Privacy Policy.',
   );
   final start = text.indexOf(label);
   expect(start, greaterThanOrEqualTo(0));

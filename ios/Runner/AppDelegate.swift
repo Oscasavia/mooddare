@@ -20,6 +20,14 @@ import AVFoundation
       let settings = FlutterMethodChannel(name: "mooddare/settings", binaryMessenger: controller.binaryMessenger)
       settings.setMethodCallHandler { call, result in
         switch call.method {
+        case "welcomeSeen":
+          result(UserDefaults.standard.bool(forKey: "mooddare.welcomeSeen"))
+        case "setWelcomeSeen":
+          guard let value = call.arguments as? Bool else {
+            result(FlutterError(code: "invalid-preference", message: "Expected a boolean", details: nil)); return
+          }
+          UserDefaults.standard.set(value, forKey: "mooddare.welcomeSeen")
+          result(nil)
         case "version":
           let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
           let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"

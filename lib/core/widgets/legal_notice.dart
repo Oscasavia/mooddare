@@ -44,7 +44,7 @@ class _LegalNoticeState extends State<LegalNotice> {
             style: linkStyle,
             recognizer: _terms..onTap = () => _open(LegalDocument.terms),
           ),
-          const TextSpan(text: ' and acknowledge our '),
+          const TextSpan(text: ' & '),
           TextSpan(
             text: 'Privacy Policy',
             style: linkStyle,

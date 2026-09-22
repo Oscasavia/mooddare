@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mooddare/features/auth/presentation/auth_gate.dart';
+import 'support/welcome_history_fake.dart';
 
 class SessionUser implements User {
   @override
@@ -46,9 +47,11 @@ class SessionAuth implements FirebaseAuth {
 void main() {
   late SessionAuth auth;
   late List<String> admitted;
+  late MemoryWelcomeHistory history;
   setUp(() {
     auth = SessionAuth();
     admitted = [];
+    history = MemoryWelcomeHistory();
   });
   tearDown(() => auth.changes.close());
 
@@ -57,6 +60,9 @@ void main() {
       MaterialApp(
         home: AuthGate(
           auth: auth,
+          welcomeHistory: history,
+          returningBuilder: (_) =>
+              const Scaffold(body: Text('Returning login')),
           signedInBuilder: (_, user) {
             admitted.add(user.uid);
             return const Scaffold(body: Text('Member feed'));
@@ -148,7 +154,7 @@ void main() {
       expect(auth.signOuts, 0);
       await auth.signOut();
       await tester.pumpAndSettle();
-      expect(find.text('Get started'), findsOneWidget);
+      expect(find.text('Returning login'), findsOneWidget);
     },
   );
 

@@ -58,7 +58,8 @@ void main() {
               tester.widget<AuthFormScreen>(find.byType(AuthFormScreen)).signUp,
               signup,
             );
-            await tester.pageBack();
+            expect(find.byType(BackButton), findsNothing);
+            await tester.binding.handlePopRoute();
             await tester.pumpAndSettle();
           }
           expect(tester.takeException(), isNull);

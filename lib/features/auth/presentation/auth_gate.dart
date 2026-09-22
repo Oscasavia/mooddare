@@ -5,11 +5,23 @@ import 'package:mooddare/core/widgets/app_empty_state.dart';
 import 'package:mooddare/features/main/presentation/screens/main_screen.dart';
 import 'screens/username_screen.dart';
 import 'screens/welcome_screen.dart';
+import 'screens/login_screen.dart';
+import '../data/welcome_history.dart';
 
 class AuthGate extends StatefulWidget {
   final FirebaseAuth? auth;
   final Widget Function(BuildContext, User)? signedInBuilder;
-  const AuthGate({super.key, this.auth, this.signedInBuilder});
+  final WelcomeHistory? welcomeHistory;
+  final WidgetBuilder? returningBuilder;
+  final bool showWelcome;
+  const AuthGate({
+    super.key,
+    this.auth,
+    this.signedInBuilder,
+    this.welcomeHistory,
+    this.returningBuilder,
+    this.showWelcome = false,
+  });
   @override
   State<AuthGate> createState() => _AuthGateState();
 }
@@ -17,6 +29,8 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   late final _firebaseAuth = widget.auth ?? FirebaseAuth.instance;
   late Stream<User?> _auth = _firebaseAuth.userChanges();
+  late final _history = widget.welcomeHistory ?? WelcomeHistory.instance;
+  bool _hadMember = false;
   @override
   Widget build(BuildContext context) => StreamBuilder<User?>(
     stream: _auth,
@@ -35,14 +49,63 @@ class _AuthGateState extends State<AuthGate> {
         );
       }
       final user = snapshot.data;
-      if (user == null) return const WelcomeScreen();
+      if (user == null) {
+        return _SignedOutEntry(
+          history: _history,
+          returning: _hadMember,
+          forceWelcome: widget.showWelcome && !_hadMember,
+          returningBuilder: widget.returningBuilder,
+        );
+      }
       if (user.isAnonymous) {
         return _EndGuestSession(auth: _firebaseAuth);
+      }
+      if (!_hadMember) {
+        _hadMember = true;
+        // Remember existing installs too, without delaying session restoration.
+        _history.rememberMember().catchError((Object _) {});
       }
       if (widget.signedInBuilder != null) {
         return widget.signedInBuilder!(context, user);
       }
       return _ProfileGate(key: ValueKey(user.uid), user: user);
+    },
+  );
+}
+
+class _SignedOutEntry extends StatefulWidget {
+  final WelcomeHistory history;
+  final bool returning, forceWelcome;
+  final WidgetBuilder? returningBuilder;
+  const _SignedOutEntry({
+    required this.history,
+    required this.returning,
+    required this.forceWelcome,
+    this.returningBuilder,
+  });
+
+  @override
+  State<_SignedOutEntry> createState() => _SignedOutEntryState();
+}
+
+class _SignedOutEntryState extends State<_SignedOutEntry> {
+  // Freeze this decision for the route's lifetime. Opening policies, rebuilding
+  // or receiving a repeated signed-out event must not replace Welcome midway.
+  late final _showWelcome = widget.returning
+      ? Future.value(false)
+      : widget.history
+            .consumeWelcome(force: widget.forceWelcome)
+            .catchError((Object _) => true);
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<bool>(
+    future: _showWelcome,
+    builder: (context, snapshot) {
+      if (!snapshot.hasData) {
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+      if (snapshot.data!) return const WelcomeScreen();
+      return widget.returningBuilder?.call(context) ?? const LoginScreen();
     },
   );
 }
@@ -89,9 +152,8 @@ class _EndGuestSessionState extends State<_EndGuestSession> {
           ),
         );
       }
-      if (snapshot.connectionState == ConnectionState.done) {
-        return const WelcomeScreen();
-      }
+      // AuthGate selects the entry screen when Firebase emits the signed-out
+      // event; don't briefly flash Welcome over a returning user's Login.
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     },
   );
