@@ -81,3 +81,15 @@ The login/signup divider sits between the email/password submit button and
 Google sign-in. Account-switch links remain below Google. See
 [personality opportunities](personality-opportunities.md) for implemented and
 proposed placements elsewhere.
+
+Settings now has separate About and Licenses routes. About pairs the original
+Mood Wink and wordmark with a short introduction to moods, dares and community.
+Licenses uses searchable, borderless package cards and selectable full notices
+from Flutter's license registry; shared-package entries and paragraph formatting
+are retained. The installed app version sits beneath Delete account in Settings.
+
+The welcome call to action has a right-aligned arrow that nudges twice over
+1.8 seconds, then rests. Reduced-motion and accessible-navigation preferences
+keep it static. `test/about_licenses_welcome_test.dart` covers the animation,
+license loading/search/retry/details and narrow layouts with enlarged text;
+existing settings and landing tests cover navigation and footer placement.

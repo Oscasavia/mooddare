@@ -61,7 +61,8 @@ void main() {
           'Help & FAQ',
           'Contact us',
           'Share MoodDare',
-          'About & licenses',
+          'About',
+          'Licenses',
           'Sign out',
           'Delete account',
         ]) {
@@ -78,6 +79,15 @@ void main() {
             .toList();
         expect((tiles[tiles.length - 2].title as Text).data, 'Sign out');
         expect((tiles.last.title as Text).data, 'Delete account');
+        await tester.scrollUntilVisible(
+          find.text('Version 1.0.0 (42)'),
+          100,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(
+          tester.getTopLeft(find.text('Version 1.0.0 (42)')).dy,
+          greaterThan(tester.getBottomLeft(find.text('Delete account')).dy),
+        );
         expect(repo.deletions + repo.signOuts, 0);
       },
     );
@@ -288,8 +298,13 @@ void main() {
       await tapRow(tester, 'Share MoodDare');
       expect(repo.shares, 2);
       expect(repo.shareOrigin!.isEmpty, isFalse);
-      await tapRow(tester, 'About & licenses');
-      expect(find.text('1.0.0 (42)'), findsWidgets);
+      await tapRow(tester, 'About');
+      expect(find.text('A little dare.\nA great story.'), findsOneWidget);
+      expect(find.text('Licenses'), findsNothing);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tapRow(tester, 'Licenses');
+      expect(find.text('Built with a little help'), findsOneWidget);
     },
   );
 }

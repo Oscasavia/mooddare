@@ -8,6 +8,8 @@ import 'package:mooddare/features/settings/presentation/help_screen.dart';
 import 'blocked_accounts_screen.dart';
 import 'package:mooddare/features/settings/presentation/delete_account_screen.dart';
 import 'edit_profile_screen.dart';
+import 'package:mooddare/features/settings/presentation/about_screen.dart';
+import 'package:mooddare/features/settings/presentation/licenses_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final SettingsRepository? repository;
@@ -305,23 +307,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           : 'Invite someone to try a dare',
                     ),
                   ),
-                  FutureBuilder<String>(
-                    future: _version,
-                    builder: (context, version) => _tile(
-                      'About & licenses',
-                      Icons.info_outline_rounded,
-                      () => showAboutDialog(
-                        context: context,
-                        applicationName: 'MoodDare',
-                        applicationVersion: version.data ?? 'Loading version…',
-                        children: [
-                          const Text(
-                            'Small challenges. Real moments. Made for your everyday adventures.',
-                          ),
-                        ],
-                      ),
-                      subtitle: version.data,
-                    ),
+                  _tile(
+                    'About',
+                    Icons.info_outline_rounded,
+                    () => _open(const AboutScreen()),
+                  ),
+                  _tile(
+                    'Licenses',
+                    Icons.description_outlined,
+                    () => _open(const LicensesScreen()),
                   ),
                 ]),
                 _section('Account actions', [
@@ -338,6 +332,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     danger: true,
                   ),
                 ]),
+                FutureBuilder<String>(
+                  future: _version,
+                  builder: (context, version) => Text(
+                    version.hasData
+                        ? (version.data == 'Version unavailable'
+                              ? version.data!
+                              : 'Version ${version.data}')
+                        : 'Loading version…',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: Colors.white38),
+                  ),
+                ),
               ],
             ),
             if (_busy)

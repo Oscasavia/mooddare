@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mooddare/core/widgets/mooddare_wordmark.dart';
 import '../widgets/welcome_artwork.dart';
+import '../widgets/welcome_arrow.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
 
@@ -35,7 +36,16 @@ class WelcomeScreen extends StatelessWidget {
           context,
           MaterialPageRoute(builder: (_) => const SignupScreen()),
         ),
-        child: const Text('Find your next dare'),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            children: [
+              Expanded(child: Text('Find your next dare')),
+              SizedBox(width: 12),
+              WelcomeArrow(),
+            ],
+          ),
+        ),
       ),
       const SizedBox(height: 12),
       OutlinedButton(
