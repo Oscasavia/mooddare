@@ -155,7 +155,9 @@ class _FeedScreenState extends State<FeedScreen> {
       onPointerUp: (_) => _disarmExit(),
       child: Scaffold(
         appBar: AppBar(
-          title: const MoodDareWordmark(),
+          title: MoodDareWordmark(
+            width: MediaQuery.sizeOf(context).width < 400 ? 124 : 148,
+          ),
           bottom: _moodId == null
               ? null
               : PreferredSize(

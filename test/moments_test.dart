@@ -486,6 +486,34 @@ void main() {
     },
   );
 
+  testWidgets(
+    'wordmark adapts when a cover screen unfolds without losing the feed',
+    (tester) async {
+      final repo = MemoryPosts([moment('folding')]);
+      addTearDown(repo.commentChanges.close);
+      await openFeed(tester, repo, size: const Size(360, 800), textScale: 2);
+      final brand = find.byType(MoodDareWordmark);
+      final coverWidth = tester.getSize(brand).width;
+      expect(coverWidth, lessThan(140));
+      tester.view.physicalSize = const Size(840, 900);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(brand).width, greaterThan(coverWidth));
+      expect(tester.getSize(brand).width, closeTo(148, .1));
+      tester.view.physicalSize = const Size(320, 700);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(brand).width, coverWidth);
+      expect(
+        tester.getRect(brand).right,
+        lessThan(tester.getRect(find.byTooltip('Find people')).left),
+      );
+      expect(find.text('A moment worth sharing: folding'), findsOneWidget);
+      await tester.tap(find.byTooltip('Filter by mood'));
+      await tester.pumpAndSettle();
+      expect(find.text('Filter by mood'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('caption taps open the viewer; like and menu actions do not', (
     tester,
   ) async {

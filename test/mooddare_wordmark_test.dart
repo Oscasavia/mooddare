@@ -49,14 +49,23 @@ void main() {
       expect(data.getUint8(1), 80);
       expect(data.getUint8(2), 64);
       var lavenderPixels = 0;
+      var leftInk = image.width;
+      var rightInk = -1;
       for (var offset = 0; offset < data.lengthInBytes; offset += 4) {
         if ((data.getUint8(offset) - 197).abs() <= 2 &&
             (data.getUint8(offset + 1) - 180).abs() <= 2 &&
             data.getUint8(offset + 2) >= 253) {
           lavenderPixels++;
+          final x = (offset ~/ 4) % image.width;
+          if (x < leftInk) leftInk = x;
+          if (x > rightInk) rightInk = x;
         }
       }
       expect(lavenderPixels, greaterThan(500));
+      // Layout edges match visible lettering, rather than the original PNG's
+      // 200px side margins. This is what makes the Welcome heading align.
+      expect(leftInk, lessThanOrEqualTo(1));
+      expect(rightInk, greaterThanOrEqualTo(image.width - 2));
       image.dispose();
     });
   });

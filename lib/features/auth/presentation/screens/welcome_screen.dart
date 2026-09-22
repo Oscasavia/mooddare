@@ -19,7 +19,7 @@ class WelcomeScreen extends StatelessWidget {
               children: [
                 const Align(
                   alignment: Alignment.centerLeft,
-                  child: MoodDareWordmark(width: 280),
+                  child: MoodDareWordmark(width: 180),
                 ),
                 const SizedBox(height: 48),
                 const WelcomeArtwork(),

@@ -142,6 +142,12 @@ void main() {
         expect(find.text('📸'), findsNothing);
         expect(find.byType(WelcomeArtwork), findsOneWidget);
         expect(find.byType(MoodDareWordmark), findsOneWidget);
+        final brandRect = tester.getRect(find.byType(MoodDareWordmark));
+        final headlineRect = tester.getRect(
+          find.text('A little dare.\nA great story.'),
+        );
+        expect(brandRect.left, closeTo(headlineRect.left, .1));
+        expect(brandRect.width, lessThanOrEqualTo(180));
         expect(find.text('MOODDARE'), findsNothing);
         expect(find.text('A little dare.\nA great story.'), findsOneWidget);
         expect(find.byType(FilledButton), findsOneWidget);
