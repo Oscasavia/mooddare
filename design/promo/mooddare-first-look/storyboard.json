@@ -1,0 +1,22 @@
+{
+  "title": "A little dare. A great story.",
+  "duration": 22,
+  "fps": 30,
+  "voice": "Samantha",
+  "voiceRate": 165,
+  "scenes": [
+    {"start": 0, "end": 3.4, "visual": "Mood-wink opens both eyes, then smoothly winks. A little curious?"},
+    {"start": 3.4, "end": 8.6, "visual": "Actual Discover screen in an upright phone. Pick your mood. Animated mood labels."},
+    {"start": 8.6, "end": 13.4, "visual": "Actual Creative dare screen. A small dare can start a good story."},
+    {"start": 13.4, "end": 17.2, "visual": "Mood-wink poses in a branded keepsake card. Make it a moment."},
+    {"start": 17.2, "end": 22, "visual": "Mood-wink and approved wordmark. A little dare. A great story. Coming soon."}
+  ],
+  "narration": [
+    {"start": 0.65, "text": "A little curious?"},
+    {"start": 3.85, "text": "Pick your mood."},
+    {"start": 5.8, "text": "Find a dare that feels like you."},
+    {"start": 9.0, "text": "Try something different."},
+    {"start": 13.75, "text": "Make a moment worth sharing."},
+    {"start": 17.65, "text": "Mood dare. A little dare. A great story."}
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "source": "voiceover-source.mp3",
+  "sha256": "022b018094d56543eaa87afc993248da03380e04fefcb0de3562e561bf0791fb",
+  "provider": "TTSMaker \u2014 voiceover supplied by the user",
+  "segments": [
+    {
+      "start": 0.65,
+      "sourceStart": 0,
+      "sourceEnd": 1.205,
+      "text": "A little curious?"
+    },
+    {
+      "start": 3.85,
+      "sourceStart": 1.205,
+      "sourceEnd": 2.01,
+      "text": "Pick your mood."
+    },
+    {
+      "start": 5.8,
+      "sourceStart": 2.01,
+      "sourceEnd": 3.615,
+      "text": "Find a dare that feels like you."
+    },
+    {
+      "start": 9.0,
+      "sourceStart": 3.615,
+      "sourceEnd": 4.835,
+      "text": "Try something different."
+    },
+    {
+      "start": 13.75,
+      "sourceStart": 4.835,
+      "sourceEnd": 6.305,
+      "text": "Make a moment worth sharing."
+    },
+    {
+      "start": 17.65,
+      "sourceStart": 6.305,
+      "sourceEnd": 7.105,
+      "text": "MoodDare."
+    },
+    {
+      "start": 18.9,
+      "sourceStart": 7.105,
+      "sourceEnd": 7.965,
+      "text": "A little dare."
+    },
+    {
+      "start": 20.15,
+      "sourceStart": 7.965,
+      "sourceEnd": 9.0,
+      "text": "A great story."
+    }
+  ]
+}

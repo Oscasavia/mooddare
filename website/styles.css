@@ -141,12 +141,10 @@ p { line-height: 1.8; }
 .feature-list .feature-detail { font-size: 11px; color: #aaa0b5; margin-top: 14px; }
 
 .film-heading { text-align: center; margin-bottom: 56px; }
-.film-frame { border-radius: 24px; overflow: hidden; background: #242029; aspect-ratio: 2.1; }
-.film-placeholder { height: 100%; position: relative; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 38px; overflow: hidden; background: radial-gradient(ellipse at 50% 35%, #79678942, transparent 65%), linear-gradient(120deg, #211e27, #302936 50%, #211f26); }
-.film-tag { position: absolute; top: 30px; left: 34px; font-size: 9px; letter-spacing: .18em; color: #beb3cc; }
-.film-placeholder > img { width: clamp(90px, 11vw, 154px); transform: rotate(-5deg); margin-top: 30px; }
-.film-placeholder > p { font-size: 16px; text-align: center; margin: 28px 0 0; line-height: 1.9; }
-.film-placeholder strong { font-weight: 400; font-size: 11px; color: #b7acc5; }
+.film-frame { border-radius: 24px; overflow: hidden; background: #242029; aspect-ratio: 16 / 9; }
+.film-frame.film-portrait { aspect-ratio: 9 / 16; max-width: 420px; margin-inline: auto; }
+.film-description { text-align: center; font-size: 15px; line-height: 1.8; margin: 22px 0 0; }
+.film-description span { display: block; font-size: 12px; color: var(--muted); }
 .film-frame video { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
 .faq-section { padding-top: 12px; display: grid; grid-template-columns: .8fr 1.2fr; gap: 95px; }
 .faq-list details { border-bottom: 1px solid var(--line); }
@@ -251,9 +249,6 @@ dialog p { font-size: 12px; text-align: center; max-width: 350px; margin: 16px a
   .feature-wink { width: 70px; position: absolute; right: 10px; bottom: 5px; margin: 0; }
   .feature-title h2 { max-width: 80%; }
   .feature-list p { max-width: none; }
-  .film-frame { aspect-ratio: 1.6; }
-  .film-placeholder > img { width: 120px; }
-  .film-tag { top: 22px; left: 24px; font-size: 8px; }
   .faq-section { grid-template-columns: 1fr; gap: 10px; padding-top: 0; }
   .faq-section h2 br { display: none; }
   .site-footer { grid-template-columns: 1fr; gap: 35px; }
@@ -303,11 +298,6 @@ dialog p { font-size: 12px; text-align: center; max-width: 350px; margin: 16px a
   .gallery-note { margin-top: 25px; line-height: 1.8; }
   .feature-wink { width: 54px; right: 0; bottom: 12px; }
   .feature-list h3 { font-size: 22px; }
-  .film-frame { aspect-ratio: 1; }
-  .film-placeholder { padding: 32px 18px 22px; }
-  .film-placeholder > img { width: 99px; }
-  .film-tag { top: 23px; left: 20px; font-size: 7px; }
-  .film-placeholder > p { font-size: 13px; margin-top: 23px; }
   .film-heading { margin-bottom: 36px; }
   .faq-section { padding-top: 0; }
   .faq-list summary { font-size: 14px; }

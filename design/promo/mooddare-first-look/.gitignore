@@ -1,0 +1,4 @@
+# Locally rendered review files; regenerate with tooling/promo/build.sh.
+*.mp4
+*.jpg
+*.mp3

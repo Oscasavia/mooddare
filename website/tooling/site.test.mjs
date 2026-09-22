@@ -119,7 +119,7 @@ for (const width of [320, 390, 480, 768, 1024, 1280, 1440, 1920]) {
     assert.ok(dimensions.content <= dimensions.viewport, JSON.stringify(dimensions));
     assert.equal(await evaluate(`document.querySelectorAll('h1').length`), 1);
     assert.equal(await evaluate(`document.querySelector('#android-download').disabled && document.querySelector('#ios-download').disabled`), true);
-    assert.equal(await evaluate(`document.querySelector('video') === null && document.querySelector('#promo-placeholder').textContent.includes('Film coming soon.')`), true);
+    assert.equal(await evaluate(`document.querySelector('video').controls && !document.querySelector('video').autoplay && document.querySelector('video').preload === 'none'`), true);
     if ([390, 1440].includes(width)) await screenshot(width === 390 ? 'mobile' : 'desktop');
   });
 }
@@ -218,11 +218,55 @@ test('invalid release URLs stay disabled; valid HTTPS URLs enable downloads and 
   await visit('/');
   await evaluate(`import('./app.js').then(m => m.applyReleaseConfig({androidUrl:'javascript:alert(1)',iosUrl:'http://example.com',promoVideoUrl:'data:text/html,unsafe'}))`);
   assert.equal(await evaluate(`document.querySelectorAll('.store-link:disabled').length`), 2);
-  assert.equal(await evaluate(`document.querySelector('video') === null`), true);
+  assert.equal(await evaluate(`document.querySelector('video').src.endsWith('assets/promo/mooddare-landscape.mp4')`), true);
   await evaluate(`import('./app.js').then(m => m.applyReleaseConfig({androidUrl:'https://example.com/android',iosUrl:'https://example.com/ios',promoVideoUrl:'https://example.com/promo.mp4'}))`);
   assert.equal(await evaluate(`document.querySelector('#android-download').tagName`), 'A');
   assert.equal(await evaluate(`document.querySelector('#ios-download').href`), 'https://example.com/ios');
   assert.equal(await evaluate(`document.querySelector('video').controls && !document.querySelector('video').autoplay && document.querySelector('video').preload === 'none'`), true);
+});
+
+for (const width of [390, 1440]) {
+  test(`promo plays, seeks and loads captions at ${width}px without autoplay`, async () => {
+    await visit('/', width);
+    const portrait = width < 600;
+    assert.equal(await evaluate(`document.querySelector('video').src.endsWith('mooddare-${portrait ? 'portrait' : 'landscape'}.mp4')`), true);
+    assert.equal(await evaluate(`document.querySelector('video').paused && !document.querySelector('video').muted && document.querySelector('video').playsInline`), true);
+    assert.equal(await evaluate(`document.querySelector('video').networkState`), 1);
+    const poster = await evaluate(`document.querySelector('video').poster`);
+    assert.equal((await fetch(poster)).status, 200);
+    await evaluate(`document.querySelector('#film').scrollIntoView({behavior:'instant',block:'center'})`);
+    await cdp.send('Runtime.evaluate', {
+      expression: `document.querySelector('video').play().then(()=>true)`,
+      userGesture: true, awaitPromise: true, returnByValue: true,
+    });
+    await until(`document.querySelector('video').currentTime > .15`);
+    assert.equal(await evaluate(`Math.abs(document.querySelector('video').duration - 22) < .1`), true);
+    assert.equal(await evaluate(`document.querySelector('video').videoWidth`), portrait ? 1080 : 1920);
+    await evaluate(`document.querySelector('video').pause(); document.querySelector('video').currentTime=10; document.querySelector('video').textTracks[0].mode='showing'`);
+    await until(`!document.querySelector('video').seeking && document.querySelector('video').currentTime >= 10`);
+    await until(`document.querySelector('video').textTracks[0].cues?.length === 8`);
+    assert.equal(await evaluate(`document.querySelector('video').textTracks[0].activeCues[0]?.text`), 'Try something different.');
+    await screenshot(portrait ? 'film-mobile' : 'film-desktop');
+    const original = await evaluate(`document.querySelector('video').src`);
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: portrait ? 1440 : 390, height: 1000, deviceScaleFactor: 1, mobile: !portrait });
+    assert.equal(await evaluate(`document.querySelector('video').src`), original, 'Resizing does not replace playback.');
+    assert.equal(await evaluate(`document.querySelector('video').currentTime >= 10`), true);
+  });
+}
+
+test('local media server supports seeking and serves captions with correct content types', async () => {
+  const url=base+'/assets/promo/mooddare-landscape.mp4';
+  const response=await fetch(url, { headers: { Range: 'bytes=0-31' } });
+  assert.equal(response.status,206);
+  assert.equal(response.headers.get('content-type'),'video/mp4');
+  assert.equal((await response.arrayBuffer()).byteLength,32);
+  const suffix=await fetch(url, { headers: { Range: 'bytes=-32' } });
+  assert.equal(suffix.status,206);
+  assert.equal((await suffix.arrayBuffer()).byteLength,32);
+  assert.equal((await fetch(url,{headers:{Range:'bytes=999999999-'}})).status,416);
+  const captions=await fetch(base+'/assets/promo/captions-en.vtt');
+  assert.match(captions.headers.get('content-type'),/text\/vtt/);
+  assert.match(await captions.text(),/^WEBVTT/);
 });
 
 test('reduced motion and JavaScript-free content remain usable', async () => {
@@ -234,6 +278,7 @@ test('reduced motion and JavaScript-free content remain usable', async () => {
     await visit('/', 390);
     assert.match(await evaluate(`document.querySelector('h1').textContent`), /great story/);
     assert.equal(await evaluate(`document.querySelector('#android-download').disabled`), true);
+    assert.equal(await evaluate(`document.querySelector('video').controls && !!document.querySelector('video track')`), true);
   } finally {
     await cdp.send('Emulation.setScriptExecutionDisabled', { value: false });
     await cdp.send('Emulation.setEmulatedMedia', { features: [] });

@@ -6,8 +6,10 @@ A Flutter app for mood-based challenges, a photo beauty studio, and shared momen
 
 The standalone landing page lives in [`website/`](website/README.md). Preview it
 with `npm --prefix website start` and open http://127.0.0.1:4173. It includes real
-app screenshots, an interactive mood sampler, FAQs, policy pages and clearly
-marked download/video placeholders. Set final HTTPS URLs in `website/config.js`.
+app screenshots, an interactive mood sampler, FAQs, policy pages and the 22-second
+MoodDare promo with narration and English captions. Desktop uses the landscape cut;
+phones use the vertical cut. Store downloads remain placeholders until final HTTPS
+URLs are set in `website/config.js`.
 Run `npm --prefix website test` for the Chrome browser checks (Node 22+). The
 separate `firebase.landing.json` prepares Hosting; nothing is deployed automatically.
 

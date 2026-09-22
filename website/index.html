@@ -94,10 +94,12 @@
     <section class="film-section section-pad wrap" id="film" aria-labelledby="film-title">
       <div class="film-heading"><p class="eyebrow">MEET THE MOOD</p><h2 id="film-title">A little preview.<br>A lot of personality.</h2></div>
       <div class="film-frame" id="promo-container">
-        <div class="film-placeholder" id="promo-placeholder" role="img" aria-label="MoodDare promotional video placeholder. Film coming soon.">
-          <span class="film-tag">THE MOODDARE FILM · COMING SOON</span><img src="assets/mood-wink.svg" width="250" height="250" alt="" loading="lazy"><p>Good things take a little dare.<br><strong>Film coming soon.</strong></p>
-        </div>
+        <video controls playsinline preload="none" poster="assets/promo/mooddare-landscape.jpg" src="assets/promo/mooddare-landscape.mp4" aria-label="MoodDare promotional film" aria-describedby="film-description">
+          <track kind="captions" src="assets/promo/captions-en.vtt" srclang="en" label="English">
+          Your browser does not support embedded video. <a href="assets/promo/mooddare-landscape.mp4">Watch the MoodDare film.</a>
+        </video>
       </div>
+      <p class="film-description" id="film-description">A little dare. A great story. <span>22 seconds · Sound on · Captions available</span></p>
     </section>
 
     <section class="faq-section section-pad wrap" aria-labelledby="faq-title"><div><p class="eyebrow">A FEW LITTLE ANSWERS</p><h2 id="faq-title">Curious?<br>Good.</h2></div><div class="faq-list">

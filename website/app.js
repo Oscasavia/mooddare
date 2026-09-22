@@ -49,6 +49,16 @@ function httpsUrl(value) {
   } catch { return null; }
 }
 
+function mediaUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const url = new URL(value, document.baseURI);
+    if (url.username || url.password) return null;
+    const local = url.origin === location.origin && ['http:', 'https:'].includes(url.protocol);
+    return local || url.protocol === 'https:' ? url.href : null;
+  } catch { return null; }
+}
+
 export function applyReleaseConfig(config) {
   let available = 0;
   for (const [platform, url] of [['android', config.androidUrl], ['ios', config.iosUrl]]) {
@@ -66,17 +76,38 @@ export function applyReleaseConfig(config) {
     available++;
   }
   if (available) document.querySelector('#download-status').textContent = available === 2 ? 'Choose your platform and find your next dare.' : 'One platform is ready. More download links are on their way.';
-  const videoUrl = httpsUrl(config.promoVideoUrl);
-  const placeholder = document.querySelector('#promo-placeholder');
-  if (videoUrl && placeholder) {
+  const container = document.querySelector('#promo-container');
+  const landscape = mediaUrl(config.promoVideoUrl);
+  const portrait = mediaUrl(config.promoPortraitVideoUrl);
+  // Choose the cut on page load. Resizing must not restart a film in progress.
+  const usePortrait = matchMedia('(max-width: 600px)').matches && !!portrait;
+  const videoUrl = usePortrait ? portrait : landscape;
+  if (videoUrl && container) {
+    container.querySelector('video')?.pause();
     const video = document.createElement('video');
     video.controls = true;
     video.playsInline = true;
     video.preload = 'none';
     video.src = videoUrl;
+    const poster = mediaUrl(usePortrait ? config.promoPortraitPosterUrl : config.promoPosterUrl);
+    if (poster) video.poster = poster;
     video.setAttribute('aria-label', 'MoodDare promotional film');
-    video.textContent = 'Your browser does not support embedded video.';
-    placeholder.replaceWith(video);
+    video.setAttribute('aria-describedby', 'film-description');
+    const captions = mediaUrl(config.promoCaptionsUrl);
+    if (captions) {
+      const track = document.createElement('track');
+      track.kind = 'captions';
+      track.src = captions;
+      track.srclang = 'en';
+      track.label = 'English';
+      video.append(track);
+    }
+    const fallback = document.createElement('a');
+    fallback.href = videoUrl;
+    fallback.textContent = 'Watch the MoodDare film';
+    video.append('Your browser does not support embedded video. ', fallback);
+    container.classList.toggle('film-portrait', usePortrait);
+    container.replaceChildren(video);
   }
 }
 
