@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'preview_screen.dart';
 import '../../../camera/presentation/live_beauty_screen.dart';
 import '../../../camera/presentation/capture_timer.dart';
+import '../../../camera/presentation/camera_zoom_surface.dart';
 
 class CameraScreen extends StatelessWidget {
   final String dareText;
@@ -45,6 +46,7 @@ class _CameraScreenState extends State<BasicCameraScreen>
   CameraController? _camera;
   List<CameraDescription> _cameras = [];
   int _index = 0;
+  double _minZoom = 1, _maxZoom = 1;
   bool _busy = false;
   bool _initializing = false;
   bool _videoMode = false;
@@ -97,11 +99,22 @@ class _CameraScreenState extends State<BasicCameraScreen>
       );
       await candidate.initialize();
       await candidate.lockCaptureOrientation(DeviceOrientation.portraitUp);
+      var minZoom = 1.0, maxZoom = 1.0;
+      try {
+        minZoom = await candidate.getMinZoomLevel();
+        maxZoom = await candidate.getMaxZoomLevel();
+      } on CameraException {
+        // A camera without zoom support should still be usable for capture.
+      }
       if (!mounted || generation != _generation || !_appActive || _inPreview) {
         await candidate.dispose();
         return;
       }
-      setState(() => _camera = candidate);
+      setState(() {
+        _camera = candidate;
+        _minZoom = minZoom;
+        _maxZoom = maxZoom;
+      });
     } catch (error) {
       await candidate?.dispose();
       if (mounted && generation == _generation) {
@@ -119,6 +132,15 @@ class _CameraScreenState extends State<BasicCameraScreen>
       }
     }
   }
+
+  Future<double> Function(double) _zoomCamera(CameraController camera) =>
+      (ratio) async {
+        if (camera != _camera || !_appActive || _inPreview) {
+          throw StateError('Camera session has ended');
+        }
+        await camera.setZoomLevel(ratio);
+        return ratio;
+      };
 
   Future<void> _releaseCamera() {
     final camera = _camera;
@@ -349,7 +371,14 @@ class _CameraScreenState extends State<BasicCameraScreen>
                         fit: StackFit.expand,
                         children: [
                           if (ready)
-                            Center(child: CameraPreview(_camera!))
+                            CameraZoomSurface(
+                              key: ObjectKey(_camera),
+                              enabled: _appActive && !_busy && !_inPreview,
+                              minZoom: _minZoom,
+                              maxZoom: _maxZoom,
+                              onZoom: _zoomCamera(_camera!),
+                              child: Center(child: CameraPreview(_camera!)),
+                            )
                           else if (_error == null)
                             const Center(child: CircularProgressIndicator())
                           else

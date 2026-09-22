@@ -120,6 +120,12 @@ class LiveBeautyPlugin(
             }
             "status" -> result.success((session?.status() ?: mapOf("ready" to false)) +
                 mapOf("screenBrightness" to activity.window.attributes.screenBrightness))
+            "setZoom" -> {
+                val current = session
+                if (current == null || call.argument<Number>("textureId")?.toLong() != current.entry.id()) {
+                    result.error("closed", "Camera session has ended.", null)
+                } else current.setZoom(call.argument<Number>("ratio")?.toFloat(), result)
+            }
             "setLook" -> {
                 val current = session
                 if (current == null) result.error("closed", "Camera is closed.", null)
@@ -344,7 +350,7 @@ class LiveBeautyPlugin(
         }
 
         private fun finishStart() {
-            startResult?.success(mapOf("textureId" to entry.id()))
+            startResult?.success(mapOf("textureId" to entry.id()) + zoomStatus())
             startResult = null
         }
         private fun finishStartError(code: String, message: String) {
@@ -513,7 +519,39 @@ class LiveBeautyPlugin(
             "detectionMillis" to detectionMillis, "fps" to fps, "frames" to frames,
             "detections" to detections, "error" to error,
             "recording" to recording, "recordingMillis" to if (recording) SystemClock.elapsedRealtime() - recordingStarted else 0L,
-            "videoReady" to (pendingVideo != null), "recordingError" to recordingError)
+            "videoReady" to (pendingVideo != null), "recordingError" to recordingError) + zoomStatus()
+
+        private fun zoomStatus(): Map<String, Any> {
+            val zoom = camera?.cameraInfo?.zoomState?.value
+            return mapOf("minZoom" to (zoom?.minZoomRatio ?: 1f),
+                "maxZoom" to (zoom?.maxZoomRatio ?: 1f), "zoom" to (zoom?.zoomRatio ?: 1f))
+        }
+
+        fun setZoom(ratio: Float?, result: MethodChannel.Result) {
+            val current = camera
+            val zoom = current?.cameraInfo?.zoomState?.value
+            if (closed || current == null || zoom == null) {
+                result.error("closed", "Camera is not ready.", null); return
+            }
+            if (ratio == null || !ratio.isFinite()) {
+                result.error("invalid_input", "Zoom must be a finite number.", null); return
+            }
+            val target = ratio.coerceIn(zoom.minZoomRatio, zoom.maxZoomRatio)
+            try {
+                val future = current.cameraControl.setZoomRatio(target)
+                future.addListener({
+                    try {
+                        future.get()
+                        if (closed) result.error("closed", "Camera session has ended.", null)
+                        else result.success(target.toDouble())
+                    } catch (_: Exception) {
+                        result.error("zoom", "Could not change camera zoom.", null)
+                    }
+                }, ContextCompat.getMainExecutor(activity))
+            } catch (_: Exception) {
+                result.error("zoom", "Could not change camera zoom.", null)
+            }
+        }
 
         // Main-thread ownership keeps brightness and torch cleanup independent of Dart.
         fun setCaptureLight(enabled: Boolean, result: MethodChannel.Result) {

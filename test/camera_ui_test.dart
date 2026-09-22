@@ -8,6 +8,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('mooddare/live_beauty');
   double? sentAspect;
+  final zooms = <double>[];
+  var texture = 0;
   var captures = 0, videoStarts = 0, videoStops = 0;
   var allowRecording = false, nativeRecording = false, microphoneAllowed = true;
   final lightRequests = <bool>[];
@@ -17,6 +19,8 @@ void main() {
   var geometryAvailable = false;
   setUp(() {
     sentAspect = null;
+    zooms.clear();
+    texture = 0;
     captures = videoStarts = videoStops = 0;
     allowRecording = nativeRecording = false;
     microphoneAllowed = true;
@@ -27,6 +31,12 @@ void main() {
     geometryAvailable = false;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'setZoom') {
+            expect(call.arguments['textureId'], texture);
+            final zoom = (call.arguments['ratio'] as num).toDouble();
+            zooms.add(zoom);
+            return zoom;
+          }
           if (call.method == 'setLook') {
             sentAspect = (call.arguments['aspectRatio'] as num).toDouble();
             looks.add(Map<String, dynamic>.from(call.arguments as Map));
@@ -61,7 +71,12 @@ void main() {
           return switch (call.method) {
             'requestCamera' => true,
             'requestMicrophone' => microphoneAllowed,
-            'start' => {'textureId': 1},
+            'start' => {
+              'textureId': ++texture,
+              'minZoom': 1.0,
+              'maxZoom': 4.0,
+              'zoom': 1.0,
+            },
             'status' => {
               'ready': true,
               'recording': nativeRecording,
@@ -119,6 +134,71 @@ void main() {
     await tester.pump();
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
   }
+
+  Future<void> pinchPreview(WidgetTester tester) async {
+    final center = tester.getCenter(find.byKey(const ValueKey('camera_frame')));
+    final a = await tester.startGesture(
+      center - const Offset(40, 0),
+      pointer: 20,
+    );
+    final b = await tester.startGesture(
+      center + const Offset(40, 0),
+      pointer: 21,
+    );
+    await b.moveBy(const Offset(80, 0));
+    await tester.pump();
+    await a.up();
+    await b.up();
+    await tester.pump();
+  }
+
+  testWidgets(
+    'preview pinch leaves photo, hold/lock recording and camera switching intact',
+    (tester) async {
+      allowRecording = true;
+      await openTimerCamera(tester, seconds: 0);
+      await pinchPreview(tester);
+      expect(zooms.last, 2);
+      expect(captures, 0);
+      expect(videoStarts, 0);
+      final shutter = find.byKey(const ValueKey('capture_shutter'));
+      await tester.tap(shutter);
+      await tester.pumpAndSettle();
+      expect(captures, 1);
+      // The mock capture fails and intentionally reopens the camera.
+      expect(find.text('1.0×'), findsOneWidget);
+      final finger = await tester.startGesture(
+        tester.getCenter(shutter),
+        pointer: 1,
+      );
+      await tester.pump(const Duration(milliseconds: 650));
+      await tester.pump();
+      expect(videoStarts, 1);
+      await pinchPreview(tester);
+      expect(zooms.last, 2);
+      expect(videoStops, 0);
+      await finger.moveBy(const Offset(0, -110));
+      await tester.pump();
+      await finger.up();
+      await tester.pump();
+      expect(videoStops, 0);
+      await pinchPreview(tester);
+      expect(zooms.last, 4);
+      expect(videoStops, 0);
+      await tester.tap(shutter);
+      await tester.pumpAndSettle();
+      expect(videoStops, 1);
+      await tester.tap(find.byTooltip('Switch camera'));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 250));
+      }
+      expect(find.text('1.0×'), findsOneWidget);
+      await pinchPreview(tester);
+      expect(zooms.last, 2);
+      expect(tester.takeException(), isNull);
+      await closeTimerCamera(tester);
+    },
+  );
 
   for (final seconds in [3, 10]) {
     testWidgets(

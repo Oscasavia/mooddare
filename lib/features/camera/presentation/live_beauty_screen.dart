@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../../feed/presentation/screens/preview_screen.dart';
 import '../domain/beauty_lens.dart';
 import 'capture_shutter.dart';
+import 'camera_zoom_surface.dart';
 import 'capture_timer.dart';
 import 'custom_beauty_panel.dart';
 
@@ -47,6 +48,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   int? _texture;
   int _generation = 0, _selected = 0;
   double _strength = .65, _aspect = .75;
+  double _minZoom = 1, _maxZoom = 1, _initialZoom = 1;
   CustomBeautyLook _customLook = const CustomBeautyLook();
   BeautyAdjustment _customAdjustment = BeautyAdjustment.smooth;
   bool get _isCustom => BeautyLens.all[_selected] == BeautyLens.custom;
@@ -158,7 +160,12 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
       }
       await _sendLook();
       if (!mounted || generation != _generation) return;
-      setState(() => _texture = (value!['textureId'] as num).toInt());
+      setState(() {
+        _texture = (value!['textureId'] as num).toInt();
+        _minZoom = (value['minZoom'] as num?)?.toDouble() ?? 1;
+        _maxZoom = (value['maxZoom'] as num?)?.toDouble() ?? 1;
+        _initialZoom = (value['zoom'] as num?)?.toDouble() ?? 1;
+      });
       var polling = false;
       var waitingTicks = 0;
       _poll = Timer.periodic(const Duration(milliseconds: 250), (_) async {
@@ -234,6 +241,17 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
       await _channel.invokeMethod<void>('stop');
     });
   }
+
+  Future<double> Function(double) _zoomCamera(int texture) => (ratio) async {
+    if (_texture != texture || !_active || _inPreview) {
+      throw StateError('Camera session has ended');
+    }
+    return await _channel.invokeMethod<double>('setZoom', {
+          'ratio': ratio,
+          'textureId': texture,
+        }) ??
+        ratio;
+  };
 
   Future<void> _sendLook() => _channel.invokeMethod<void>('setLook', {
     ...(_isCustom
@@ -628,14 +646,22 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                   child: AspectRatio(
                     key: const ValueKey('camera_frame'),
                     aspectRatio: _viewportAspect,
-                    child: ClipRect(
-                      child: SizedBox.expand(
-                        child: FittedBox(
-                          fit: BoxFit.cover,
-                          child: SizedBox(
-                            width: _aspect * 1000,
-                            height: 1000,
-                            child: Texture(textureId: _texture!),
+                    child: CameraZoomSurface(
+                      key: ValueKey(_texture),
+                      enabled: _ready && _active && !_inPreview && !_busy,
+                      minZoom: _minZoom,
+                      maxZoom: _maxZoom,
+                      initialZoom: _initialZoom,
+                      onZoom: _zoomCamera(_texture!),
+                      child: ClipRect(
+                        child: SizedBox.expand(
+                          child: FittedBox(
+                            fit: BoxFit.cover,
+                            child: SizedBox(
+                              width: _aspect * 1000,
+                              height: 1000,
+                              child: Texture(textureId: _texture!),
+                            ),
                           ),
                         ),
                       ),
