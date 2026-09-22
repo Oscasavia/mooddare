@@ -22,8 +22,7 @@ class _BlockedAccountsScreenState extends State<BlockedAccountsScreen> {
       stream: _blocked,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const AppEmptyState(
-            icon: Icons.cloud_off,
+          return const AppEmptyState.error(
             title: 'Could not load accounts',
             message: 'Check your connection and reopen this page.',
           );

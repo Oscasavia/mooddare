@@ -7,6 +7,7 @@ import 'package:image/image.dart' as img;
 import 'package:mooddare/core/app_theme.dart';
 import 'package:mooddare/core/branding/mood_wink.dart';
 import 'package:mooddare/core/widgets/branded_startup.dart';
+import 'package:mooddare/core/widgets/mooddare_wordmark.dart';
 
 Future<void> mount(
   WidgetTester tester,
@@ -47,6 +48,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await mount(tester, initialize);
       expect(tester.widget<MoodWink>(find.byType(MoodWink)).wink, 0);
+      expect(find.byType(MoodDareWordmark), findsNothing);
       ready.complete();
       await tester.pump();
       expect(find.text('Ready'), findsNothing);
@@ -100,6 +102,10 @@ void main() {
     });
     await tester.pump();
     expect(find.text('Let’s try that again'), findsOneWidget);
+    expect(
+      tester.widget<MoodWink>(find.byType(MoodWink)).expression,
+      MoodWinkExpression.error,
+    );
     expect(find.text('Ready'), findsNothing);
     await tester.tap(find.text('Retry'));
     await tester.pump();

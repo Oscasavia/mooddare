@@ -255,6 +255,23 @@ class _FindPeopleScreenState extends State<FindPeopleScreen> {
     );
   }
 
+  Widget _searchFailure(String label, VoidCallback retry) => Center(
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const MoodWink(size: 64, expression: MoodWinkExpression.error),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: retry,
+            child: Text(label, textAlign: TextAlign.center),
+          ),
+        ],
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final people = _users
@@ -297,13 +314,9 @@ class _FindPeopleScreenState extends State<FindPeopleScreen> {
           ),
           Expanded(
             child: _blockError
-                ? Center(
-                    child: TextButton(
-                      onPressed: () => setState(_watchBlocks),
-                      child: const Text(
-                        'Could not load blocked accounts. Retry',
-                      ),
-                    ),
+                ? _searchFailure(
+                    'Could not load blocked accounts. Retry',
+                    () => setState(_watchBlocks),
                   )
                 : _query.isEmpty
                 ? _recentSearches()
@@ -327,17 +340,12 @@ class _FindPeopleScreenState extends State<FindPeopleScreen> {
                           child: Center(child: CircularProgressIndicator()),
                         )
                       else if (_error)
-                        Center(
-                          child: TextButton(
-                            onPressed: _load,
-                            child: const Text('Could not search people. Retry'),
-                          ),
-                        )
+                        _searchFailure('Could not search people. Retry', _load)
                       else if (people.isEmpty)
                         const AppEmptyState(
                           illustration: MoodWink(
                             size: 80,
-                            expression: MoodWinkExpression.noResults,
+                            expression: MoodWinkExpression.thinking,
                           ),
                           title: 'No matching people',
                           message:

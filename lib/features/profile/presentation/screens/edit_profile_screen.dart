@@ -164,8 +164,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _loadFailed
-          ? AppEmptyState(
-              icon: Icons.cloud_off_outlined,
+          ? AppEmptyState.error(
               title: 'Could not load your profile',
               message: _error ?? 'Please try again.',
               actionLabel: 'Retry',

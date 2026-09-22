@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../branding/mood_wink.dart';
 import 'app_empty_state.dart';
-import 'mooddare_wordmark.dart';
 
 /// A single short wink concurrent with initialization, never a looping loader.
 /// Authentication remains the responsibility of [child].
@@ -77,8 +76,7 @@ class _BrandedStartupState extends State<BrandedStartup>
       if (snapshot.connectionState == ConnectionState.done &&
           snapshot.hasError) {
         return Scaffold(
-          body: AppEmptyState(
-            icon: Icons.cloud_off_outlined,
+          body: AppEmptyState.error(
             title: 'Let’s try that again',
             message:
                 'MoodDare could not start. Check your connection and try again.',
@@ -97,18 +95,7 @@ class _BrandedStartupState extends State<BrandedStartup>
               child: Semantics(
                 label: 'Starting MoodDare',
                 child: ExcludeSemantics(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) => Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Center(child: MoodWink(wink: _wink)),
-                        Positioned(
-                          top: constraints.maxHeight / 2 + 86,
-                          child: const MoodDareWordmark(width: 160),
-                        ),
-                      ],
-                    ),
-                  ),
+                  child: Center(child: MoodWink(wink: _wink)),
                 ),
               ),
             ),

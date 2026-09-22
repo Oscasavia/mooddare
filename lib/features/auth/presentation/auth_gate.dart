@@ -26,8 +26,7 @@ class _AuthGateState extends State<AuthGate> {
       }
       if (snapshot.hasError) {
         return Scaffold(
-          body: AppEmptyState(
-            icon: Icons.cloud_off_outlined,
+          body: AppEmptyState.error(
             title: 'Could not restore your session',
             message: 'Check your connection and try again.',
             actionLabel: 'Retry',
@@ -127,8 +126,7 @@ class _ProfileGateState extends State<_ProfileGate> {
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Scaffold(
-              body: AppEmptyState(
-                icon: Icons.cloud_off_outlined,
+              body: AppEmptyState.error(
                 title: 'Could not load your profile',
                 message: 'Check your connection and try again.',
                 actionLabel: 'Retry',

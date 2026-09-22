@@ -31,8 +31,7 @@ class _MyDaresGridState extends State<MyDaresGrid> {
     stream: _posts,
     builder: (context, snapshot) {
       if (snapshot.hasError) {
-        return const AppEmptyState(
-          icon: Icons.cloud_off,
+        return const AppEmptyState.error(
           title: 'Could not load moments',
           message: 'Check your connection and reopen your profile.',
         );

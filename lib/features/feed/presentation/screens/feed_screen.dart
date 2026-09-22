@@ -211,8 +211,7 @@ class _FeedScreenState extends State<FeedScreen> {
           stream: _posts,
           builder: (context, snapshot) {
             if (snapshot.hasError) {
-              return AppEmptyState(
-                icon: Icons.cloud_off_outlined,
+              return AppEmptyState.error(
                 title: 'Could not load moments',
                 message: 'Check your connection and try again.',
                 actionLabel: 'Retry',

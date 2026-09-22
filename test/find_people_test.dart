@@ -118,7 +118,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester.widget<MoodWink>(find.byType(MoodWink)).expression,
-        MoodWinkExpression.noResults,
+        MoodWinkExpression.thinking,
       );
       expect(find.text('No matching people'), findsOneWidget);
       expect(
@@ -129,8 +129,19 @@ void main() {
       await search(tester, 'offline');
       repo.pending.last.completeError(StateError('offline'));
       await tester.pumpAndSettle();
-      expect(find.byType(MoodWink), findsNothing);
+      expect(
+        tester.widget<MoodWink>(find.byType(MoodWink)).expression,
+        MoodWinkExpression.error,
+      );
       expect(find.text('Could not search people. Retry'), findsOneWidget);
+      await tester.ensureVisible(find.text('Could not search people. Retry'));
+      await tester.tap(find.text('Could not search people. Retry'));
+      await tester.pump();
+      expect(find.byType(MoodWink), findsNothing);
+      repo.pending.last.complete(PeoplePage([person('alice')]));
+      await tester.pumpAndSettle();
+      expect(find.text('@alice'), findsOneWidget);
+      expect(find.byType(MoodWink), findsNothing);
       await tester.tap(find.byTooltip('Clear search'));
       await tester.pumpAndSettle();
       expect(

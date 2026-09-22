@@ -194,23 +194,6 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                               )
                             : Text(_signUp ? 'Create account' : 'Sign in'),
                       ),
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        key: const ValueKey('google_sign_in'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: const Color(0xFF1F1F1F),
-                        ),
-                        onPressed: _busy ? null : () => _submit(google: true),
-                        icon: Image.asset(
-                          'assets/branding/google-g.png',
-                          width: 20,
-                          height: 20,
-                          fit: BoxFit.contain,
-                          excludeFromSemantics: true,
-                        ),
-                        label: const Text('Continue with Google'),
-                      ),
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 16),
                         child: Row(
@@ -237,6 +220,23 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                           ],
                         ),
                       ),
+                      FilledButton.icon(
+                        key: const ValueKey('google_sign_in'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFF1F1F1F),
+                        ),
+                        onPressed: _busy ? null : () => _submit(google: true),
+                        icon: Image.asset(
+                          'assets/branding/google-g.png',
+                          width: 20,
+                          height: 20,
+                          fit: BoxFit.contain,
+                          excludeFromSemantics: true,
+                        ),
+                        label: const Text('Continue with Google'),
+                      ),
+                      const SizedBox(height: 24),
                       Text.rich(
                         TextSpan(
                           children: [

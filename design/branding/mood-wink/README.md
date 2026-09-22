@@ -20,7 +20,8 @@ monochrome artwork, native launch resources, and the complete iOS AppIcon and
 LaunchImage catalogs. Android adaptive artwork stays within the central safe
 circle. iOS launcher PNGs are opaque RGB, with no baked-in corner rounding.
 Native launch screens use a still open-eyed lavender face on ink; Flutter then
-closes and reopens one eye over 900ms, with the approved wordmark below it.
+closes and reopens one eye over 900ms. The splash shows only the animated icon;
+the accessible startup label remains available to screen readers.
 
 The wink runs once per fresh app startup while Firebase initializes. It does not
 loop during a slow initialization or replay when returning from the background.
@@ -39,10 +40,20 @@ selected. The navigation label remains visible and accessible. Login and signup
 share a compact 64px wink above the 128px wordmark. These are static accents;
 only startup animates.
 
-Find people uses the wink to invite a first search and an `x_x` expression for
-no matches, with a flat mouth and the original silhouette. Loading, errors and
-search results retain their distinct behavior. `AppEmptyState.illustration`
+Find people uses the wink to invite a first search and a thinking expression
+for no matches: an upward glance, raised eyebrow, and small slanted mouth.
+The `x_x` expression with a flat mouth is reserved for errors. The shared
+`AppEmptyState.error` displays it for full-page startup, session, feed, profile,
+and blocked-account loading errors; Find people also uses it for search and
+blocked-account loading failures. Existing explanations and recovery actions
+remain available. Loading and populated results do not display either face.
+`AppEmptyState.illustration`
 allows other screens to opt into branded artwork without replacing useful
 status icons everywhere. Keyboard/large-text layouts, search transitions and
 geometry are covered in `test/brand_personality_test.dart` and the existing
 entry/search suites.
+
+The login/signup divider sits between the email/password submit button and
+Google sign-in. Account-switch links remain below Google. See
+[personality opportunities](personality-opportunities.md) for proposed placements
+elsewhere; those proposals are not installed yet.

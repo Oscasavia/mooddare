@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../branding/mood_wink.dart';
 
 class AppEmptyState extends StatelessWidget {
   final IconData? icon;
@@ -16,6 +17,18 @@ class AppEmptyState extends StatelessWidget {
     this.actionLabel,
     this.onAction,
   }) : assert(icon != null || illustration != null);
+
+  const AppEmptyState.error({
+    super.key,
+    required this.title,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  }) : icon = null,
+       illustration = const MoodWink(
+         size: 80,
+         expression: MoodWinkExpression.error,
+       );
   @override
   Widget build(BuildContext context) => Center(
     child: SingleChildScrollView(

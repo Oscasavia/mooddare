@@ -2,7 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../app_theme.dart';
 
-enum MoodWinkExpression { wink, noResults }
+enum MoodWinkExpression { wink, thinking, error }
 
 /// Clean vector reconstruction of the approved Mood Wink concept. Contours
 /// are shared by Flutter and the native-resource exporter (M, C, Z commands).
@@ -91,7 +91,27 @@ class MoodWinkGeometry {
         }
       }
     }
-    if (expression == MoodWinkExpression.noResults) {
+    if (expression == MoodWinkExpression.thinking) {
+      // An upward glance, lifted brow and small off-center mouth: curious,
+      // rather than upset. All features remain cutouts in the original face.
+      final features = Path()
+        ..addOval(const Rect.fromLTWH(31, 37, 10, 16))
+        ..addOval(const Rect.fromLTWH(66, 32, 10, 16))
+        ..moveTo(59, 22)
+        ..cubicTo(66, 17, 76, 18, 81, 23)
+        ..cubicTo(84, 26, 80, 30, 77, 27)
+        ..cubicTo(72, 24, 67, 24, 62, 27)
+        ..cubicTo(59, 29, 56, 25, 59, 22)
+        ..close()
+        ..moveTo(39, 71)
+        ..lineTo(58, 66)
+        ..cubicTo(62, 65, 63, 71, 59, 72)
+        ..lineTo(40, 77)
+        ..cubicTo(36, 78, 35, 72, 39, 71)
+        ..close();
+      return Path.combine(PathOperation.difference, result, features);
+    }
+    if (expression == MoodWinkExpression.error) {
       final features = Path();
       for (final center in [const Offset(33, 44), const Offset(69, 41)]) {
         features.addPolygon([
