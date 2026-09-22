@@ -9,6 +9,7 @@ class AuthorIdentity extends StatelessWidget {
   final String fallback;
   final double avatarRadius;
   final bool compact;
+  final Widget? besideName;
   static const textInset = 50.0;
   const AuthorIdentity({
     super.key,
@@ -19,6 +20,7 @@ class AuthorIdentity extends StatelessWidget {
     this.fallback = 'MoodDare member',
     this.avatarRadius = 18,
     this.compact = false,
+    this.besideName,
   });
 
   @override
@@ -28,6 +30,16 @@ class AuthorIdentity extends StatelessWidget {
         ? '@$username'
         : user?.name ?? fallback;
     final photo = user?.photoUrl;
+    final nameButton = TextButton(
+      key: nameKey,
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(0, 48),
+        alignment: Alignment.centerLeft,
+      ),
+      child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+    );
     return Row(
       children: [
         Semantics(
@@ -63,16 +75,15 @@ class AuthorIdentity extends StatelessWidget {
         ),
         const SizedBox(width: 2),
         Expanded(
-          child: TextButton(
-            key: nameKey,
-            onPressed: onPressed,
-            style: TextButton.styleFrom(
-              padding: EdgeInsets.zero,
-              minimumSize: const Size(0, 48),
-              alignment: Alignment.centerLeft,
-            ),
-            child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-          ),
+          child: besideName == null
+              ? nameButton
+              : Row(
+                  children: [
+                    Flexible(child: nameButton),
+                    const SizedBox(width: 6),
+                    Flexible(child: besideName!),
+                  ],
+                ),
         ),
       ],
     );

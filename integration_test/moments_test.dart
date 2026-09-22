@@ -207,6 +207,34 @@ void main() {
           await tester.pump(const Duration(milliseconds: 100));
         }
         expect(detailPlayer.value.isPlaying, isFalse);
+        final progress = find.byKey(const ValueKey('video_progress'));
+        expect(progress, findsOneWidget);
+        final seekBounds = tester.getRect(progress);
+        final durationMs = detailPlayer.value.duration.inMilliseconds;
+        final fraction =
+            detailPlayer.value.position.inMilliseconds < durationMs / 2
+            ? .75
+            : .25;
+        await tester.tapAt(
+          Offset(
+            seekBounds.left + seekBounds.width * fraction,
+            seekBounds.center.dy,
+          ),
+        );
+        for (var i = 0; i < 30; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+          final position = await detailPlayer.position;
+          if (position != null &&
+              (position.inMilliseconds - durationMs * fraction).abs() < 200) {
+            break;
+          }
+        }
+        expect(
+          (await detailPlayer.position)!.inMilliseconds,
+          closeTo(durationMs * fraction, 200),
+        );
+        expect(detailPlayer.value.isPlaying, isFalse);
+        expect(detailPlayer.value.volume, 0);
         await tester.pageBack();
         await tester.pumpAndSettle();
         await waitForPlayer(tester);

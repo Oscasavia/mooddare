@@ -4,17 +4,28 @@ import 'package:mooddare/core/app_routes.dart';
 import 'package:mooddare/features/feed/presentation/widgets/author_identity.dart';
 import 'package:mooddare/models/user_model.dart';
 import '../../data/social_repository.dart';
+import '../../data/recent_search_store.dart';
 import '../widgets/follow_button.dart';
 
 class FindPeopleScreen extends StatefulWidget {
   final SocialRepository repository;
-  const FindPeopleScreen({super.key, required this.repository});
+  final RecentSearchStore? recentSearches;
+  const FindPeopleScreen({
+    super.key,
+    required this.repository,
+    this.recentSearches,
+  });
   @override
   State<FindPeopleScreen> createState() => _FindPeopleScreenState();
 }
 
 class _FindPeopleScreenState extends State<FindPeopleScreen> {
   final _search = TextEditingController();
+  late final _history = widget.recentSearches ?? RecentSearchStore.instance;
+  late final _historyUid = widget.repository.currentUserId;
+  List<String> _recent = [];
+  int _historyVersion = 0;
+  bool _historyError = false;
   Timer? _debounce;
   StreamSubscription<Set<String>>? _blocks;
   Set<String>? _blocked;
@@ -28,7 +39,112 @@ class _FindPeopleScreenState extends State<FindPeopleScreen> {
   void initState() {
     super.initState();
     _watchBlocks();
+    _loadHistory();
   }
+
+  Future<void> _loadHistory() async {
+    final uid = _historyUid;
+    if (uid == null) return;
+    final version = _historyVersion;
+    try {
+      final history = await _history.load(uid);
+      if (mounted && version == _historyVersion) {
+        setState(() {
+          _recent = history;
+          _historyError = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && version == _historyVersion) {
+        setState(() => _historyError = true);
+      }
+    }
+  }
+
+  void _saveHistory(List<String> values) {
+    final uid = _historyUid;
+    if (uid == null) return;
+    _historyVersion++;
+    setState(() {
+      _recent = RecentSearchStore.clean(values);
+      _historyError = false;
+    });
+    unawaited(
+      _history.save(uid, _recent).catchError((Object _) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not save recent searches on this device.'),
+            ),
+          );
+        }
+      }),
+    );
+  }
+
+  void _submit(String value) {
+    _search.text = value;
+    _search.selection = TextSelection.collapsed(offset: value.length);
+    _changed(value);
+    _debounce?.cancel();
+    if (_query.isEmpty) return;
+    _saveHistory([_query, ..._recent]);
+    FocusManager.instance.primaryFocus?.unfocus();
+    // A submitted search replaces any pending request, including pagination.
+    _generation++;
+    _users.clear();
+    _page = null;
+    _load();
+  }
+
+  Widget _recentSearches() => ListView(
+    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+    children: [
+      if (_historyError)
+        TextButton(
+          onPressed: _loadHistory,
+          child: const Text('Could not load recent searches. Retry'),
+        ),
+      if (_recent.isEmpty)
+        const Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Find your people\nSearch a username to connect and follow along.',
+            textAlign: TextAlign.center,
+          ),
+        )
+      else ...[
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Recent searches',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            TextButton(
+              onPressed: () => _saveHistory([]),
+              child: const Text('Clear all'),
+            ),
+          ],
+        ),
+        for (final query in _recent)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.history_rounded, size: 20),
+            title: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis),
+            onTap: () => _submit(query),
+            trailing: IconButton(
+              tooltip: 'Remove $query from recent searches',
+              icon: const Icon(Icons.close_rounded, size: 18),
+              onPressed: () =>
+                  _saveHistory(_recent.where((item) => item != query).toList()),
+            ),
+          ),
+      ],
+    ],
+  );
 
   void _watchBlocks() {
     _blocks?.cancel();
@@ -49,12 +165,12 @@ class _FindPeopleScreenState extends State<FindPeopleScreen> {
   }
 
   void _changed(String text) {
-    _debounce?.cancel();
     final query = text.trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
     if (query == _query) {
       setState(() {});
       return;
     }
+    _debounce?.cancel();
     _generation++;
     setState(() {
       _query = query;
@@ -109,6 +225,10 @@ class _FindPeopleScreenState extends State<FindPeopleScreen> {
     final identity = AuthorIdentity(
       user: user,
       onPressed: () {
+        final username = user.username;
+        if (username != null && username.isNotEmpty) {
+          _saveHistory([username, ..._recent]);
+        }
         FocusManager.instance.primaryFocus?.unfocus();
         Navigator.pushNamed(context, profileRoute, arguments: user.id);
       },
@@ -153,6 +273,8 @@ class _FindPeopleScreenState extends State<FindPeopleScreen> {
             child: TextField(
               controller: _search,
               onChanged: _changed,
+              onSubmitted: _submit,
+              textInputAction: TextInputAction.search,
               onTapOutside: (_) =>
                   FocusManager.instance.primaryFocus?.unfocus(),
               textCapitalization: TextCapitalization.none,
@@ -184,18 +306,11 @@ class _FindPeopleScreenState extends State<FindPeopleScreen> {
                     ),
                   )
                 : _query.isEmpty
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Text(
-                        'Find your people\nSearch a username to connect and follow along.',
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  )
+                ? _recentSearches()
                 : _blocked == null
                 ? const Center(child: CircularProgressIndicator())
                 : ListView(
+                    key: ValueKey('people_results_$_query'),
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),

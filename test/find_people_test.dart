@@ -9,6 +9,7 @@ import 'package:mooddare/features/profile/data/social_repository.dart';
 import 'package:mooddare/features/profile/presentation/screens/find_people_screen.dart';
 import 'package:mooddare/models/user_model.dart';
 import 'support/social_fakes.dart';
+import 'support/search_history_fake.dart';
 
 UserModel person(String id) =>
     UserModel(id: id, username: id, createdAt: Timestamp.now());
@@ -65,7 +66,11 @@ void main() {
   );
 
   late SearchSocial repo;
-  setUp(() => repo = SearchSocial());
+  late MemorySearchHistory history;
+  setUp(() {
+    repo = SearchSocial();
+    history = MemorySearchHistory();
+  });
   tearDown(() => repo.changed.close());
   Future<void> open(WidgetTester tester, {double scale = 1}) async {
     tester.view.physicalSize = const Size(320, 700);
@@ -87,7 +92,7 @@ void main() {
             body: Text('Profile ${settings.arguments}'),
           ),
         ),
-        home: FindPeopleScreen(repository: repo),
+        home: FindPeopleScreen(repository: repo, recentSearches: history),
       ),
     );
     await tester.pumpAndSettle();
@@ -184,6 +189,67 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byTooltip('Clear search'), findsNothing);
   });
+
+  testWidgets(
+    'recent searches save submissions, replay, remove and clear without recording typing',
+    (tester) async {
+      history.values['viewer'] = ['bob', 'alice'];
+      await open(tester);
+      expect(find.text('Recent searches'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ListTile, 'bob'));
+      await tester.pump();
+      expect(repo.calls, ['bob']);
+      repo.pending.last.complete(const PeoplePage([]));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Clear search'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Remove bob from recent searches'));
+      await tester.pumpAndSettle();
+      expect(history.values['viewer'], ['alice']);
+      await tester.enterText(find.byType(TextField), 'char');
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(history.values['viewer'], ['alice']);
+      await tester.enterText(find.byType(TextField), '@CHARLIE');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pump();
+      expect(repo.calls.last, 'charlie');
+      repo.pending.last.complete(const PeoplePage([]));
+      await tester.pumpAndSettle();
+      expect(history.values['viewer'], ['charlie', 'alice']);
+      await tester.tap(find.byTooltip('Clear search'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Clear all'));
+      await tester.pumpAndSettle();
+      expect(history.values['viewer'], isEmpty);
+      expect(find.text('Recent searches'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'history failures remain retryable and do not prevent searching',
+    (tester) async {
+      history.failLoad = true;
+      await open(tester);
+      expect(
+        find.text('Could not load recent searches. Retry'),
+        findsOneWidget,
+      );
+      history.failLoad = false;
+      history.values['viewer'] = ['alice'];
+      await tester.tap(find.text('Could not load recent searches. Retry'));
+      await tester.pumpAndSettle();
+      history.failSave = true;
+      await tester.tap(find.widgetWithText(ListTile, 'alice'));
+      await tester.pump();
+      repo.pending.last.complete(const PeoplePage([]));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Could not save recent searches on this device.'),
+        findsOneWidget,
+      );
+      expect(find.text('No matching people'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'Show more appends results and keeps existing profiles after failure',

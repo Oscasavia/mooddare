@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mooddare/models/user_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mooddare/core/comment_time.dart';
 import 'package:mooddare/models/comment_model.dart';
@@ -48,10 +50,15 @@ void main() {
     'timestamps appear for comments and replies, preserve Edited and omit missing dates',
     (tester) async {
       final repo = TimestampPosts();
+      repo.authors['viewer'] = UserModel(
+        id: 'viewer',
+        username: 'me',
+        createdAt: Timestamp.now(),
+      );
       repo.comments.addAll([
         CommentModel(
           id: 'root',
-          authorId: 'other',
+          authorId: 'viewer',
           text: 'Root text',
           createdAt: DateTime.now().subtract(const Duration(minutes: 5)),
           editedAt: DateTime.now(),
@@ -67,6 +74,18 @@ void main() {
       await tester.tap(find.byTooltip('Comments'));
       await tester.pumpAndSettle();
       expect(find.text('5m'), findsOneWidget);
+      final name = find.descendant(
+        of: find.byKey(const ValueKey('comment_author_root')),
+        matching: find.byType(Text),
+      );
+      final time = find.byKey(const ValueKey('comment_time_root'));
+      expect(
+        tester.getRect(time).left - tester.getRect(name).right,
+        closeTo(6, 1),
+      );
+      final menu = find.byKey(const ValueKey('comment_menu_root'));
+      final row = find.byKey(const ValueKey('root'));
+      expect(tester.getRect(menu).right, closeTo(tester.getRect(row).right, 1));
       expect(find.text('Edited'), findsOneWidget);
       expect(find.byKey(const ValueKey('comment_time_legacy')), findsNothing);
       await tester.ensureVisible(find.textContaining('View replies').first);

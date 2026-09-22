@@ -242,6 +242,27 @@ class _CommentsSheetState extends State<CommentsSheet> {
     }
   }
 
+  Widget _timestamp(CommentModel comment) {
+    final local = comment.createdAt!.toLocal();
+    final labels = MaterialLocalizations.of(context);
+    final exact =
+        '${labels.formatFullDate(local)}, ${labels.formatTimeOfDay(TimeOfDay.fromDateTime(local))}';
+    return Tooltip(
+      message: exact,
+      excludeFromSemantics: true,
+      child: Text(
+        commentTime(local, DateTime.now()),
+        key: ValueKey('comment_time_${comment.id}'),
+        semanticsLabel: 'Posted $exact',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(
+          context,
+        ).textTheme.labelSmall?.copyWith(color: Colors.white60),
+      ),
+    );
+  }
+
   Widget _comment(CommentModel comment, {String? replyTo}) {
     final uid = widget.repository.currentUserId;
     final savedLike = comment.likedBy.contains(uid);
@@ -271,6 +292,9 @@ class _CommentsSheetState extends State<CommentsSheet> {
                     user: snapshot.data,
                     avatarRadius: 14,
                     compact: true,
+                    besideName: comment.createdAt == null
+                        ? null
+                        : _timestamp(comment),
                     avatarKey: ValueKey('comment_avatar_${comment.id}'),
                     nameKey: ValueKey('comment_author_${comment.id}'),
                     onPressed: () {
@@ -284,33 +308,6 @@ class _CommentsSheetState extends State<CommentsSheet> {
                   ),
                 ),
               ),
-              if (comment.createdAt != null)
-                Flexible(
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 8, right: 4),
-                    child: Builder(
-                      builder: (context) {
-                        final local = comment.createdAt!.toLocal();
-                        final labels = MaterialLocalizations.of(context);
-                        final exact =
-                            '${labels.formatFullDate(local)}, ${labels.formatTimeOfDay(TimeOfDay.fromDateTime(local))}';
-                        return Tooltip(
-                          message: exact,
-                          excludeFromSemantics: true,
-                          child: Text(
-                            commentTime(local, DateTime.now()),
-                            key: ValueKey('comment_time_${comment.id}'),
-                            semanticsLabel: 'Posted $exact',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(color: Colors.white60),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
               if (uid != null &&
                   (uid == comment.authorId || uid == widget.post.authorId))
                 StablePopupMenu<String>(

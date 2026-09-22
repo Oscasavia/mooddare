@@ -16,6 +16,7 @@ import '../video_sound.dart';
 import 'comments_sheet.dart';
 import 'author_identity.dart';
 import 'post_likes_sheet.dart';
+import 'video_seek_bar.dart';
 
 class DareProofCard extends StatefulWidget {
   final PostModel post;
@@ -55,7 +56,8 @@ class _DareProofCardState extends State<DareProofCard>
       _pausedByUser = false,
       _sharing = false,
       _commenting = false,
-      _viewingLikes = false;
+      _viewingLikes = false,
+      _scrubbing = false;
   int _likes = 0;
   bool _downloading = false;
   String? get _uid => _repository.currentUserId;
@@ -67,7 +69,8 @@ class _DareProofCardState extends State<DareProofCard>
       !_sharing &&
       !_commenting &&
       !_viewingLikes &&
-      !_pausedByUser;
+      !_pausedByUser &&
+      !_scrubbing;
   @override
   void initState() {
     super.initState();
@@ -514,7 +517,8 @@ class _DareProofCardState extends State<DareProofCard>
                   left: 20,
                   right: 20,
                   bottom: widget.isFullScreen
-                      ? MediaQuery.paddingOf(context).bottom + 16
+                      ? MediaQuery.paddingOf(context).bottom +
+                            (widget.post.mediaType == 'video' ? 52 : 16)
                       : 24,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -632,7 +636,8 @@ class _DareProofCardState extends State<DareProofCard>
                   ValueListenableBuilder<VideoPlayerValue>(
                     valueListenable: _video!,
                     builder: (_, value, _) => IgnorePointer(
-                      child: value.isInitialized && !value.isPlaying
+                      child:
+                          value.isInitialized && !value.isPlaying && !_scrubbing
                           ? const Center(
                               child: Icon(
                                 Icons.play_circle_outline,
@@ -641,6 +646,21 @@ class _DareProofCardState extends State<DareProofCard>
                               ),
                             )
                           : const SizedBox.shrink(),
+                    ),
+                  ),
+                if (widget.isFullScreen && _video != null && !_videoFailed)
+                  Positioned(
+                    left: 8,
+                    right: 8,
+                    bottom: MediaQuery.paddingOf(context).bottom,
+                    child: VideoSeekBar(
+                      controller: _video!,
+                      onScrubbingChanged: (scrubbing) {
+                        setState(() => _scrubbing = scrubbing);
+                        _syncPlayback();
+                      },
+                      onSeekError: () =>
+                          _message('Could not seek this video. Try again.'),
                     ),
                   ),
                 IgnorePointer(
