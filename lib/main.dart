@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:mooddare/core/app_theme.dart';
 import 'package:mooddare/core/navigation.dart';
-import 'package:mooddare/core/widgets/app_empty_state.dart';
+import 'package:mooddare/core/widgets/branded_startup.dart';
 import 'package:mooddare/features/auth/presentation/auth_gate.dart';
 import 'firebase_options.dart';
 
@@ -35,55 +35,17 @@ class MoodDareApp extends StatelessWidget {
     debugShowCheckedModeBanner: false,
     navigatorObservers: [appRouteObserver],
     onGenerateRoute: appRouteFactory,
-    home: const _Startup(),
+    home: BrandedStartup(
+      initialize: _initializeFirebase,
+      child: const AuthGate(),
+    ),
   );
 }
 
-class _Startup extends StatefulWidget {
-  const _Startup();
-  @override
-  State<_Startup> createState() => _StartupState();
-}
-
-class _StartupState extends State<_Startup> {
-  late Future<void> _ready;
-  @override
-  void initState() {
-    super.initState();
-    _ready = _initialize()..ignore();
+Future<void> _initializeFirebase() async {
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   }
-
-  Future<void> _initialize() async {
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => FutureBuilder<void>(
-    future: _ready,
-    builder: (context, snapshot) {
-      if (snapshot.hasError) {
-        return Scaffold(
-          body: AppEmptyState(
-            icon: Icons.cloud_off_outlined,
-            title: 'Let’s try that again',
-            message:
-                'MoodDare could not start. Check your connection and try again.',
-            actionLabel: 'Retry',
-            onAction: () => setState(() {
-              // Observe immediate platform failures until FutureBuilder attaches.
-              _ready = _initialize()..ignore();
-            }),
-          ),
-        );
-      }
-      if (snapshot.connectionState != ConnectionState.done) {
-        return const Scaffold(body: Center(child: CircularProgressIndicator()));
-      }
-      return const AuthGate();
-    },
-  );
 }

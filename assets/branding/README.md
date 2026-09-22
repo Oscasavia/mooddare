@@ -8,4 +8,9 @@ generation on 2026-09-22. The original PNG is preserved unchanged. The shared
 `MoodDareWordmark` widget removes its dark presentation background at paint time
 and renders the lettering in the app's lavender (#C5B4FF). It is used on Moments
 and Welcome, with an accessible MoodDare heading label. The source prompts and
-concept board are saved in the design folder. App-icon concepts are not installed.
+concept board are saved in the design folder.
+
+`mood-wink.svg` is the vector source export for the selected Mood Wink app icon.
+The canonical paths live in `lib/core/branding/mood_wink.dart`, shared by the
+animated Flutter splash and the native asset exporter. See
+`design/branding/mood-wink/README.md` for regeneration and platform details.
