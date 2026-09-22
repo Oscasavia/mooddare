@@ -1,5 +1,7 @@
 import 'package:mooddare/core/comment_time.dart';
 import 'package:mooddare/core/app_theme.dart';
+import 'package:mooddare/core/branding/mood_wink.dart';
+import 'package:mooddare/core/widgets/app_empty_state.dart';
 import 'package:mooddare/core/widgets/stable_popup_menu.dart';
 import 'dart:async';
 import 'package:flutter/gestures.dart';
@@ -547,8 +549,14 @@ class _CommentsSheetState extends State<CommentsSheet> {
                               .where((c) => !_blocked.contains(c.authorId))
                               .toList();
                           if (comments.isEmpty) {
-                            return const Center(
-                              child: Text('Start the conversation ✨'),
+                            return const AppEmptyState(
+                              illustration: MoodWink(
+                                size: 64,
+                                expression: MoodWinkExpression.talking,
+                              ),
+                              title: 'Start the conversation',
+                              message:
+                                  'A few kind words can make someone’s day.',
                             );
                           }
                           return ListView.builder(

@@ -44,7 +44,7 @@ void main() {
           await deleteMenu(tester);
           expect(repo.comments, isEmpty);
           expect(find.text('Remove this'), findsNothing);
-          expect(find.text('Start the conversation ✨'), findsOneWidget);
+          expect(find.text('Start the conversation'), findsOneWidget);
           await tester.binding.handlePopRoute();
           await tester.pumpAndSettle();
           expect(

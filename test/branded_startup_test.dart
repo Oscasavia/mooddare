@@ -32,6 +32,55 @@ Future<void> mount(
 );
 
 void main() {
+  for (final insets in [
+    const EdgeInsets.only(top: 48, bottom: 24),
+    const EdgeInsets.only(top: 24, bottom: 48),
+    const EdgeInsets.only(top: 62, bottom: 34),
+  ]) {
+    testWidgets(
+      'native-to-Flutter handoff stays centered with system insets $insets',
+      (tester) async {
+        tester.view.physicalSize = const Size(360, 800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final ready = Completer<void>();
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.build(),
+            home: MediaQuery(
+              data: MediaQueryData(
+                size: const Size(360, 800),
+                padding: insets,
+                viewPadding: insets,
+              ),
+              child: BrandedStartup(
+                initialize: () => ready.future,
+                child: const Text('Ready'),
+              ),
+            ),
+          ),
+        );
+        final first = tester.getRect(find.byType(MoodWink));
+        expect(first.center, const Offset(180, 400));
+        expect(first.size, const Size.square(128));
+        await tester.pump(const Duration(milliseconds: 270));
+        expect(tester.getRect(find.byType(MoodWink)), first);
+        expect(
+          tester.widget<MoodWink>(find.byType(MoodWink)).wink,
+          inExclusiveRange(0, 1),
+        );
+        ready.complete();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 629));
+        expect(find.text('Ready'), findsNothing);
+        // Permit the next frame after the 900ms controller boundary.
+        await tester.pump(const Duration(milliseconds: 2));
+        expect(find.text('Ready'), findsOneWidget);
+      },
+    );
+  }
+
   testWidgets(
     'one wink completes before handoff, without reinitializing on resize',
     (tester) async {

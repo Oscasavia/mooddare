@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mooddare/core/branding/mood_wink.dart';
 import 'package:mooddare/core/widgets/mooddare_wordmark.dart';
 import 'package:flutter/services.dart';
 import 'package:mooddare/features/feed/presentation/video_sound.dart';
@@ -103,7 +104,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CommentsSheet), findsOneWidget);
     expect(find.byType(PostDetailsScreen), findsNothing);
-    expect(find.text('Start the conversation ✨'), findsOneWidget);
+    expect(find.text('Start the conversation'), findsOneWidget);
+    expect(
+      tester.widget<MoodWink>(find.byType(MoodWink)).expression,
+      MoodWinkExpression.talking,
+    );
     expect(
       tester
           .widget<IconButton>(
@@ -120,6 +125,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.comments.single.text, 'Love this moment!');
     expect(find.text('Love this moment!'), findsOneWidget);
+    expect(find.byType(MoodWink), findsNothing);
     expect(
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
       isEmpty,
@@ -411,6 +417,10 @@ void main() {
     await tester.tap(find.text('Happy'));
     await tester.pumpAndSettle();
     expect(find.text('No moments in this mood yet'), findsOneWidget);
+    expect(
+      tester.widget<MoodWink>(find.byType(MoodWink)).expression,
+      MoodWinkExpression.thinking,
+    );
     await tester.tap(find.text('Show all moods'));
     await tester.pumpAndSettle();
     expect(repo.selectedMood, isNull);
@@ -574,6 +584,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(PostDetailsScreen), findsNothing);
     expect(find.text('The first moment could be yours'), findsOneWidget);
+    expect(
+      tester.widget<MoodWink>(find.byType(MoodWink)).expression,
+      MoodWinkExpression.smile,
+    );
   });
 
   for (final dimensions in [

@@ -6,6 +6,7 @@ import 'package:mooddare/features/feed/presentation/screens/post_details_screen.
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:mooddare/core/widgets/app_empty_state.dart';
+import 'package:mooddare/core/branding/mood_wink.dart';
 
 class MyDaresGrid extends StatefulWidget {
   final String userId;
@@ -42,7 +43,10 @@ class _MyDaresGridState extends State<MyDaresGrid> {
       final posts = snapshot.data!;
       if (posts.isEmpty) {
         return const AppEmptyState(
-          icon: Icons.photo_camera_back_outlined,
+          illustration: MoodWink(
+            size: 80,
+            expression: MoodWinkExpression.smile,
+          ),
           title: 'Your story starts here',
           message: 'Your shared dares will appear here.',
         );

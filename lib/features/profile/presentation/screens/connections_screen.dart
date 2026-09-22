@@ -2,6 +2,8 @@ import 'package:mooddare/core/widgets/stable_popup_menu.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mooddare/core/app_routes.dart';
+import 'package:mooddare/core/branding/mood_wink.dart';
+import 'package:mooddare/core/widgets/app_empty_state.dart';
 import 'package:mooddare/features/feed/presentation/widgets/author_identity.dart';
 import 'package:mooddare/models/user_model.dart';
 import '../../data/social_repository.dart';
@@ -101,6 +103,46 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     }
   }
 
+  Widget _connection(UserModel user) {
+    final identity = AuthorIdentity(
+      user: user,
+      onPressed: () =>
+          Navigator.pushNamed(context, profileRoute, arguments: user.id),
+    );
+    if (user.id == widget.repository.currentUserId) return identity;
+    final follow = FollowButton(userId: user.id, repository: widget.repository);
+    final options = StablePopupMenu<String>(
+      tooltip: 'Account options',
+      onSelected: (_) => _block(user),
+      itemBuilder: (_) => [
+        const PopupMenuItem(value: 'block', child: Text('Block account')),
+      ],
+    );
+    if (MediaQuery.textScalerOf(context).scale(14) > 20) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          identity,
+          Row(
+            children: [
+              Expanded(
+                child: Align(alignment: Alignment.centerRight, child: follow),
+              ),
+              options,
+            ],
+          ),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        Expanded(child: identity),
+        follow,
+        options,
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(widget.followers ? 'Followers' : 'Following')),
@@ -170,12 +212,21 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                       )
                       .toList();
                   if (users.isEmpty) {
-                    return Center(
-                      child: Text(
-                        query.isEmpty
-                            ? 'No people here yet'
-                            : 'No matching people',
+                    return AppEmptyState(
+                      illustration: MoodWink(
+                        size: 80,
+                        expression: query.isEmpty
+                            ? MoodWinkExpression.smile
+                            : MoodWinkExpression.thinking,
                       ),
+                      title: query.isEmpty
+                          ? 'No people here yet'
+                          : 'No matching people',
+                      message: query.isNotEmpty
+                          ? 'Try another name or username.'
+                          : widget.followers
+                          ? 'Followers will appear here as people connect.'
+                          : 'Followed accounts will appear here.',
                     );
                   }
                   return ListView.builder(
@@ -184,36 +235,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                       final user = users[index];
                       return Padding(
                         padding: const EdgeInsets.fromLTRB(16, 4, 0, 4),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: AuthorIdentity(
-                                user: user,
-                                onPressed: () => Navigator.pushNamed(
-                                  context,
-                                  profileRoute,
-                                  arguments: user.id,
-                                ),
-                              ),
-                            ),
-                            if (user.id != widget.repository.currentUserId) ...[
-                              FollowButton(
-                                userId: user.id,
-                                repository: widget.repository,
-                              ),
-                              StablePopupMenu<String>(
-                                tooltip: 'Account options',
-                                onSelected: (_) => _block(user),
-                                itemBuilder: (_) => [
-                                  const PopupMenuItem(
-                                    value: 'block',
-                                    child: Text('Block account'),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
+                        child: _connection(user),
                       );
                     },
                   );

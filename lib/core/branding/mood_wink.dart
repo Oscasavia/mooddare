@@ -2,7 +2,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../app_theme.dart';
 
-enum MoodWinkExpression { wink, thinking, error }
+enum MoodWinkExpression { wink, smile, talking, thinking, error }
 
 /// Clean vector reconstruction of the approved Mood Wink concept. Contours
 /// are shared by Flutter and the native-resource exporter (M, C, Z commands).
@@ -53,6 +53,15 @@ class MoodWinkGeometry {
     [],
   ];
 
+  static const talkingMouth = <List<double>>[
+    [35, 66],
+    [45, 70, 59, 68, 68, 61],
+    [73, 58, 75, 64, 71, 71],
+    [64, 84, 44, 87, 35, 75],
+    [31, 70, 31, 65, 35, 66],
+    [],
+  ];
+
   static List<List<double>> rightEye(double wink) => [
     for (var i = 0; i < openEye.length; i++)
       [
@@ -68,10 +77,12 @@ class MoodWinkGeometry {
     final result = Path()..fillType = PathFillType.evenOdd;
     for (final contour in [
       face,
-      if (expression == MoodWinkExpression.wink) ...[
+      if (expression == MoodWinkExpression.wink ||
+          expression == MoodWinkExpression.smile ||
+          expression == MoodWinkExpression.talking) ...[
         leftEye,
-        rightEye(wink),
-        smile,
+        rightEye(expression == MoodWinkExpression.wink ? wink : 0),
+        expression == MoodWinkExpression.talking ? talkingMouth : smile,
       ],
     ]) {
       for (final command in contour) {

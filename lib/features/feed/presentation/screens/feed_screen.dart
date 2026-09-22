@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mooddare/features/dares/data/repositories/dares_repository.dart';
 import 'package:mooddare/core/widgets/app_empty_state.dart';
+import 'package:mooddare/core/branding/mood_wink.dart';
 import 'package:mooddare/core/widgets/mooddare_wordmark.dart';
 import 'package:mooddare/models/post_model.dart';
 import '../../data/repositories/post_repository.dart';
@@ -240,7 +241,10 @@ class _FeedScreenState extends State<FeedScreen> {
             if (posts.isEmpty) {
               if (_moodId != null) {
                 return AppEmptyState(
-                  icon: Icons.filter_alt_outlined,
+                  illustration: const MoodWink(
+                    size: 80,
+                    expression: MoodWinkExpression.thinking,
+                  ),
                   title: 'No moments in this mood yet',
                   message: 'Try another mood or see what everyone is sharing.',
                   actionLabel: 'Show all moods',
@@ -248,7 +252,10 @@ class _FeedScreenState extends State<FeedScreen> {
                 );
               }
               return const AppEmptyState(
-                icon: Icons.auto_awesome_outlined,
+                illustration: MoodWink(
+                  size: 88,
+                  expression: MoodWinkExpression.smile,
+                ),
                 title: 'The first moment could be yours',
                 message:
                     'Choose a mood in Discover, try a dare and share your capture. Moments stay in the feed for 24 hours.',

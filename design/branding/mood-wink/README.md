@@ -22,6 +22,10 @@ circle. iOS launcher PNGs are opaque RGB, with no baked-in corner rounding.
 Native launch screens use a still open-eyed lavender face on ink; Flutter then
 closes and reopens one eye over 900ms. The splash shows only the animated icon;
 the accessible startup label remains available to screen readers.
+Flutter uses the full-window center, matching the native artwork, rather than
+centering inside SafeArea. Unequal status/navigation insets previously shifted
+the face downward during the native-to-Flutter handoff. The 900ms wink timeline
+and 128px mark size are unchanged; inset regression tests lock in alignment.
 
 The wink runs once per fresh app startup while Firebase initializes. It does not
 loop during a slow initialization or replay when returning from the background.
@@ -53,7 +57,14 @@ status icons everywhere. Keyboard/large-text layouts, search transitions and
 geometry are covered in `test/brand_personality_test.dart` and the existing
 entry/search suites.
 
+The empty Moments feed, profile grid, and followers/following lists now use an
+open-eyed smile. This uses the original eyes and smile contours, with the same
+outline and lavender color. Empty comments use a gently opened smiling mouth;
+the outline and eyes stay identical. Filtered feed/connection lists use Thinking
+when there are no matches. These illustrations remain static and yield to real
+content immediately. Error and loading states remain distinct.
+
 The login/signup divider sits between the email/password submit button and
 Google sign-in. Account-switch links remain below Google. See
-[personality opportunities](personality-opportunities.md) for proposed placements
-elsewhere; those proposals are not installed yet.
+[personality opportunities](personality-opportunities.md) for implemented and
+proposed placements elsewhere.

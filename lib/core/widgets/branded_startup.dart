@@ -91,12 +91,12 @@ class _BrandedStartupState extends State<BrandedStartup>
           final initialized = snapshot.connectionState == ConnectionState.done;
           if (initialized && _animation.isCompleted) return widget.child;
           return Scaffold(
-            body: SafeArea(
-              child: Semantics(
-                label: 'Starting MoodDare',
-                child: ExcludeSemantics(
-                  child: Center(child: MoodWink(wink: _wink)),
-                ),
+            // Match the native launch screen's full-window center. SafeArea
+            // shifts this mark when status and navigation insets differ.
+            body: Semantics(
+              label: 'Starting MoodDare',
+              child: ExcludeSemantics(
+                child: Center(child: MoodWink(wink: _wink)),
               ),
             ),
           );
