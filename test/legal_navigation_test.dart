@@ -17,6 +17,10 @@ Future<void> tapPolicy(WidgetTester tester, String label) async {
   final rich = find.descendant(of: notice, matching: find.byType(RichText));
   final paragraph = tester.renderObject<RenderParagraph>(rich);
   final text = paragraph.text.toPlainText();
+  expect(
+    text,
+    'By continuing, you agree to our Terms of Use and acknowledge our Privacy Policy.',
+  );
   final start = text.indexOf(label);
   expect(start, greaterThanOrEqualTo(0));
   final box = paragraph

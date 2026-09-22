@@ -264,10 +264,7 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 24),
-                      const LegalNotice(
-                        lead:
-                            'By creating an account or signing in, you agree to our',
-                      ),
+                      const LegalNotice(),
                     ],
                   ),
                 ),

@@ -4,8 +4,7 @@ import 'package:mooddare/features/settings/presentation/legal_screen.dart';
 
 /// Local policy routes work before sign-in and without a network connection.
 class LegalNotice extends StatefulWidget {
-  final String lead;
-  const LegalNotice({super.key, this.lead = 'By continuing, you agree to our'});
+  const LegalNotice({super.key});
 
   @override
   State<LegalNotice> createState() => _LegalNoticeState();
@@ -39,8 +38,7 @@ class _LegalNoticeState extends State<LegalNotice> {
     return Text.rich(
       TextSpan(
         children: [
-          const TextSpan(text: 'For ages 18 and up. '),
-          TextSpan(text: '${widget.lead} '),
+          const TextSpan(text: 'By continuing, you agree to our '),
           TextSpan(
             text: 'Terms of Use',
             style: linkStyle,
