@@ -35,6 +35,46 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time;
       }
     }
+    function validDarePrompt(data) {
+      return data.dareText is string && data.dareText.size() > 0 && data.dareText.size() <= 500
+        && data.dareText.matches('(?s).*[^\\s].*')
+        && ((!('moodId' in data) && !('moodName' in data))
+          || (data.moodId is string && data.moodId.size() > 0 && data.moodId.size() <= 128
+            && !data.moodId.matches('.*/.*')
+            && data.moodName is string && data.moodName.size() > 0 && data.moodName.size() <= 80));
+    }
+    match /users/{uid}/savedDares/{dareId} {
+      allow read, delete: if owner(uid);
+      allow create: if owner(uid)
+        && request.resource.data.keys().hasOnly(['dareText','moodId','moodName','createdAt'])
+        && validDarePrompt(request.resource.data)
+        && request.resource.data.createdAt == request.time;
+    }
+    match /dareInvites/{inviteId} {
+      function participant() {
+        return signedIn() && (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid);
+      }
+      // A sender can check its deterministic invitation ID before creating it.
+      allow get: if signedIn() && (!exists(/databases/$(database)/documents/dareInvites/$(inviteId)) || participant());
+      allow list, delete: if participant();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['dareText','moodId','moodName','createdAt','senderId','recipientId','opened'])
+        && validDarePrompt(request.resource.data)
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.recipientId is string
+        && request.resource.data.recipientId != request.auth.uid
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && exists(/databases/$(database)/documents/users/$(request.resource.data.recipientId))
+        && existsAfter(/databases/$(database)/documents/users/$(request.auth.uid)/following/$(request.resource.data.recipientId))
+        && existsAfter(/databases/$(database)/documents/users/$(request.resource.data.recipientId)/following/$(request.auth.uid))
+        && !existsAfter(/databases/$(database)/documents/users/$(request.auth.uid)/blocked/$(request.resource.data.recipientId))
+        && !existsAfter(/databases/$(database)/documents/users/$(request.resource.data.recipientId)/blocked/$(request.auth.uid))
+        && request.resource.data.opened == false
+        && request.resource.data.createdAt == request.time;
+      allow update: if owner(resource.data.recipientId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['opened'])
+        && request.resource.data.opened == true;
+    }
     function canFollow(follower, target) {
       return signedIn() && request.auth.uid == follower && follower != target
         && exists(/databases/$(database)/documents/users/$(follower))

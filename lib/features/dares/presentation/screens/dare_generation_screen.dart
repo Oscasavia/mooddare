@@ -1,3 +1,8 @@
+import 'package:mooddare/features/profile/data/social_repository.dart';
+import 'package:mooddare/core/widgets/share_icon.dart';
+import '../../data/repositories/dare_library_repository.dart';
+import '../widgets/dare_actions.dart';
+import '../widgets/send_dare_sheet.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,11 +11,15 @@ import 'package:mooddare/features/feed/presentation/screens/camera_screen.dart';
 import '../widgets/mood_preview.dart';
 
 class DareDisplayScreen extends StatefulWidget {
+  final DareLibraryRepository? library;
+  final SocialRepository? social;
   final MoodModel mood;
   final bool isProofRequired;
   const DareDisplayScreen({
     super.key,
     required this.mood,
+    this.library,
+    this.social,
     required this.isProofRequired,
   });
   @override
@@ -80,6 +89,7 @@ class _DareDisplayScreenState extends State<DareDisplayScreen> {
     final dare = hasDares
         ? mood.dareList[_index]
         : 'More dares are on their way.';
+    final prompt = DarePrompt(text: dare, moodId: mood.id, moodName: mood.name);
     final accent = Color.lerp(mood.color, Colors.white, .2)!;
     return Scaffold(
       body: DecoratedBox(
@@ -201,6 +211,11 @@ class _DareDisplayScreenState extends State<DareDisplayScreen> {
                                             ),
                                           ),
                                         ),
+                                        if (hasDares)
+                                          SaveDareButton(
+                                            prompt: prompt,
+                                            repository: widget.library,
+                                          ),
                                         IconButton(
                                           tooltip: 'Try another dare',
                                           onPressed:
@@ -310,7 +325,20 @@ class _DareDisplayScreenState extends State<DareDisplayScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: hasDares && !_openingCamera
+                              ? () => showSendDare(
+                                  context,
+                                  prompt,
+                                  repository: widget.library,
+                                  social: widget.social,
+                                )
+                              : null,
+                          icon: const ShareIcon(),
+                          label: const Text('Send dare'),
+                        ),
+                        const SizedBox(height: 4),
                         const Text(
                           'Sharing is optional.',
                           textAlign: TextAlign.center,

@@ -1,3 +1,4 @@
+import 'dare_library_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:mooddare/core/widgets/app_empty_state.dart';
 import 'package:mooddare/models/mood_model.dart';
@@ -100,6 +101,7 @@ class _DaresScreenState extends State<DaresScreen> {
                                 ),
                               ),
                             ),
+                            const DareInboxButton(),
                             IconButton(
                               tooltip: 'About collections',
                               onPressed: () => showMoodCollections(context),

@@ -1,3 +1,4 @@
+import 'package:mooddare/features/dares/data/repositories/dare_library_repository.dart';
 import 'social_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -87,6 +88,10 @@ class AccountRepository {
         await batch.commit();
       }
     }
+    await DareLibraryRepository(
+      firestore: db,
+      auth: auth,
+    ).removeAccountData(user.uid);
     await SocialRepository(
       firestore: db,
       auth: auth,

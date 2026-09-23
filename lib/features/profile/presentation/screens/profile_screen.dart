@@ -1,3 +1,5 @@
+import 'package:mooddare/features/dares/data/repositories/dare_library_repository.dart';
+import 'package:mooddare/features/dares/presentation/screens/dare_library_screen.dart';
 import 'dart:async';
 import 'package:mooddare/core/widgets/stable_popup_menu.dart';
 import '../widgets/report_user_sheet.dart';
@@ -16,6 +18,7 @@ import 'package:mooddare/features/profile/presentation/screens/edit_profile_scre
 import 'package:mooddare/features/profile/presentation/screens/settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
+  final DareLibraryRepository? dareLibrary;
   final bool isGuest;
   final String? userId;
   final VoidCallback? onProfileUpdated;
@@ -26,6 +29,7 @@ class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
     required this.isGuest,
+    this.dareLibrary,
     this.userId,
     this.onProfileUpdated,
     this.repository,
@@ -114,8 +118,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _displayUserId = widget.userId ?? _userRepository.currentUserId ?? '';
+    _tabController = TabController(length: _self ? 3 : 2, vsync: this);
     _profileData = _loadProfileData();
     if (_canManage) {
       _blocks = _social.blocked().listen(
@@ -278,6 +282,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                         ),
                         tabs: [
                           _buildTab("Dares", Icons.grid_on_outlined),
+                          if (_self)
+                            _buildTab("Saved", Icons.bookmark_border_rounded),
                           _buildTab("Stats", Icons.bar_chart_outlined),
                         ],
                       ),
@@ -289,6 +295,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                               userId: _displayUserId,
                               repository: _postRepository,
                             ),
+                            if (_self)
+                              DareLibraryList(repository: widget.dareLibrary),
                             StatsAndBadges(
                               daresCompleted: stats['daresCompleted'] ?? 0,
                               totalLikes: stats['totalLikes'] ?? 0,

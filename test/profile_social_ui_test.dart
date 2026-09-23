@@ -188,7 +188,7 @@ void main() {
         );
         await tester.tap(find.text('Stats'));
         await tester.pumpAndSettle();
-        expect(tabs.controller!.index, 1);
+        expect(tabs.controller!.index, 2);
         await tester.tap(find.text('Dares'));
         await tester.pumpAndSettle();
         expect(tabs.controller!.index, 0);

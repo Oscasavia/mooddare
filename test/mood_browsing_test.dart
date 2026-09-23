@@ -331,6 +331,8 @@ void main() {
             )
             .first,
       );
+      await Scrollable.ensureVisible(tester.element(card), alignment: .5);
+      await tester.pumpAndSettle();
       await tester.tap(card);
       await tester.pumpAndSettle();
       expect(find.text('Epic · Coming soon'), findsOneWidget);

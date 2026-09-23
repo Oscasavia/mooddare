@@ -425,3 +425,117 @@ test('account relationship cleanup batches respect paired-edge rules without tou
   last.delete(doc(client, 'users/u10/followers/alice'));
   await assertSucceeds(last.commit());
 });
+
+const darePrompt = () => ({dareText: 'Capture something that made you smile.', moodId: 'happy', moodName: 'Happy'});
+const invite = (overrides = {}) => ({...darePrompt(), senderId: 'alice', recipientId: 'bob', opened: false, createdAt: serverTimestamp(), ...overrides});
+async function seedMutualDareUsers() {
+  await env.withSecurityRulesDisabled(async context => {
+    const store = context.firestore();
+    for (const uid of ['alice', 'bob', 'charlie']) await setDoc(doc(store, `users/${uid}`), {id: uid});
+    for (const [a,b] of [['alice','bob'], ['bob','alice']]) {
+      await setDoc(doc(store, `users/${a}/following/${b}`), {createdAt: Timestamp.now()});
+      await setDoc(doc(store, `users/${b}/followers/${a}`), {createdAt: Timestamp.now()});
+    }
+  });
+}
+for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
+  async function loadDarePolicy() {
+    await env.cleanup();
+    env = await initializeTestEnvironment({projectId: 'demo-mooddare',
+      firestore: {rules: await readFile(new URL(`../../${policy}`, import.meta.url), 'utf8')},
+      storage: {rules: await readFile(new URL('../../storage.rules', import.meta.url), 'utf8')},
+    });
+  }
+test(`${policy}: saved dares are owner-only prompt snapshots and survive source post removal`, async () => {
+  await loadDarePolicy();
+  const saved = doc(db('alice'), 'users/alice/savedDares/one');
+  await assertSucceeds(setDoc(saved, {...darePrompt(), createdAt: serverTimestamp()}));
+  await assertSucceeds(getDocs(query(collection(db('alice'), 'users/alice/savedDares'), orderBy('createdAt', 'desc'), limit(40))));
+  await assertFails(getDoc(doc(db('bob'), saved.path)));
+  await assertFails(getDocs(collection(db('bob'), 'users/alice/savedDares')));
+  await assertFails(setDoc(doc(db('bob'), 'users/alice/savedDares/two'), {...darePrompt(), createdAt: serverTimestamp()}));
+  await assertFails(deleteDoc(doc(db('bob'), saved.path)));
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), saved.path)));
+  await assertSucceeds(getDoc(saved));
+  await assertSucceeds(deleteDoc(saved));
+});
+test(`${policy}: saved dares reject invalid text, partial moods, media and timestamp tampering`, async () => {
+  await loadDarePolicy();
+  const ref = doc(db('alice'), 'users/alice/savedDares/one');
+  for (const value of [
+    {...darePrompt(), dareText: ''}, {...darePrompt(), dareText: ' \n '}, {...darePrompt(), dareText: 'x'.repeat(501)},
+    {dareText:'A dare', moodId:'happy'}, {...darePrompt(), moodId:'a/b'}, {...darePrompt(), moodName:''},
+    {...darePrompt(), mediaUrl:'https://example.com/photo.jpg'}, {...darePrompt(), recipientId:'bob'},
+  ]) await assertFails(setDoc(ref, {...value, createdAt:serverTimestamp()}));
+  await assertFails(setDoc(ref, {...darePrompt(), createdAt:Timestamp.fromMillis(1)}));
+  await assertSucceeds(setDoc(ref, {dareText:'Legacy dare without mood', createdAt:serverTimestamp()}));
+  await assertFails(updateDoc(ref, {dareText:'Changed snapshot'}));
+});
+test(`${policy}: mutual followers can send invitations and only participants can read or delete them`, async () => {
+  await loadDarePolicy();
+  await seedMutualDareUsers();
+  const alice = doc(db('alice'), 'dareInvites/one');
+  await assertSucceeds(getDoc(alice)); // Missing deterministic ID can be checked before sending.
+  await assertSucceeds(setDoc(alice, invite()));
+  await assertSucceeds(getDoc(doc(db('bob'), alice.path)));
+  await assertFails(getDoc(doc(db('charlie'), alice.path)));
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), alice.path)));
+  await assertFails(deleteDoc(doc(db('charlie'), alice.path)));
+  await assertSucceeds(deleteDoc(doc(db('bob'), alice.path)));
+});
+test(`${policy}: invitation inbox, unread and account cleanup queries are scoped to their participant`, async () => {
+  await loadDarePolicy();
+  await seedMutualDareUsers();
+  await setDoc(doc(db('alice'), 'dareInvites/one'), invite());
+  await assertSucceeds(getDocs(query(collection(db('bob'), 'dareInvites'), where('recipientId','==','bob'), orderBy('createdAt','desc'), limit(40))));
+  await assertSucceeds(getDocs(query(collection(db('bob'), 'dareInvites'), where('recipientId','==','bob'), where('opened','==',false), limit(1))));
+  await assertSucceeds(getDocs(query(collection(db('alice'), 'dareInvites'), where('senderId','==','alice'), limit(100))));
+  await assertFails(getDocs(collection(db('alice'), 'dareInvites')));
+  await assertFails(getDocs(query(collection(db('charlie'), 'dareInvites'), where('recipientId','==','bob'))));
+});
+test(`${policy}: invites reject one-way follows, self-send, impersonation and missing users`, async () => {
+  await loadDarePolicy();
+  await seedMutualDareUsers();
+  const ref = doc(db('alice'), 'dareInvites/one');
+  for (const value of [{recipientId:'alice'}, {senderId:'bob', recipientId:'alice'}, {recipientId:'charlie'}, {recipientId:'missing'}]) {
+    await assertFails(setDoc(ref, invite(value)));
+  }
+  await env.withSecurityRulesDisabled(context => deleteDoc(doc(context.firestore(), 'users/bob/following/alice')));
+  await assertFails(setDoc(ref, invite()));
+});
+test(`${policy}: either block direction denies invitations even with stale follow records`, async () => {
+  await loadDarePolicy();
+  await seedMutualDareUsers();
+  for (const [a,b] of [['alice','bob'], ['bob','alice']]) {
+    await setDoc(doc(db(a), `users/${a}/blocked/${b}`), {createdAt:serverTimestamp()});
+    await assertFails(setDoc(doc(db('alice'), 'dareInvites/one'), invite()));
+    await deleteDoc(doc(db(a), `users/${a}/blocked/${b}`));
+  }
+  const client = db('alice'), batch = writeBatch(client);
+  batch.set(doc(client, 'users/alice/blocked/bob'), {createdAt:serverTimestamp()});
+  batch.set(doc(client, 'dareInvites/one'), invite());
+  await assertFails(batch.commit());
+});
+test(`${policy}: only the recipient can acknowledge a dare; neither person can rewrite or resend the snapshot`, async () => {
+  await loadDarePolicy();
+  await seedMutualDareUsers();
+  const alice = doc(db('alice'), 'dareInvites/one'), bob = doc(db('bob'), 'dareInvites/one');
+  await setDoc(alice, invite());
+  await assertFails(updateDoc(alice, {opened:true}));
+  await assertFails(updateDoc(bob, {dareText:'Changed', opened:true}));
+  await assertFails(updateDoc(bob, {senderId:'charlie'}));
+  await assertFails(setDoc(alice, invite()));
+  await assertSucceeds(updateDoc(bob, {opened:true}));
+  await assertFails(updateDoc(bob, {opened:false}));
+  await assertSucceeds(deleteDoc(alice)); // Sender account cleanup.
+});
+test(`${policy}: invitation payloads reject arbitrary metadata, invalid prompts and forged creation dates`, async () => {
+  await loadDarePolicy();
+  await seedMutualDareUsers();
+  for (const value of [{opened:true}, {text:'Chat message'}, {dareText:' '}, {dareText:'x'.repeat(501)},
+    {createdAt:Timestamp.fromMillis(1)}, {moodId:null}, {moodName:'x'.repeat(81)}, {mediaUrl:'https://example.com/a.mp4'}]) {
+    await assertFails(setDoc(doc(db('alice'), 'dareInvites/one'), invite(value)));
+  }
+});
+
+}

@@ -1,3 +1,5 @@
+import 'package:mooddare/features/dares/data/repositories/dare_library_repository.dart';
+import 'package:mooddare/features/dares/presentation/widgets/dare_actions.dart';
 import 'package:mooddare/core/app_theme.dart';
 import 'package:mooddare/core/widgets/stable_popup_menu.dart';
 import 'package:mooddare/core/widgets/share_icon.dart';
@@ -19,6 +21,7 @@ import 'post_likes_sheet.dart';
 import 'video_seek_bar.dart';
 
 class DareProofCard extends StatefulWidget {
+  final DareLibraryRepository? dareLibrary;
   final PostModel post;
   final bool isFullScreen, isActive;
   final VoidCallback? onHidden;
@@ -26,6 +29,7 @@ class DareProofCard extends StatefulWidget {
   const DareProofCard({
     super.key,
     required this.post,
+    this.dareLibrary,
     this.isFullScreen = false,
     this.isActive = false,
     this.onHidden,
@@ -59,7 +63,8 @@ class _DareProofCardState extends State<DareProofCard>
       _viewingLikes = false,
       _scrubbing = false;
   int _likes = 0;
-  bool _downloading = false;
+  bool _downloading = false, _savingDare = false;
+  late final _dareLibrary = widget.dareLibrary ?? DareLibraryRepository();
   String? get _uid => _repository.currentUserId;
   bool get _shouldPlay =>
       widget.isActive &&
@@ -248,6 +253,7 @@ class _DareProofCardState extends State<DareProofCard>
             post: widget.post,
             repository: _repository,
             onHidden: widget.onHidden,
+            dareLibrary: _dareLibrary,
           ),
         ),
       );
@@ -295,6 +301,19 @@ class _DareProofCardState extends State<DareProofCard>
 
   Future<void> _action(String action) async {
     if (!mounted) return;
+    if (action == 'saveDare') {
+      if (_savingDare) return;
+      setState(() => _savingDare = true);
+      try {
+        await _dareLibrary.save(DarePrompt.fromPost(widget.post));
+        _message('Dare saved to your profile.');
+      } catch (_) {
+        _message('Could not save this dare. Please try again.');
+      } finally {
+        if (mounted) setState(() => _savingDare = false);
+      }
+      return;
+    }
     if (action == 'download') {
       if (_downloading) return;
       setState(() => _downloading = true);
@@ -485,6 +504,14 @@ class _DareProofCardState extends State<DareProofCard>
                                   _downloading ? 'Saving…' : 'Download moment',
                                 ),
                               ),
+                              if (DarePrompt.fromPost(widget.post).isValid)
+                                PopupMenuItem(
+                                  value: 'saveDare',
+                                  enabled: !_savingDare,
+                                  child: Text(
+                                    _savingDare ? 'Saving dare…' : 'Save dare',
+                                  ),
+                                ),
                               if (widget.post.authorId == _uid)
                                 const PopupMenuItem(
                                   value: 'delete',
@@ -543,7 +570,9 @@ class _DareProofCardState extends State<DareProofCard>
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      if (DarePrompt.fromPost(widget.post).isValid)
+                        TryDareButton(prompt: DarePrompt.fromPost(widget.post)),
+                      const SizedBox(height: 8),
                       FutureBuilder<UserModel?>(
                         future: _author,
                         builder: (context, snapshot) {

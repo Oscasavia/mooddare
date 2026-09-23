@@ -64,6 +64,42 @@ class SocialRepository {
         .map((s) => s.docs.map((d) => d.id).toSet());
   }
 
+  /// Updates when either person unfollows or the current user blocks someone.
+  Stream<Set<String>> mutuals() {
+    final uid = currentUserId;
+    if (uid == null) return Stream.value({});
+    return Stream.multi((controller) {
+      Set<String>? outgoing, incoming, blocks;
+      void emit() {
+        if (outgoing != null && incoming != null && blocks != null) {
+          controller.add(
+            outgoing!.intersection(incoming!).difference(blocks!)..remove(uid),
+          );
+        }
+      }
+
+      final subscriptions = [
+        connections(uid, followers: false).listen((v) {
+          outgoing = v;
+          emit();
+        }, onError: controller.addError),
+        connections(uid, followers: true).listen((v) {
+          incoming = v;
+          emit();
+        }, onError: controller.addError),
+        blocked().listen((v) {
+          blocks = v;
+          emit();
+        }, onError: controller.addError),
+      ];
+      controller.onCancel = () async {
+        for (final subscription in subscriptions) {
+          await subscription.cancel();
+        }
+      };
+    });
+  }
+
   Future<List<UserModel>> people(Set<String> ids) async {
     final users = <UserModel>[];
     final list = ids.toList();
