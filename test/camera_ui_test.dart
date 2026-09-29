@@ -22,6 +22,7 @@ void main() {
   Map<String, dynamic>? captureLook;
   Map<String, dynamic>? videoLook;
   var geometryAvailable = false;
+  var faceAvailable = true;
   setUp(() {
     preferences = MemoryBeautyPreferences();
     sentAspect = null;
@@ -35,6 +36,7 @@ void main() {
     captureLook = null;
     videoLook = null;
     geometryAvailable = false;
+    faceAvailable = true;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           if (call.method == 'setZoom') {
@@ -88,7 +90,7 @@ void main() {
               'recording': nativeRecording,
               'width': 960,
               'height': 1280,
-              'faceDetected': true,
+              'faceDetected': faceAvailable,
               'geometryDetected': geometryAvailable,
             },
             _ => null,
@@ -384,6 +386,27 @@ void main() {
       await tester.pump();
     },
   );
+
+  testWidgets('zero-strength lenses do not ask for face tracking', (
+    tester,
+  ) async {
+    faceAvailable = false;
+    preferences.value = const BeautyPreferencesData(strength: 0);
+    await openTimerCamera(tester, seconds: 0);
+    final shutter = find.byKey(const ValueKey('capture_shutter'));
+    await tester.drag(shutter, const Offset(-90, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Soft'), findsOneWidget);
+    expect(find.text('Find your face'), findsNothing);
+    await tester.tap(find.byTooltip('Adjust lens'));
+    await tester.pump();
+    final slider = find.byType(Slider);
+    tester.widget<Slider>(slider).onChanged!(.6);
+    await tester.pump();
+    expect(find.text('Find your face'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
 
   testWidgets('shaping explains missing mesh and clears the hint on recovery', (
     tester,

@@ -236,6 +236,9 @@ class LiveBeautyPlugin(
         private val faceTracker = FaceStabilizer()
         private var fixtureMode = false
         private var fixtureFile: File? = null
+        private val debugPerformance = activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        private val frameTiming = FrameTimingWindow()
+        @Volatile private var performance: Map<String, Any> = emptyMap()
         private var count = 0
         private var rateStart = SystemClock.elapsedRealtime()
         @Volatile private var closed = false
@@ -258,7 +261,11 @@ class LiveBeautyPlugin(
         private val fixtureFrames = object : Runnable {
             override fun run() {
                 if (closed || !recording) return
-                try { renderer?.draw(recordFrame = true); frames++ }
+                try {
+                    val began = SystemClock.elapsedRealtimeNanos()
+                    renderer?.draw(recordFrame = true); frames++
+                    recordPerformance(began)
+                }
                 catch (_: Exception) { finishRecording() }
                 if (recording) handler.postDelayed(this, 33)
             }
@@ -366,7 +373,21 @@ class LiveBeautyPlugin(
             faceTracker.reset(); faceVisible = false
         }
 
+        private fun recordPerformance(began: Long) {
+            if (!debugPerformance) return
+            val now = SystemClock.elapsedRealtimeNanos()
+            val report = frameTiming.record(now, now - began, faceVisible, geometryVisible) ?: return
+            performance = mapOf("frames" to report.frames, "fps" to report.fps,
+                "averageFrameMs" to report.averageMs, "maxFrameMs" to report.maximumMs,
+                "slowFrames" to report.slowFrames, "faceFrames" to report.faceFrames,
+                "meshFrames" to report.meshFrames, "detectorMs" to detectionMillis,
+                "detections" to detections, "recording" to recording,
+                "trackingEnabled" to (renderer?.needsFaceTracking == true))
+            android.util.Log.i("MoodDareCameraPerf", performance.toString())
+        }
+
         private fun render(image: ImageProxy) {
+            val began = if (debugPerformance) SystemClock.elapsedRealtimeNanos() else 0L
             try {
                 if (closed) return
                 val crop = image.cropRect
@@ -385,7 +406,7 @@ class LiveBeautyPlugin(
                 }
                 buffer.flip()
                 val now = SystemClock.elapsedRealtime()
-                if (!detecting && now - lastDetection >= 90) {
+                if (renderer!!.needsFaceTracking && !detecting && now - lastDetection >= 90) {
                     lastDetection = now
                     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                     bitmap.copyPixelsFromBuffer(buffer)
@@ -395,10 +416,16 @@ class LiveBeautyPlugin(
                     if (small !== bitmap) bitmap.recycle()
                     detect(small)
                 }
+                // Original/compare do not need ML work or cached geometry.
+                if (!renderer!!.needsFaceTracking) {
+                    faceTracker.reset()
+                    lastDetection = 0L
+                }
                 // Never leave a smoothing mask painted over a departed face.
                 updateTrackedFace(now)
                 renderer!!.upload(buffer, width, height)
                 renderer!!.draw(recordFrame = recording)
+                recordPerformance(began)
                 ready = true; frames++; count++
                 val elapsed = now - rateStart
                 if (elapsed >= 1000) { fps = count * 1000.0 / elapsed; count = 0; rateStart = now }
@@ -422,7 +449,7 @@ class LiveBeautyPlugin(
                 catch (e: Exception) { Tasks.forException<List<FaceMesh>>(e) }
             Tasks.whenAllComplete(facesTask, meshTask).addOnCompleteListener(executor) {
                 try {
-                    if (closed) return@addOnCompleteListener
+                    if (closed || (!fixtureMode && renderer?.needsFaceTracking != true)) return@addOnCompleteListener
                     val meshes = if (meshTask.isSuccessful) meshTask.result else emptyList()
                     val faces = if (facesTask.isSuccessful) facesTask.result else emptyList()
                     val observations = faces.map { face ->
@@ -517,7 +544,7 @@ class LiveBeautyPlugin(
             "hasFlash" to (camera?.cameraInfo?.hasFlashUnit() ?: false), "captureLight" to captureLight,
             "faceDetected" to faceVisible, "geometryDetected" to geometryVisible,
             "detectionMillis" to detectionMillis, "fps" to fps, "frames" to frames,
-            "detections" to detections, "error" to error,
+            "detections" to detections, "performance" to performance, "error" to error,
             "recording" to recording, "recordingMillis" to if (recording) SystemClock.elapsedRealtime() - recordingStarted else 0L,
             "videoReady" to (pendingVideo != null), "recordingError" to recordingError) + zoomStatus()
 

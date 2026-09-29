@@ -66,7 +66,7 @@ internal class FaceStabilizer {
             previous = sampled?.points ?: old
             previousGeometry = sampled?.geometry
             points = FloatArray(value.size) { old!![it] + (value[it] - old[it]) * alpha }
-            geometry = face.geometry?.let { geometry?.blend(it, alpha) ?: it }
+            geometry = face.geometry?.let { geometry?.blendExpression(it, alpha) ?: it }
             if (geometry == null) previousGeometry = null
         }
         quality = pose
@@ -83,7 +83,12 @@ internal class FaceStabilizer {
         val blend = ease((now - updatedAt) / 35f)
         val from = previous ?: target
         val shape = geometry?.let { previousGeometry?.blend(it, blend) ?: it }
-        return StabilizedFace(FloatArray(target.size) { from[it] + (target[it] - from[it]) * blend }, confidence, shape)
+        val coordinates = when {
+            blend <= 0f -> from
+            blend >= 1f -> target
+            else -> FloatArray(target.size) { from[it] + (target[it] - from[it]) * blend }
+        }
+        return StabilizedFace(coordinates, confidence, shape)
     }
 
     companion object {

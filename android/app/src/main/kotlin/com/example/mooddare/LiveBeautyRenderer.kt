@@ -21,6 +21,10 @@ internal class LiveBeautyRenderer(surface: Surface) {
     private var videoWidth = 0
     private var videoHeight = 0
     private val program: Int
+    private val uniforms = mutableMapOf<String, Int>()
+    private val zeros = FloatArray(16)
+    private val horizontalAxis = floatArrayOf(1f, 0f)
+    private val positionAttribute: Int
     private val texture: Int
     private val maskTexture: Int
     private val geometryMask = FaceGeometryMask()
@@ -39,6 +43,8 @@ internal class LiveBeautyRenderer(surface: Surface) {
     var faceSlim = 0f
     var makeup = MakeupSettings()
     var original = false
+    val needsFaceTracking: Boolean get() = !original &&
+        (smooth > 0f || eyeSize > 0f || faceSlim > 0f || makeup.active)
     var outputAspect: Float? = null
     var face: FloatArray? = null
     var faceGeometry: FaceGeometry? = null
@@ -70,6 +76,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
         val linked = IntArray(1)
         GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, linked, 0)
         check(linked[0] != 0) { GLES20.glGetProgramInfoLog(program) }
+        positionAttribute = GLES20.glGetAttribLocation(program, "position")
         GLES20.glDeleteShader(vertex); GLES20.glDeleteShader(fragment)
         val textures = IntArray(2)
         GLES20.glGenTextures(2, textures, 0)
@@ -122,7 +129,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
         geometry: FaceGeometry? = faceGeometry) {
         GLES20.glViewport(0, 0, w, h)
         GLES20.glUseProgram(program)
-        val position = GLES20.glGetAttribLocation(program, "position")
+        val position = positionAttribute
         GLES20.glEnableVertexAttribArray(position)
         vertices.position(0)
         GLES20.glVertexAttribPointer(position, 2, GLES20.GL_FLOAT, false, 0, vertices)
@@ -131,7 +138,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
         GLES20.glUniform1i(uniform("image"), 0)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, maskTexture)
-        if (geometry != null && (lastGeometry == null || !lastGeometry!!.points.contentEquals(geometry.points))) {
+        if (geometry != null && (lastGeometry !== geometry && (lastGeometry == null || !lastGeometry!!.points.contentEquals(geometry.points)))) {
             shapeAspect = sourceWidth.toFloat() / sourceHeight
             shapeGeometry = FaceShapeGeometry.create(geometry, shapeAspect)
             geometryMask.update(geometry)
@@ -154,11 +161,11 @@ internal class LiveBeautyRenderer(surface: Surface) {
         val guides = if (geometry != null) shapeGeometry else null
         GLES20.glUniform1f(uniform("shapeAspect"), sourceAspect)
         GLES20.glUniform1f(uniform("hasShape"), if (guides != null) 1f else 0f)
-        GLES20.glUniform2fv(uniform("shapeAxis"), 1, guides?.axis ?: floatArrayOf(1f, 0f), 0)
-        GLES20.glUniform4fv(uniform("meshEyes[0]"), 2, guides?.eyes ?: FloatArray(8), 0)
-        GLES20.glUniform2fv(uniform("eyeOpenness"), 1, guides?.eyeStrength ?: FloatArray(2), 0)
-        GLES20.glUniform4fv(uniform("meshJaw[0]"), 4, guides?.jaw ?: FloatArray(16), 0)
-        GLES20.glUniform4fv(uniform("jawShift"), 1, guides?.jawShift ?: FloatArray(4), 0)
+        GLES20.glUniform2fv(uniform("shapeAxis"), 1, guides?.axis ?: horizontalAxis, 0)
+        GLES20.glUniform4fv(uniform("meshEyes[0]"), 2, guides?.eyes ?: zeros, 0)
+        GLES20.glUniform2fv(uniform("eyeOpenness"), 1, guides?.eyeStrength ?: zeros, 0)
+        GLES20.glUniform4fv(uniform("meshJaw[0]"), 4, guides?.jaw ?: zeros, 0)
+        GLES20.glUniform4fv(uniform("jawShift"), 1, guides?.jawShift ?: zeros, 0)
         val targetAspect = w.toFloat() / h
         GLES20.glUniform2f(uniform("crop"),
             if (sourceAspect > targetAspect) targetAspect / sourceAspect else 1f,
@@ -171,9 +178,9 @@ internal class LiveBeautyRenderer(surface: Surface) {
         GLES20.glUniform4f(uniform("settings"), if (original) 0f else smooth,
             if (original) 0f else light, if (original) 0f else warmth, if (f == null) 0f else confidence)
         GLES20.glUniform2f(uniform("shape"), if (original) 0f else eyeSize, if (original) 0f else faceSlim)
-        GLES20.glUniform4fv(uniform("face"), 1, f ?: FloatArray(12), 0)
-        GLES20.glUniform4fv(uniform("eyes"), 1, f ?: FloatArray(12), 4)
-        GLES20.glUniform4fv(uniform("features"), 1, f ?: FloatArray(12), 8)
+        GLES20.glUniform4fv(uniform("face"), 1, f ?: zeros, 0)
+        GLES20.glUniform4fv(uniform("eyes"), 1, f ?: zeros, 4)
+        GLES20.glUniform4fv(uniform("features"), 1, f ?: zeros, 8)
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
         check(GLES20.glGetError() == GLES20.GL_NO_ERROR) { "GPU rendering failed" }
     }
@@ -278,7 +285,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
         EGL14.eglTerminate(display)
     }
 
-    private fun uniform(name: String) = GLES20.glGetUniformLocation(program, name)
+    private fun uniform(name: String) = uniforms.getOrPut(name) { GLES20.glGetUniformLocation(program, name) }
     private fun shader(type: Int, source: String): Int {
         val shader = GLES20.glCreateShader(type)
         GLES20.glShaderSource(shader, source); GLES20.glCompileShader(shader)

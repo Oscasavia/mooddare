@@ -7,7 +7,7 @@ internal data class MakeupSettings(
     val shade: String = "rose"
 ) {
     val active: Boolean get() = lips > 0f || blush > 0f
-    val color: FloatArray get() = when (shade) {
+    val color: FloatArray = when (shade) {
         "red" -> floatArrayOf(191f / 255, 36f / 255, 51f / 255)
         "berry" -> floatArrayOf(140f / 255, 54f / 255, 94f / 255)
         "peach" -> floatArrayOf(217f / 255, 120f / 255, 96f / 255)

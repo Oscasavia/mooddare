@@ -8,8 +8,46 @@ import kotlin.math.min
 /** Normalized, unmirrored contours with stable sample counts for temporal filtering. */
 internal class FaceGeometry private constructor(val points: FloatArray) {
     fun polygon(index: Int): FloatArray = points.copyOfRange(index * STRIDE, (index + 1) * STRIDE)
-    fun blend(target: FaceGeometry, amount: Float) = FaceGeometry(
-        FloatArray(points.size) { points[it] + (target.points[it] - points[it]) * amount })
+    fun blend(target: FaceGeometry, amount: Float): FaceGeometry {
+        if (amount <= 0f) return this
+        if (amount >= 1f || this === target) return target
+        return FaceGeometry(FloatArray(points.size) { points[it] + (target.points[it] - points[it]) * amount })
+    }
+
+    /** Keep head-motion smoothing, but catch blinks/speech even with a still head.
+     * Normalize by each face's bounds so translation/scale do not masquerade as
+     * an expression. Paired contours share an amount (especially inner/outer lips).
+     */
+    fun blendExpression(target: FaceGeometry, amount: Float): FaceGeometry {
+        val from = bounds(); val to = target.bounds()
+        fun response(vararg contours: Int): Float {
+            var motion = 0f
+            for (contour in contours) {
+                var total = 0f
+                for (i in contour * STRIDE until (contour + 1) * STRIDE) {
+                    val axis = i % 2
+                    val delta = (target.points[i] - to[axis]) / to[axis + 2] -
+                        (points[i] - from[axis]) / from[axis + 2]
+                    total += delta * delta
+                }
+                motion = max(motion, kotlin.math.sqrt(total / STRIDE))
+            }
+            val expression = ((motion - .004f) / .025f).coerceIn(0f, 1f)
+            return amount + max(0f, .95f - amount) * expression
+        }
+        val left = response(LEFT_EYE, LEFT_BROW)
+        val right = response(RIGHT_EYE, RIGHT_BROW)
+        val lips = response(OUTER_LIPS, INNER_LIPS)
+        return FaceGeometry(FloatArray(points.size) { i ->
+            val alpha = when (i / STRIDE) {
+                LEFT_EYE, LEFT_BROW -> left
+                RIGHT_EYE, RIGHT_BROW -> right
+                OUTER_LIPS, INNER_LIPS -> lips
+                else -> amount
+            }
+            points[i] + (target.points[i] - points[i]) * alpha
+        })
+    }
 
     fun bounds(): FloatArray {
         val face = polygon(FACE)

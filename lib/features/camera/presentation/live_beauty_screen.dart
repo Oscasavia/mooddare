@@ -72,6 +72,10 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
         (lens.hasMakeup || lens.eyeSize > 0 || lens.faceSlim > 0);
   }
 
+  bool get _needsFace => _isCustom
+      ? !_customLook.isOriginal
+      : _strength > 0 && (BeautyLens.all[_selected].smooth > 0 || _needsMesh);
+
   bool get _hasMakeup => _isCustom
       ? _customLook.lips > 0 || _customLook.blush > 0
       : BeautyLens.all[_selected].hasMakeup;
@@ -1042,7 +1046,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  if (_selected != 0 &&
+                                  if (_needsFace &&
                                       _ready &&
                                       !_comparing &&
                                       (!_face || (_needsMesh && !_geometry)))
