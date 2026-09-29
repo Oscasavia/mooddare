@@ -403,3 +403,42 @@ rules tests and 23 backend tests passed. Two Android emulator integration flows
 passed, including weekly navigation, read state and removed-content handling.
 Analysis, formatting and ordinary arm64 APK build passed. Apple push remains
 backlog; the existing camera and lens implementation is unchanged.
+
+## Private moderation dashboard — 2026-09-29
+
+Added `/admin/` with MoodDare branding, Google sign-in, report pagination/search,
+review status, on-demand photo/video previews, reason/confirmation dialogs and
+action history. Access is checked server-side on every request against the private
+staff registry, with revoked-token verification and recent sign-in for mutations.
+Only the explicitly approved oscasavia@gmail.com account was granted staff access.
+The app now supports reporting comments and replies in addition to posts/users.
+
+Staff can remove/restore individual content, dismiss reports, suspend an author
+for seven days, ban indefinitely and lift restrictions. Removal archives original
+content privately, revokes hosted media download tokens and prevents client
+recreation/overwrite. Comment removal redacts its text; restoration preserves
+thread details. Retryable operations hold per-target locks and retain audit
+records. Staff self-restriction and modification of other enabled staff accounts
+are rejected. Account restrictions apply to existing sessions through Firestore
+and Storage rules; the app shows a restriction/support screen above its navigator.
+A live removal also replaces an already-open full-screen moment.
+
+Automated validation: 417 Flutter tests passed with 87.98% Dart line coverage,
+75 rules tests across strict and compatibility policies, 35 backend tests,
+5 dashboard browser flows and 20 existing marketing-site browser tests passed.
+Six moderation checks passed on the Android emulator. Formatting and analysis
+passed. Rebuilt the ordinary arm64 APK and installed it in place on Samsung,
+preserving app data. Backend rules/API and admin Hosting were deployed; the live
+unauthenticated reports endpoint returned 401 and admin assets have no-store/CSP.
+
+The dashboard is a human review tool. Automated objectionable-content filtering,
+a dedicated appeals UI, automated evidence retention/purge, and permanent account
+erasure tooling remain follow-ups. Ban/restrict does not remove all historical
+content automatically, and already-downloaded copies cannot be recalled.
+See `docs/MODERATION.md` for operations, permissions and recovery boundaries.
+
+Live acceptance also verified post removal, original download-token revocation,
+restoration with a new working media link, and continued rejection of the original
+link against production Firestore/Storage using isolated temporary content. All
+test media, reports, archive and audit records were cleaned up. No real user post
+was changed. The owner confirmed successful real Google dashboard sign-in.

@@ -1,22 +1,29 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    function owner(uid) { return request.auth != null && request.auth.uid == uid; }
+    function active() {
+      return request.auth != null && (!firestore.exists(/databases/(default)/documents/accountRestrictions/$(request.auth.uid))
+        || (firestore.get(/databases/(default)/documents/accountRestrictions/$(request.auth.uid)).data.status != 'banned'
+          && (firestore.get(/databases/(default)/documents/accountRestrictions/$(request.auth.uid)).data.status != 'suspended'
+            || firestore.get(/databases/(default)/documents/accountRestrictions/$(request.auth.uid)).data.until <= request.time)));
+    }
+    function owner(uid) { return active() && request.auth.uid == uid; }
+    function available(file) { return !firestore.exists(/databases/(default)/documents/moderationPosts/$(file.split('[.]')[0])); }
     match /posts/{uid}/{file} {
-      allow get: if request.auth != null;
+      allow get: if active() && available(file);
       allow list, delete: if owner(uid);
-      allow create, update: if owner(uid) && request.resource.size > 0
+      allow create, update: if owner(uid) && available(file) && request.resource.size > 0
         && request.resource.size <= 30 * 1024 * 1024
         && request.resource.contentType in ['image/jpeg', 'video/mp4'];
     }
     match /profile_pictures/{uid}/{file} {
-      allow get: if request.auth != null;
+      allow get: if active();
       allow list, delete: if owner(uid);
       allow create, update: if owner(uid) && request.resource.size > 0
         && request.resource.size <= 5 * 1024 * 1024 && request.resource.contentType == 'image/jpeg';
     }
     match /profile_pictures/{uid} {
-      allow get: if request.auth != null;
+      allow get: if active();
       allow delete: if owner(uid);
     }
   }

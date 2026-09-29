@@ -244,6 +244,62 @@ class _CommentsSheetState extends State<CommentsSheet> {
     }
   }
 
+  Future<void> _report(CommentModel comment) async {
+    _focus.unfocus();
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Report comment',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              for (final item in const {
+                'spam': 'Spam',
+                'harassment': 'Harassment',
+                'hate': 'Hate speech',
+                'sexualContent': 'Sexual content',
+                'violence': 'Violence or dangerous behavior',
+                'other': 'Something else',
+              }.entries)
+                ListTile(
+                  title: Text(item.value),
+                  onTap: () => Navigator.pop(context, item.key),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (reason == null) return;
+    try {
+      await widget.repository.reportComment(widget.post.id, comment, reason);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Report sent. Thank you for letting us know.'),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not send your report. Please try again.'),
+          ),
+        );
+      }
+    }
+  }
+
   Widget _timestamp(CommentModel comment) {
     final local = comment.createdAt!.toLocal();
     final labels = MaterialLocalizations.of(context);
@@ -266,6 +322,17 @@ class _CommentsSheetState extends State<CommentsSheet> {
   }
 
   Widget _comment(CommentModel comment, {String? replyTo}) {
+    if (comment.moderationRemoved) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Text(
+          'This comment was removed by MoodDare.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: Colors.white60),
+        ),
+      );
+    }
     final uid = widget.repository.currentUserId;
     final savedLike = comment.likedBy.contains(uid);
     final liked = _optimisticLikes[comment.id] ?? savedLike;
@@ -310,8 +377,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                   ),
                 ),
               ),
-              if (uid != null &&
-                  (uid == comment.authorId || uid == widget.post.authorId))
+              if (uid != null)
                 StablePopupMenu<String>(
                   enabled: !_sending && !_deleting.contains(comment.id),
                   key: ValueKey('comment_menu_${comment.id}'),
@@ -319,6 +385,8 @@ class _CommentsSheetState extends State<CommentsSheet> {
                   onSelected: (action) {
                     if (action == 'edit') {
                       _edit(comment);
+                    } else if (action == 'report') {
+                      _report(comment);
                     } else {
                       _delete(comment);
                     }
@@ -329,10 +397,16 @@ class _CommentsSheetState extends State<CommentsSheet> {
                         value: 'edit',
                         child: Text('Edit comment'),
                       ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Text('Delete comment'),
-                    ),
+                    if (uid != comment.authorId)
+                      const PopupMenuItem(
+                        value: 'report',
+                        child: Text('Report comment'),
+                      ),
+                    if (uid == comment.authorId || uid == widget.post.authorId)
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Text('Delete comment'),
+                      ),
                   ],
                 ),
             ],

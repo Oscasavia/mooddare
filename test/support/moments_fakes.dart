@@ -32,6 +32,18 @@ PostModel moment(
 );
 
 class MemoryPosts implements PostRepository {
+  final removalChanges = StreamController<bool>.broadcast();
+  @override
+  Stream<bool> watchPostRemoved(String id) => removalChanges.stream;
+  @override
+  Future<void> reportComment(
+    String postId,
+    CommentModel comment,
+    String reason,
+  ) async {
+    reports++;
+  }
+
   final List<PostModel> posts;
   int likes = 0, reports = 0, reads = 0;
   final comments = <CommentModel>[];

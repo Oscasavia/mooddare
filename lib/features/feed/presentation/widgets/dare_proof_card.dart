@@ -52,6 +52,8 @@ class _DareProofCardState extends State<DareProofCard>
   late Future<int> _commentCount;
   VideoPlayerController? _video;
   Timer? _timer;
+  StreamSubscription<bool>? _removal;
+  bool _removed = false;
   PageRoute<dynamic>? _route;
   bool _liked = false,
       _liking = false,
@@ -69,6 +71,7 @@ class _DareProofCardState extends State<DareProofCard>
   late final _dareLibrary = widget.dareLibrary ?? DareLibraryRepository();
   String? get _uid => _repository.currentUserId;
   bool get _shouldPlay =>
+      !_removed &&
       widget.isActive &&
       !_covered &&
       _foreground &&
@@ -84,6 +87,14 @@ class _DareProofCardState extends State<DareProofCard>
     WidgetsBinding.instance.addObserver(this);
     videoMuted.addListener(_soundChanged);
     _repository = widget.repository ?? PostRepository();
+    if (widget.isFullScreen) {
+      _removal = _repository.watchPostRemoved(widget.post.id).listen((removed) {
+        if (removed && mounted) {
+          _video?.pause();
+          setState(() => _removed = true);
+        }
+      }, onError: (Object _) {});
+    }
     _author = _repository.getAuthor(widget.post.authorId);
     _commentCount = _repository.getCommentCount(widget.post.id);
     _liked = widget.post.likedBy.contains(_uid);
@@ -225,6 +236,7 @@ class _DareProofCardState extends State<DareProofCard>
     WidgetsBinding.instance.removeObserver(this);
     appRouteObserver.unsubscribe(this);
     _timer?.cancel();
+    _removal?.cancel();
     _heart.dispose();
     unawaited(_video?.dispose());
     super.dispose();
@@ -431,6 +443,18 @@ class _DareProofCardState extends State<DareProofCard>
 
   @override
   Widget build(BuildContext context) {
+    if (_removed) {
+      return SafeArea(
+        child: Column(
+          children: [
+            const Align(alignment: Alignment.topLeft, child: BackButton()),
+            const Expanded(
+              child: Center(child: Text('This moment is no longer available.')),
+            ),
+          ],
+        ),
+      );
+    }
     final remaining = widget.post.expiresAt.toDate().difference(DateTime.now());
     return Padding(
       padding: EdgeInsets.all(widget.isFullScreen ? 0 : 12),

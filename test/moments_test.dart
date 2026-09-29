@@ -190,7 +190,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'A reply');
       await tester.pump();
-      expect(find.byTooltip('Comment options'), findsNothing);
+      await tester.tap(find.byTooltip('Comment options'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete comment'), findsNothing);
+      expect(find.text('Report comment'), findsOneWidget);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
       expect(
         tester.getBottomRight(find.byTooltip('Post comment')).dy,
         lessThanOrEqualTo(420),

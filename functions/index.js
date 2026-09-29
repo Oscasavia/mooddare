@@ -56,3 +56,9 @@ const {announceWeek} = require('./weekly');
 // Same Monday/UTC boundary as the app. Subsequent ticks resume bounded fan-out
 // or a late-published schedule; completed campaigns perform no recipient reads.
 exports.notifyWeeklyDare = onSchedule({schedule:'*/5 * * * 1', timeZone:'Etc/UTC', timeoutSeconds:300, maxInstances:1}, () => announceWeek(db));
+
+const {onRequest}=require('firebase-functions/v2/https');
+const {getAuth}=require('firebase-admin/auth');
+const {getStorage}=require('firebase-admin/storage');
+const {handler}=require('./moderation_http');
+exports.moderationApi=onRequest({timeoutSeconds:120,memory:'512MiB',cors:['https://mooddare.web.app','https://mooddare.firebaseapp.com']},handler(db,getAuth(),getStorage().bucket('mooddare.firebasestorage.app')));

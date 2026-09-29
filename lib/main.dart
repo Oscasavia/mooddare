@@ -1,3 +1,4 @@
+import 'features/auth/presentation/account_access_guard.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -28,13 +29,20 @@ Future<void> main() async {
   runApp(const MoodDareApp());
 }
 
+final _firebaseReady = ValueNotifier(false);
+
 class MoodDareApp extends StatelessWidget {
   const MoodDareApp({super.key});
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'MoodDare',
-    builder: (_, child) =>
-        DismissKeyboard(child: child ?? const SizedBox.shrink()),
+    builder: (_, child) => ValueListenableBuilder<bool>(
+      valueListenable: _firebaseReady,
+      builder: (_, ready, _) => AccountAccessGuard(
+        enabled: ready,
+        child: DismissKeyboard(child: child ?? const SizedBox.shrink()),
+      ),
+    ),
     theme: AppTheme.build(),
     debugShowCheckedModeBanner: false,
     navigatorObservers: [appRouteObserver],
@@ -52,6 +60,7 @@ Future<void> _initializeFirebase() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
   }
+  _firebaseReady.value = true;
   if (PushService.instance == null) {
     final service = PushService(
       auth: FirebaseAuth.instance,

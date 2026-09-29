@@ -28,6 +28,11 @@ class PostRepository {
 
   String? get currentUserId => _auth.currentUser?.uid;
 
+  Stream<bool> watchPostRemoved(String id) => _firestore
+      .doc('moderationPosts/$id')
+      .snapshots()
+      .map((doc) => doc.exists);
+
   Future<UserModel?> getAuthor(String uid) async {
     final doc = await _firestore.collection('users').doc(uid).get();
     return doc.exists ? UserModel.fromFirestore(doc) : null;
@@ -505,6 +510,34 @@ class PostRepository {
     } finally {
       await directory.delete(recursive: true);
     }
+  }
+
+  Future<void> reportComment(
+    String postId,
+    CommentModel comment,
+    String reason,
+  ) async {
+    final uid = currentUserId;
+    if (uid == null) throw StateError('Sign in to report a comment.');
+    if (![
+      'spam',
+      'harassment',
+      'hate',
+      'sexualContent',
+      'violence',
+      'other',
+    ].contains(reason)) {
+      throw const FormatException('Choose a report reason.');
+    }
+    final type = comment.parentId == null ? 'comment' : 'reply';
+    await _firestore.doc('reports/${uid}_${type}_${postId}_${comment.id}').set({
+      'postId': postId,
+      'commentId': comment.id,
+      'isReply': comment.parentId != null,
+      'reporterId': uid,
+      'reason': reason,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 
   Future<void> reportPost(String postId) async {

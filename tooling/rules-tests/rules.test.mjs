@@ -665,3 +665,64 @@ for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
     await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(),path),{uid:'bob',updatedAt:serverTimestamp()}));
   });
 }
+
+for (const policy of ['firestore.rules','firestore.compat.rules']) {
+  test(`${policy}: moderation records cannot be forged, read or deleted by app clients`,async()=>{
+    await env.cleanup();env=await initializeTestEnvironment({projectId:'demo-mooddare',firestore:{rules:await readFile(new URL(`../../${policy}`,import.meta.url),'utf8')},storage:{rules:await readFile(new URL('../../storage.rules',import.meta.url),'utf8')}});
+    for(const c of ['moderationStaff','moderationContent','moderationActions','moderationLocks','moderationReviews','accountRestrictions']){
+      await env.withSecurityRulesDisabled(ctx=>setDoc(doc(ctx.firestore(),`${c}/secret`),{enabled:true}));
+      for(const path of [`${c}/secret`,`${c}/secret/nested/item`]){
+        await assertFails(getDoc(doc(db('alice'),path)));await assertFails(setDoc(doc(db('alice'),path),{enabled:true}));await assertFails(deleteDoc(doc(db('alice'),path)));
+      }
+    }
+    await assertFails(setDoc(doc(db('alice'),'moderationPosts/one'),{removed:true}));
+    await assertFails(getDocs(collection(db('alice'),'moderationPosts')));
+  });
+  test(`${policy}: banned accounts cannot use existing tokens; expired suspensions recover`,async()=>{
+    await setDoc(doc(db('alice'),'posts/one'),post());
+    await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'accountRestrictions/alice'),{status:'banned',until:null}));
+    await assertFails(getDoc(doc(db('alice'),'posts/one')));await assertFails(updateDoc(doc(db('alice'),'posts/one'),{likedBy:['alice']}));
+    await assertFails(setDoc(doc(db('alice'),'reports/alice_one'),{postId:'one',reporterId:'alice',reason:'inappropriate',createdAt:serverTimestamp()}));
+    await assertSucceeds(getDoc(doc(db('alice'),'accountRestrictions/alice')));
+    await assertFails(getDoc(doc(db('bob'),'accountRestrictions/alice')));
+    await assertFails(deleteDoc(doc(db('alice'),'accountRestrictions/alice')));
+    await assertSucceeds(getDoc(doc(db('bob'),'posts/one')));
+    await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'accountRestrictions/alice'),{status:'suspended',until:Timestamp.fromMillis(Date.now()+86400000)}));
+    await assertFails(getDoc(doc(db('alice'),'posts/one')));
+    await env.withSecurityRulesDisabled(c=>updateDoc(doc(c.firestore(),'accountRestrictions/alice'),{until:Timestamp.fromMillis(0)}));
+    await assertSucceeds(getDoc(doc(db('alice'),'posts/one')));
+  });
+  test(`${policy}: removed posts cannot be recreated and their storage cannot be fetched or overwritten`,async()=>{
+    const storage=env.authenticatedContext('alice').storage();const object=ref(storage,'posts/alice/one.jpg');
+    await assertSucceeds(uploadBytes(object,new Uint8Array([1]),{contentType:'image/jpeg'}));
+    await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'moderationPosts/one'),{removed:true}));
+    await assertFails(setDoc(doc(db('alice'),'posts/one'),post()));
+    await assertFails(uploadBytes(object,new Uint8Array([2]),{contentType:'image/jpeg'}));
+    const {getBytes}=await import('firebase/storage');await assertFails(getBytes(object));
+    await assertSucceeds(getDoc(doc(db('bob'),'moderationPosts/one')));
+    await env.withSecurityRulesDisabled(c=>deleteDoc(doc(c.firestore(),'moderationPosts/one')));
+    await assertSucceeds(setDoc(doc(db('alice'),'posts/one'),post()));
+    await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'accountRestrictions/alice'),{status:'banned'}));
+    await assertFails(uploadBytes(ref(storage,'posts/alice/two.jpg'),new Uint8Array([1]),{contentType:'image/jpeg'}));
+    await assertFails(getBytes(object));
+  });
+  test(`${policy}: comment/reply reports validate targets and identity and remain private`,async()=>{
+    await setDoc(doc(db('alice'),'posts/one'),post());
+    await setDoc(doc(db('alice'),'posts/one/comments/c'),{authorId:'alice',text:'Hello',createdAt:serverTimestamp()});
+    await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'posts/one/replies/r'),{authorId:'alice',rootAuthorId:'alice',parentId:'c',text:'Reply',createdAt:Timestamp.now()}));
+    for(const [isReply,commentId,type] of [[false,'c','comment'],[true,'r','reply']]){
+      const path=`reports/bob_${type}_one_${commentId}`,value={postId:'one',commentId,isReply,reporterId:'bob',reason:'harassment',createdAt:serverTimestamp()};
+      await assertSucceeds(setDoc(doc(db('bob'),path),value));await assertFails(getDoc(doc(db('alice'),path)));
+      await assertFails(updateDoc(doc(db('bob'),path),{reason:'invalid',createdAt:serverTimestamp()}));
+      await assertFails(setDoc(doc(db('alice'),path),value));
+      await assertFails(updateDoc(doc(db('bob'),path),{commentId:'missing',createdAt:serverTimestamp()}));
+    }
+  });
+  test(`${policy}: removed comment text cannot be edited or liked`,async()=>{
+    await setDoc(doc(db('alice'),'posts/one'),post());
+    await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'posts/one/comments/c'),{authorId:'alice',text:'Removed',moderationRemoved:true,createdAt:Timestamp.now(),likedBy:[]}));
+    await assertFails(updateDoc(doc(db('alice'),'posts/one/comments/c'),{text:'Resurrected',editedAt:serverTimestamp()}));
+    await assertFails(updateDoc(doc(db('bob'),'posts/one/comments/c'),{likedBy:['bob']}));
+    await assertSucceeds(getDoc(doc(db('bob'),'posts/one/comments/c')));
+  });
+}

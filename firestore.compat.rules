@@ -4,7 +4,18 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
+    function signedIn() {
+      return request.auth != null && (!exists(/databases/$(database)/documents/accountRestrictions/$(request.auth.uid))
+        || (get(/databases/$(database)/documents/accountRestrictions/$(request.auth.uid)).data.status != 'banned'
+          && (get(/databases/$(database)/documents/accountRestrictions/$(request.auth.uid)).data.status != 'suspended'
+            || get(/databases/$(database)/documents/accountRestrictions/$(request.auth.uid)).data.until <= request.time)));
+    }
+    match /moderationPosts/{id} {
+      allow get: if signedIn();
+    }
+    match /accountRestrictions/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+    }
     function owner(uid) { return signedIn() && request.auth.uid == uid; }
     function validUsername(name) {
       return name is string && name.matches('^[a-zA-Z0-9_]{3,20}$')
@@ -28,11 +39,11 @@ service cloud.firestore {
         && request.resource.data.get('coverColor', 'lavender') in ['lavender','midnight','rose','sage','ocean','sunset'];
     }
     match /{collection}/{id} {
-      allow read: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns']);
-      allow delete: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns']) && (collection != 'users' || owner(id));
-      allow create, update: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns']) && validUsernameChange(collection, id) && validCoverChange(collection, id);
+      allow read: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts']);
+      allow delete: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts']) && (collection != 'users' || owner(id));
+      allow create, update: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts']) && validUsernameChange(collection, id) && validCoverChange(collection, id);
       match /{subcollection}/{document=**} {
-        allow read, write: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns']) && !(subcollection in ['comments', 'replies', 'following', 'followers', 'blocked', 'savedDares', 'notifications', 'preferences']);
+        allow read, write: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts']) && !(subcollection in ['comments', 'replies', 'following', 'followers', 'blocked', 'savedDares', 'notifications', 'preferences']);
       }
     }
     match /users/{uid}/blocked/{authorId} {
@@ -68,7 +79,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['uid','updatedAt'])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.updatedAt == request.time;
-      allow delete: if owner(resource.data.uid);
+      allow delete: if request.auth != null && request.auth.uid == resource.data.uid;
     }
     function validDarePrompt(data) {
       return data.dareText is string && data.dareText.size() > 0 && data.dareText.size() <= 500
@@ -147,7 +158,7 @@ service cloud.firestore {
     }
     match /posts/{id} {
       allow read: if signedIn();
-      allow create: if signedIn()
+      allow create: if signedIn() && !exists(/databases/$(database)/documents/moderationPosts/$(id))
         && request.resource.data.keys().hasOnly(['dareText','mediaUrl','mediaPath','mediaType','authorId','createdAt','expiresAt','likedBy','moodId','moodName','weeklyDareId'])
         && (!('weeklyDareId' in request.resource.data) || validWeeklyDare(request.resource.data))
         && ((!('moodId' in request.resource.data) && !('moodName' in request.resource.data))
@@ -196,7 +207,7 @@ service cloud.firestore {
           && request.resource.data.authorId == request.auth.uid && validText()
           && request.resource.data.get('likedBy', []) == []
           && request.resource.data.createdAt == request.time;
-        allow update: if signedIn() && exists(/databases/$(database)/documents/posts/$(id))
+        allow update: if signedIn() && resource.data.get('moderationRemoved', false) == false && exists(/databases/$(database)/documents/posts/$(id))
           && ((owner(resource.data.authorId)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
             && validText() && request.resource.data.editedAt == request.time)
@@ -242,11 +253,12 @@ service cloud.firestore {
           && request.resource.data.parentId is string
           && exists(/databases/$(database)/documents/posts/$(id)/comments/$(request.resource.data.parentId))
           && get(/databases/$(database)/documents/posts/$(id)/comments/$(request.resource.data.parentId)).data.get('deleting', false) == false
+          && get(/databases/$(database)/documents/posts/$(id)/comments/$(request.resource.data.parentId)).data.get('moderationRemoved', false) == false
           && request.resource.data.rootAuthorId == get(/databases/$(database)/documents/posts/$(id)/comments/$(request.resource.data.parentId)).data.authorId
           && validReplyTarget()
           && request.resource.data.get('likedBy', []) == []
           && request.resource.data.createdAt == request.time;
-        allow update: if signedIn() && exists(/databases/$(database)/documents/posts/$(id))
+        allow update: if signedIn() && resource.data.get('moderationRemoved', false) == false && exists(/databases/$(database)/documents/posts/$(id))
           && ((owner(resource.data.authorId)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
             && validText() && request.resource.data.editedAt == request.time)
@@ -275,6 +287,16 @@ service cloud.firestore {
           && id == request.auth.uid + '_' + request.resource.data.postId
           && request.resource.data.reason == 'inappropriate';
       }
+      function validCommentReport() {
+        let data = request.resource.data;
+        return data.keys().hasOnly(['postId','commentId','isReply','reporterId','reason','createdAt'])
+          && data.postId is string && data.commentId is string && data.isReply is bool
+          && id == request.auth.uid + (data.isReply ? '_reply_' : '_comment_') + data.postId + '_' + data.commentId
+          && data.reason in ['spam','harassment','hate','sexualContent','violence','other']
+          && (data.isReply
+            ? exists(/databases/$(database)/documents/posts/$(data.postId)/replies/$(data.commentId))
+            : exists(/databases/$(database)/documents/posts/$(data.postId)/comments/$(data.commentId)));
+      }
       function validUserReport() {
         let data = request.resource.data;
         return data.keys().hasOnly(['userId','reporterId','reason','createdAt'])
@@ -287,7 +309,7 @@ service cloud.firestore {
         return signedIn()
         && request.resource.data.reporterId == request.auth.uid
         && request.resource.data.createdAt == request.time
-        && (validUserReport() || validPostReport());
+        && (validUserReport() || validPostReport() || validCommentReport());
       }
       allow create: if validReport();
       allow update: if validReport() && owner(resource.data.reporterId)

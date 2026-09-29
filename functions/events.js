@@ -5,7 +5,7 @@ const category = kind => ({follow:'follows', postLike:'likes', commentLike:'like
 // Stable across retries and repeated unlike/re-like or follow/unfollow actions.
 const notificationId = n => createHash('sha256').update(JSON.stringify([n.kind, n.source, n.actorId, n.recipientId])).digest('hex');
 function eventsFor(path, before, after, post) {
-  if (!after || after.deleting) return [];
+  if (!after || after.deleting || after.moderationRemoved || before?.moderationRemoved) return [];
   const p = path.split('/');
   const events = [];
   const add = (kind, actorId, recipientId, extra = {}) => {
@@ -31,7 +31,7 @@ function eventsFor(path, before, after, post) {
   return events;
 }
 function stillRelevant(n, current, post, root) {
-  if (!current || current.deleting) return false;
+  if (!current || current.deleting || current.moderationRemoved) return false;
   if (n.postId && (!post || post.deleting)) return false;
   if (n.parentId && (!root || root.deleting)) return false;
   if (n.kind.endsWith('Like')) return (current.likedBy || []).includes(n.actorId) && current.authorId === n.recipientId;

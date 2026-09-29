@@ -13,6 +13,18 @@ jobs:
           node-version: '22'
       - run: npm test
         working-directory: website
+  moderation-dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts --prefix tooling/admin
+      - run: npm run build --prefix tooling/admin
+      - run: git diff --exit-code -- website/admin/app.js
+      - run: node --test tooling/admin/browser.test.mjs
   flutter:
     runs-on: ubuntu-latest
     steps:
