@@ -22,6 +22,7 @@ class _Posts implements PostRepository {
     String? postId,
     String? moodId,
     String? moodName,
+    String? weeklyDareId,
   }) async {
     bytes = await mediaFile.readAsBytes();
     mood = moodName;

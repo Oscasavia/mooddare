@@ -1,3 +1,4 @@
+import 'package:mooddare/features/dares/data/repositories/weekly_dare_repository.dart';
 import 'package:mooddare/features/profile/data/social_repository.dart';
 import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
@@ -45,6 +46,7 @@ class PostRepository {
     String? postId,
     String? moodId,
     String? moodName,
+    String? weeklyDareId,
   }) async {
     final user = _auth.currentUser;
     if (user == null) throw StateError('Sign in before posting.');
@@ -66,6 +68,25 @@ class PostRepository {
     final doc = _firestore.collection('posts').doc(id);
     // Retrying an acknowledged or ambiguously completed post never duplicates it.
     if ((await doc.get()).exists) return;
+    WeeklyDare? challenge;
+    if (weeklyDareId != null) {
+      if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(weeklyDareId)) {
+        throw const FormatException('Invalid weekly dare.');
+      }
+      final schedule = await _firestore
+          .collection('weeklyDares')
+          .doc(weeklyDareId)
+          .get(const GetOptions(source: Source.server));
+      challenge = WeeklyDare.parse(schedule.id, schedule.data());
+      if (challenge != null &&
+          (challenge.prompt.text != dareText.trim() ||
+              challenge.prompt.moodId != moodId ||
+              challenge.prompt.moodName != moodName)) {
+        throw const FormatException(
+          'The capture does not match this weekly dare.',
+        );
+      }
+    }
     final path =
         'posts/${user.uid}/$id.${mediaType == 'image' ? 'jpg' : 'mp4'}';
     final ref = _storage.ref(path);
@@ -76,7 +97,9 @@ class PostRepository {
       ),
     );
     final url = await ref.getDownloadURL();
-    await doc.set({
+    final data = <String, dynamic>{
+      if (challenge?.isActive(DateTime.now()) ?? false)
+        'weeklyDareId': challenge!.id,
       'dareText': dareText.trim(),
       if (moodId != null && moodName != null) ...{
         'moodId': moodId,
@@ -91,7 +114,21 @@ class PostRepository {
         DateTime.now().add(const Duration(hours: 24)),
       ),
       'likedBy': <String>[],
-    });
+    };
+    try {
+      await doc.set(data);
+    } on FirebaseException catch (error) {
+      // A recording/upload can straddle Monday's rollover. Preserve the moment
+      // as an ordinary post; the server still decides whether it earns credit.
+      if (error.code != 'permission-denied' ||
+          challenge == null ||
+          challenge.isActive(DateTime.now()) ||
+          !data.containsKey('weeklyDareId')) {
+        rethrow;
+      }
+      data.remove('weeklyDareId');
+      await doc.set(data);
+    }
   }
 
   Future<Map<String, String>> getMoodOptions() async {
@@ -128,6 +165,11 @@ class PostRepository {
         .get();
     return {
       'daresCompleted': snapshot.docs.length,
+      'weeklyDaresCompleted': snapshot.docs
+          .map((doc) => doc.data()['weeklyDareId'])
+          .whereType<String>()
+          .toSet()
+          .length,
       'totalLikes': snapshot.docs.fold(
         0,
         (total, doc) => total + ((doc.data()['likedBy'] as List?)?.length ?? 0),

@@ -1,3 +1,5 @@
+import '../widgets/weekly_dare_card.dart';
+import '../../data/repositories/weekly_dare_repository.dart';
 import 'dare_library_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:mooddare/core/widgets/app_empty_state.dart';
@@ -10,7 +12,8 @@ import 'dare_generation_screen.dart';
 
 class DaresScreen extends StatefulWidget {
   final DaresRepository? repository;
-  const DaresScreen({super.key, this.repository});
+  final WeeklyDareRepository? weeklyRepository;
+  const DaresScreen({super.key, this.repository, this.weeklyRepository});
   @override
   State<DaresScreen> createState() => _DaresScreenState();
 }
@@ -63,7 +66,25 @@ class _DaresScreenState extends State<DaresScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      automaticallyImplyLeading: false,
+      centerTitle: false,
+      title: const Text(
+        'Find your mood',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      actions: [
+        const DareInboxButton(),
+        IconButton(
+          tooltip: 'About collections',
+          onPressed: () => showMoodCollections(context),
+          icon: const Icon(Icons.layers_outlined, color: Colors.white70),
+        ),
+      ],
+    ),
     body: SafeArea(
+      top: false,
       child: FutureBuilder<MoodCatalog>(
         future: _catalog,
         builder: (context, snapshot) {
@@ -82,42 +103,27 @@ class _DaresScreenState extends State<DaresScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
                   sliver: SliverToBoxAdapter(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Expanded(
-                              child: Text(
-                                'Find your mood.',
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  height: 1.15,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: -1,
-                                ),
-                              ),
-                            ),
-                            const DareInboxButton(),
-                            IconButton(
-                              tooltip: 'About collections',
-                              onPressed: () => showMoodCollections(context),
-                              icon: const Icon(
-                                Icons.layers_outlined,
-                                color: Colors.white70,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
                         const Text(
                           'A little dare for every kind of day.',
                           style: TextStyle(color: Colors.white60, height: 1.5),
                         ),
-                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: WeeklyDareCard(repository: widget.weeklyRepository),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      children: [
                         TextField(
                           controller: _search,
                           onChanged: (_) => setState(() {}),
@@ -142,7 +148,7 @@ class _DaresScreenState extends State<DaresScreen> {
                 SliverToBoxAdapter(
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: Row(
                       children: MoodCollection.values
                           .map(
@@ -163,7 +169,7 @@ class _DaresScreenState extends State<DaresScreen> {
                 ),
                 if (catalog?.loadFailed ?? false)
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     sliver: SliverToBoxAdapter(
                       child: Row(
                         children: [
@@ -187,7 +193,7 @@ class _DaresScreenState extends State<DaresScreen> {
                 if (waiting && catalog != null)
                   const SliverToBoxAdapter(child: LinearProgressIndicator()),
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 18),
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 18),
                   sliver: SliverToBoxAdapter(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -265,7 +271,7 @@ class _DaresScreenState extends State<DaresScreen> {
                   )
                 else
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
                     sliver: SliverLayoutBuilder(
                       builder: (context, constraints) {
                         final scale =

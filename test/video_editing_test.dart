@@ -21,6 +21,7 @@ class VideoPosts implements PostRepository {
     String? postId,
     String? moodId,
     String? moodName,
+    String? weeklyDareId,
   }) async {
     uploaded = mediaFile;
     bytes = await mediaFile.readAsBytes();

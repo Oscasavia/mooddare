@@ -539,3 +539,54 @@ test(`${policy}: invitation payloads reject arbitrary metadata, invalid prompts 
 });
 
 }
+
+for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
+  const weeklySetup = async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({projectId: 'demo-mooddare',
+      firestore: {rules: await readFile(new URL(`../../${policy}`, import.meta.url), 'utf8')},
+      storage: {rules: await readFile(new URL('../../storage.rules', import.meta.url), 'utf8')},
+    });
+    await env.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), 'weeklyDares/active'), {
+        title: 'A little joy', dareText: 'Try a new perspective', moodId: 'happy', moodName: 'Happy',
+        startsAt: Timestamp.fromMillis(Date.now() - 86400000), endsAt: Timestamp.fromMillis(Date.now() + 86400000),
+      });
+      for (const [id, offset] of [['expired', -8], ['future', 8]]) {
+        await setDoc(doc(context.firestore(), `weeklyDares/${id}`), {
+          title: 'A little joy', dareText: 'Try a new perspective', moodId: 'happy', moodName: 'Happy',
+          startsAt: Timestamp.fromMillis(Date.now() + offset * 86400000),
+          endsAt: Timestamp.fromMillis(Date.now() + (offset + 7) * 86400000),
+        });
+      }
+    });
+  };
+  test(`${policy}: weekly schedule is readable only after sign-in and cannot be forged, changed or deleted`, async () => {
+    await weeklySetup();
+    await assertSucceeds(getDoc(doc(db('alice'), 'weeklyDares/active')));
+    await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'weeklyDares/active')));
+    await assertFails(setDoc(doc(db('alice'), 'weeklyDares/forged'), {dareText: 'Free credit'}));
+    await assertFails(updateDoc(doc(db('alice'), 'weeklyDares/active'), {endsAt: Timestamp.fromMillis(Date.now() + 999999999)}));
+    await assertFails(deleteDoc(doc(db('alice'), 'weeklyDares/active')));
+    await assertFails(setDoc(doc(db('alice'), 'weeklyDares/active/anything/forged'), {credit: true}));
+  });
+  test(`${policy}: weekly credit requires a matching post in the server-verified window and is immutable`, async () => {
+    await weeklySetup();
+    const alice = db('alice'), target = doc(alice, 'posts/one');
+    const valid = {...post(), moodId: 'happy', moodName: 'Happy', weeklyDareId: 'active'};
+    for (const patch of [
+      {weeklyDareId: 'missing'}, {weeklyDareId: 'expired'}, {weeklyDareId: 'future'},
+      {weeklyDareId: 1}, {dareText: 'Something else'}, {moodId: 'chill'}, {moodName: 'Chill'},
+      {authorId: 'bob'}, {createdAt: Timestamp.fromMillis(0)},
+    ]) await assertFails(setDoc(target, {...valid, ...patch}));
+    await assertSucceeds(setDoc(target, valid));
+    await assertFails(updateDoc(target, {weeklyDareId: 'another-week'}));
+    await assertFails(updateDoc(target, {weeklyDareId: null}));
+    await assertSucceeds(updateDoc(doc(db('bob'), 'posts/one'), {likedBy: ['bob']}));
+    await assertSucceeds(getDocs(query(collection(alice, 'posts'), where('authorId','==','alice'), where('weeklyDareId','==','active'), limit(1))));
+    await assertSucceeds(deleteDoc(target));
+    // Old clients and late uploads still create ordinary posts without credit.
+    await assertSucceeds(setDoc(target, post()));
+    await assertFails(updateDoc(target, {weeklyDareId: 'active'}));
+  });
+}

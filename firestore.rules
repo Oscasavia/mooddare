@@ -115,10 +115,23 @@ service cloud.firestore {
       // Curated content is managed through trusted administrative tooling.
       allow write: if false;
     }
+    // Published by trusted administration only, never by an app client.
+    match /weeklyDares/{weekId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    function validWeeklyDare(data) {
+      let challenge = get(/databases/$(database)/documents/weeklyDares/$(data.weeklyDareId)).data;
+      return data.weeklyDareId is string
+        && challenge.startsAt <= request.time && request.time < challenge.endsAt
+        && data.dareText == challenge.dareText
+        && data.moodId == challenge.moodId && data.moodName == challenge.moodName;
+    }
     match /posts/{id} {
       allow read: if signedIn();
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['dareText','mediaUrl','mediaPath','mediaType','authorId','createdAt','expiresAt','likedBy','moodId','moodName'])
+        && request.resource.data.keys().hasOnly(['dareText','mediaUrl','mediaPath','mediaType','authorId','createdAt','expiresAt','likedBy','moodId','moodName','weeklyDareId'])
+        && (!('weeklyDareId' in request.resource.data) || validWeeklyDare(request.resource.data))
         && ((!('moodId' in request.resource.data) && !('moodName' in request.resource.data))
           || (request.resource.data.moodId is string && request.resource.data.moodId.size() > 0 && request.resource.data.moodId.size() <= 128
             && request.resource.data.moodName is string && request.resource.data.moodName.size() > 0 && request.resource.data.moodName.size() <= 80))

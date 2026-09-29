@@ -27,6 +27,7 @@ class StablePopupMenu<T> extends StatelessWidget {
       context: context,
       position: RelativeRect.fromRect(rect, Offset.zero & overlay.size),
       items: itemBuilder(context),
+      clipBehavior: Clip.antiAlias,
     );
     if (selected != null && context.mounted) onSelected(selected);
   }

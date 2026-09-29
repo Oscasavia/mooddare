@@ -217,8 +217,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
               ]
             : [],
-        backgroundColor: const Color(0xFF0A0A0D),
-        elevation: 0,
       ),
       body: _blocked
           ? const Center(
@@ -300,6 +298,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                             StatsAndBadges(
                               daresCompleted: stats['daresCompleted'] ?? 0,
                               totalLikes: stats['totalLikes'] ?? 0,
+                              weeklyDaresCompleted:
+                                  stats['weeklyDaresCompleted'] ?? 0,
                             ),
                           ],
                         ),

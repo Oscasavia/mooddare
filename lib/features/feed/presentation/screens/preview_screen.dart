@@ -21,7 +21,7 @@ class PreviewScreen extends StatefulWidget {
   final File mediaFile;
   final String mediaType;
   final String dareText;
-  final String? moodId, moodName;
+  final String? moodId, moodName, weeklyDareId;
   final String? liveLens;
   final PostRepository? repository;
   const PreviewScreen({
@@ -33,6 +33,7 @@ class PreviewScreen extends StatefulWidget {
     this.repository,
     this.moodId,
     this.moodName,
+    this.weeklyDareId,
   });
   @override
   State<PreviewScreen> createState() => _PreviewScreenState();
@@ -208,6 +209,7 @@ class _PreviewScreenState extends State<PreviewScreen>
           dareText: widget.dareText,
           moodId: widget.moodId,
           moodName: widget.moodName,
+          weeklyDareId: widget.weeklyDareId,
           mediaFile: file,
           mediaType: widget.mediaType,
           postId: _postId,
@@ -484,6 +486,7 @@ class _PreviewScreenState extends State<PreviewScreen>
           ),
           actions: [
             PopupMenuButton<String>(
+              clipBehavior: Clip.antiAlias,
               tooltip: 'Save or share',
               enabled: !blocked,
               onSelected: _useMedia,

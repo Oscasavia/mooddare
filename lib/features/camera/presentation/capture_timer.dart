@@ -66,6 +66,7 @@ class CaptureTimerButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => PopupMenuButton<int>(
+    clipBehavior: Clip.antiAlias,
     key: const ValueKey('camera_timer'),
     tooltip: seconds == 0 ? 'Timer off' : 'Timer: $seconds seconds',
     enabled: enabled,

@@ -32,6 +32,13 @@ class AppTheme {
           letterSpacing: -.5,
         ),
       ),
+      popupMenuTheme: const PopupMenuThemeData(
+        color: surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(24)),
+        ),
+      ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size(48, 52),

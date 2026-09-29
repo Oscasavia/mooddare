@@ -21,12 +21,13 @@ enum _CameraFrame {
 
 class LiveBeautyScreen extends StatefulWidget {
   final String dareText;
-  final String? moodId, moodName;
+  final String? moodId, moodName, weeklyDareId;
   const LiveBeautyScreen({
     super.key,
     required this.dareText,
     this.moodId,
     this.moodName,
+    this.weeklyDareId,
   });
 
   @override
@@ -370,6 +371,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
             dareText: widget.dareText,
             moodId: widget.moodId,
             moodName: widget.moodName,
+            weeklyDareId: widget.weeklyDareId,
             liveLens: _comparing ? 'Original' : BeautyLens.all[_selected].name,
           ),
         ),
@@ -790,6 +792,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                             if (!_recording) ...[
                               const SizedBox(height: 8),
                               PopupMenuButton<_CameraFrame>(
+                                clipBehavior: Clip.antiAlias,
                                 key: const ValueKey('camera_ratio'),
                                 tooltip: 'Change frame',
                                 enabled: enabled,

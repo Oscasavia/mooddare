@@ -10,32 +10,40 @@ import '../../../camera/presentation/camera_zoom_surface.dart';
 
 class CameraScreen extends StatelessWidget {
   final String dareText;
-  final String? moodId, moodName;
+  final String? moodId, moodName, weeklyDareId;
   const CameraScreen({
     super.key,
     required this.dareText,
     this.moodId,
     this.moodName,
+    this.weeklyDareId,
   });
   @override
   Widget build(BuildContext context) => Platform.isAndroid
-      ? LiveBeautyScreen(dareText: dareText, moodId: moodId, moodName: moodName)
+      ? LiveBeautyScreen(
+          dareText: dareText,
+          moodId: moodId,
+          moodName: moodName,
+          weeklyDareId: weeklyDareId,
+        )
       : BasicCameraScreen(
           dareText: dareText,
           moodId: moodId,
           moodName: moodName,
+          weeklyDareId: weeklyDareId,
         );
 }
 
 /// Fallback for platforms that do not yet implement native live lenses.
 class BasicCameraScreen extends StatefulWidget {
   final String dareText;
-  final String? moodId, moodName;
+  final String? moodId, moodName, weeklyDareId;
   const BasicCameraScreen({
     super.key,
     required this.dareText,
     this.moodId,
     this.moodName,
+    this.weeklyDareId,
   });
   @override
   State<BasicCameraScreen> createState() => _CameraScreenState();
@@ -218,6 +226,7 @@ class _CameraScreenState extends State<BasicCameraScreen>
             dareText: widget.dareText,
             moodId: widget.moodId,
             moodName: widget.moodName,
+            weeklyDareId: widget.weeklyDareId,
           ),
         ),
       );
@@ -264,6 +273,7 @@ class _CameraScreenState extends State<BasicCameraScreen>
             dareText: widget.dareText,
             moodId: widget.moodId,
             moodName: widget.moodName,
+            weeklyDareId: widget.weeklyDareId,
           ),
         ),
       );

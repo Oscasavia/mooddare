@@ -358,6 +358,7 @@ void main() {
         expect(await posts.getUserStats('alice'), {
           'daresCompleted': 1,
           'totalLikes': 0,
+          'weeklyDaresCompleted': 0,
         });
         await posts.reportPost('p');
         expect((await db.doc('reports/alice_p').get()).exists, true);

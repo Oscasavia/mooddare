@@ -239,3 +239,36 @@ The selected-dare screen also offers Send dare. Its searchable picker lists only
 `users/{uid}/savedDares` is owner-only; `dareInvites` permits participant-only reads/deletion, mutual-follow/nonblocked creation, and recipient-only acknowledgement. Payload fields, nonblank length-bounded prompts, optional paired mood metadata, and server creation times are enforced. Both the target and compatibility policies explicitly protect these paths; the compatibility wildcard excludes them. The compatibility rules and two inbox indexes were deployed to `mooddare`; both indexes reported READY. The pre-existing profile migration release gate above is unchanged. Client idempotency is not a server-enforced rate limit; add trusted rate limiting before a broad public launch.
 
 Validation: 343 Flutter tests pass with 86.77% Dart line coverage (6007/6923 executable lines); all 53 Firestore/Storage emulator tests pass (including the new privacy, relationship, block-race, payload and mutation tests under both policies). Two Android emulator integration tests pass: mutual sender-to-recipient delivery through real photo capture/editor with unchanged dare/mood, and retrying a post’s dare through native camera/back navigation without modifying the source. Integration tests use fake account/data repositories, local test imagery and the emulator camera; no real invitation or test post was sent to a production user. Widget tests cover error/retry, paging in the repository, account cleanup, private profile tabs, legacy/locked moods and narrow large-text layouts. The existing Android native unit suite also passed; Flutter analysis and formatting checks passed. A normal ARM64 debug APK was rebuilt after integration tests and installed on the Samsung as an in-place update. Weekly community dares and personalized ranking are not part of this change.
+
+## Community dare of the week — 2026-09-23
+
+Discover now has one featured, borderless purple card above mood search, using the existing Mood-wink artwork. The toolbar keeps its standard spacing; the recent toolbar and body-padding refinements remain in place. The card shows the shared prompt, mood, remaining time, and Join this week. It changes to You joined this week / Make another moment when a qualifying post exists.
+
+- Everyone uses the same Monday 00:00 UTC–Monday 00:00 UTC schedule. The card handles foreground time changes, app resume, missing schedules and retryable load errors.
+- Only posts captured from the weekly card carry `weeklyDareId`. The ID survives both camera implementations and photo/video preview edits. Opening or cancelling capture does not award participation.
+- Firebase validates the posted prompt, mood, author, server timestamp and published active window. Clients cannot create, edit or delete `weeklyDares`, including through the compatibility wildcard.
+- A capture posted after its week closes remains an ordinary moment without weekly credit. Feed expiry stays 24 hours. The upload handles a deadline crossed during the post write without duplicating the post.
+- Profile → Stats adds Part of the moment (first week) and Showing up together (four distinct weeks, not necessarily consecutive). Multiple posts in a week count once. Stats derive from retained posts: feed expiry does not remove credit, but deleting every qualifying post for a week does. Existing account deletion already removes these posts; no extra personal collection is created.
+- No public participant leaderboard, cash/points bonus, scheduled push notification or weekly feed ranking is introduced.
+
+### Schedule administration
+
+`node tooling/weekly-dares/publish.cjs --start 2026-09-21 --weeks 52` previews the curated schedule without network access. Add `--project mooddare --apply` to publish using the existing global Firebase CLI login. The publisher resolves current catalog mood IDs, skips existing weeks, and uses a create-only precondition to avoid overwriting a concurrent change. Review prompts before publishing; the initial schedule rotates twelve original prompts.
+
+The initial 52 weeks are published through **2027-09-20 00:00 UTC**. Extend the schedule before that date (or publish edited future weeks through trusted Firebase administration). There is no recurring paid scheduler. Never edit an active challenge after people start posting, since its exact prompt is validated at posting time.
+
+Deploy using `firebase.compat.json` until the earlier profile migration release gate is complete. The `posts(authorId, weeklyDareId)` index supports personal participation status. Both strict and compatibility rules have the same new validation.
+
+Validation: 353 Flutter tests passed, Dart line coverage 86.86% (6187/7123), analysis clean, 57 Firebase emulator tests passed, and two schedule-publisher tests passed. Android emulator integration verified weekly-card navigation and exact challenge metadata through both native photo and video capture; cancelling produced no post. Visual review used the synthetic Discover fixture. CI now runs the schedule-publisher tests as well as the existing rules tests.
+
+### Collapsible weekly card
+
+The entire weekly-card header toggles its up/down chevron. Collapsing keeps “This week’s dare” and the challenge title visible while hiding the prompt and participation controls. A short size transition respects reduced-motion settings. The device remembers only the last collapsed week in application-support storage; reopening restores it, expanding clears it, and a different week starts expanded automatically. This is a presentation preference and never alters participation or Firebase data. Ordered, atomic file writes handle rapid toggles; unavailable storage still allows toggling for the current visit.
+
+Validation: 35 weekly-dare/Discover tests passed, including persisted choices, rapid writes, storage errors, app-resume rollover, and narrow screens with large text. Static analysis and the Android APK build passed.
+
+### Combined GitHub update — 2026-09-29
+
+Profile app bars now inherit the same background as Moments and Discover. Option menus use the shared 24-pixel radius and surface color, with clipped highlights in both anchored menus and camera/preview menus. The proposed customizable profile cover has not been implemented.
+
+Final combined verification: all 358 Flutter tests passed, with 86.95% Dart line coverage (6238/7174); formatting, static analysis, and the Android APK build passed. The two schedule-publisher tests passed. The existing 57-test Firebase rules verification and native weekly photo/video capture check remain applicable; those implementations were unchanged by the later presentation updates. The APK was installed on the Samsung via an in-place update preserving app data.

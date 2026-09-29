@@ -19,6 +19,7 @@ class _CapturePost implements PostRepository {
     String? postId,
     String? moodId,
     String? moodName,
+    String? weeklyDareId,
   }) async {
     image = img.decodeImage(await mediaFile.readAsBytes());
   }

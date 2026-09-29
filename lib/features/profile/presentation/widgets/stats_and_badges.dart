@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'stat_item.dart';
 
 class StatsAndBadges extends StatelessWidget {
-  final int daresCompleted, totalLikes;
+  final int daresCompleted, totalLikes, weeklyDaresCompleted;
   const StatsAndBadges({
     super.key,
     required this.daresCompleted,
     required this.totalLikes,
+    this.weeklyDaresCompleted = 0,
   });
   @override
   Widget build(BuildContext context) {
@@ -67,6 +68,26 @@ class StatsAndBadges extends StatelessWidget {
           ),
           title: const Text('Making memories'),
           subtitle: const Text('Share 10 moments'),
+        ),
+        ListTile(
+          leading: Icon(
+            weeklyDaresCompleted > 0
+                ? Icons.check_circle
+                : Icons.radio_button_unchecked,
+          ),
+          title: const Text('Part of the moment'),
+          subtitle: const Text('Join your first community dare of the week'),
+        ),
+        ListTile(
+          leading: Icon(
+            weeklyDaresCompleted >= 4
+                ? Icons.check_circle
+                : Icons.radio_button_unchecked,
+          ),
+          title: const Text('Showing up together'),
+          subtitle: Text(
+            '${weeklyDaresCompleted.clamp(0, 4)} / 4 different weeks · no streak required',
+          ),
         ),
         ListTile(
           leading: Icon(
