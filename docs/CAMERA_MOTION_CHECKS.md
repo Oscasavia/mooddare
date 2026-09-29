@@ -44,3 +44,9 @@ Build the ordinary APK again after emulator integration tests before installing 
 ## Acceptance record
 
 Record the build, phone/OS, lenses/strength, lighting/glasses, session length, observed alignment/stutter, and any timing summaries. Do not record identifying photos or face coordinates here. Multi-phone, skin-tone, glasses, low-light and sustained-heat acceptance remain pending until hands-on results are recorded.
+
+### Samsung sample — 2026-09-29, build de5f1e0
+
+Installed in place on the connected Samsung SM-F976U1. Camera timing summaries from 15:57–16:00 showed approximately 29.1–29.9 fps across preview and recording windows. Original's initial three windows had zero detector completions. The first active-effect recording windows showed 29.7–29.9 fps, mean processing times of 8.8–9.7 ms, maxima of 28.0–32.3 ms, and face/mesh visibility on all frames in those windows. Later sampled recording windows remained near 30 fps. No sampled window reported processing frames exceeding 33.3 ms.
+
+These are short debug-build observations, not a before/after benchmark, a battery claim or verification of an entire recording. Lens names, ambient lighting, glasses and skin tones are not logged; visual alignment/playback feedback is still pending. Multi-phone and longer thermal testing remain open.
