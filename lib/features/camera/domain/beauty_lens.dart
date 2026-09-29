@@ -1,3 +1,14 @@
+enum ArEffect {
+  none('none'),
+  heartHalo('heart_halo'),
+  purpleShades('purple_shades'),
+  butterflies('butterflies'),
+  moodCompanion('mood_companion');
+
+  final String id;
+  const ArEffect(this.id);
+}
+
 /// Lens strengths stay normalized; native rendering clamps every input again.
 class BeautyLens {
   final String name;
@@ -5,11 +16,13 @@ class BeautyLens {
   final double smooth, light, warmth, eyeSize, faceSlim, makeup;
   final double? lips, blush;
   final LipShade lipShade;
-  final bool heartHalo;
+  final ArEffect arEffect;
+  bool get heartHalo => arEffect == ArEffect.heartHalo;
+  bool get hasAr => arEffect != ArEffect.none;
   const BeautyLens(
     this.name, {
     this.id = '',
-    this.heartHalo = false,
+    this.arEffect = ArEffect.none,
     this.smooth = 0,
     this.light = 0,
     this.warmth = 0,
@@ -26,8 +39,8 @@ class BeautyLens {
   Map<String, Object> settings(double strength, {bool original = false}) {
     final amount = strength.isFinite ? strength.clamp(0.0, 1.0) : 0.0;
     return {
-      'arEffect': heartHalo ? 'heart_halo' : 'none',
-      'arStrength': heartHalo ? amount : 0.0,
+      'arEffect': arEffect.id,
+      'arStrength': hasAr ? amount : 0.0,
       'smooth': smooth * amount,
       'light': light * amount,
       'warmth': warmth * amount,
@@ -86,6 +99,24 @@ class BeautyLens {
     ),
   ];
 
+  static const playful = [
+    BeautyLens(
+      'Purple Shades',
+      id: 'purple_shades',
+      arEffect: ArEffect.purpleShades,
+    ),
+    BeautyLens(
+      'Butterflies',
+      id: 'butterflies',
+      arEffect: ArEffect.butterflies,
+    ),
+    BeautyLens(
+      'Mood Buddy',
+      id: 'mood_companion',
+      arEffect: ArEffect.moodCompanion,
+    ),
+  ];
+
   static const all = [
     BeautyLens('Original', id: 'original'),
     BeautyLens('Soft', id: 'soft', smooth: .85),
@@ -102,7 +133,8 @@ class BeautyLens {
       faceSlim: .85,
     ),
     ...collection,
-    BeautyLens('Heart Halo', id: 'heart_halo', heartHalo: true),
+    BeautyLens('Heart Halo', id: 'heart_halo', arEffect: ArEffect.heartHalo),
+    ...playful,
     BeautyLens(
       'Rosy',
       id: 'rosy',

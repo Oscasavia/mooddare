@@ -277,7 +277,7 @@ class LiveBeautyPlugin(
             fixtureFile = fixture
             handler.post {
                 try {
-                    renderer = LiveBeautyRenderer(surface).apply { mirror = front }
+                    renderer = LiveBeautyRenderer(surface, activity.resources).apply { mirror = front }
                     if (fixture != null) {
                         val originalBitmap = BitmapFactory.decodeFile(fixture.path)
                             ?: throw IllegalArgumentException("Invalid test image")

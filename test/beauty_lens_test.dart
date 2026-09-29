@@ -147,12 +147,35 @@ void main() {
     expect(lens.settings(.65, original: true)['original'], isTrue);
     expect(lens.settings(0)['arStrength'], 0);
     expect(lens.settings(double.nan)['arStrength'], 0);
-    for (final other in BeautyLens.all.where((l) => !l.heartHalo)) {
+    for (final other in BeautyLens.all.where((l) => !l.hasAr)) {
       expect(other.settings(1)['arEffect'], 'none');
       expect(other.settings(1)['arStrength'], 0);
     }
     expect(const CustomBeautyLook(lips: 1).settings()['arEffect'], 'none');
   });
+
+  test(
+    'new playful effects have stable IDs and no automatic beauty adjustments',
+    () {
+      expect(BeautyLens.playful.map((l) => l.arEffect), [
+        ArEffect.purpleShades,
+        ArEffect.butterflies,
+        ArEffect.moodCompanion,
+      ]);
+      for (final lens in BeautyLens.playful) {
+        expect(lens.settings(.7)['arEffect'], lens.id);
+        expect(lens.settings(.7)['arStrength'], .7);
+        expect(lens.settings(double.nan)['arStrength'], 0);
+        expect(lens.settings(0)['arStrength'], 0);
+        expect(lens.settings(1, original: true)['original'], isTrue);
+        expect(lens.hasMakeup, isFalse);
+        expect(lens.hasAr, isTrue);
+        expect(lens.settings(1)['smooth'], 0);
+        expect(lens.settings(1)['eyeSize'], 0);
+        expect(lens.settings(1)['faceSlim'], 0);
+      }
+    },
+  );
 
   test('zero strength disables every lens and strength is bounded', () {
     for (final lens in BeautyLens.all) {

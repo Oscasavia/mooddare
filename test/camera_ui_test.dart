@@ -428,6 +428,60 @@ void main() {
     await tester.pump();
   });
 
+  for (final lens in BeautyLens.playful) {
+    testWidgets(
+      '${lens.name} keeps camera controls, favorites and capture settings',
+      (tester) async {
+        tester.view.physicalSize = const Size(320, 640);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        preferences.value = BeautyPreferencesData(favorites: {lens.id});
+        await openTimerCamera(tester, seconds: 0);
+        await tester.tap(find.byKey(const ValueKey('lens_library_button')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Favorites'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(ValueKey('library_lens_${lens.id}')));
+        await tester.pumpAndSettle();
+        expect(find.text(lens.name), findsOneWidget);
+        expect(looks.last['arEffect'], lens.id);
+        expect(find.text('Face the camera for this effect'), findsOneWidget);
+        await tester.tap(find.byTooltip('Adjust lens'));
+        await tester.pump();
+        await tester.tap(find.byTooltip('Compare original'));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(looks.last['original'], isTrue);
+        await tester.tap(find.byTooltip('Show lens'));
+        await tester.pump(const Duration(milliseconds: 100));
+        geometryAvailable = true;
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.text('Face the camera for this effect'), findsNothing);
+        if (lens.arEffect == ArEffect.moodCompanion) {
+          expect(find.text('Open your mouth'), findsOneWidget);
+        }
+        final shutter = find.byKey(const ValueKey('capture_shutter'));
+        await tester.tap(shutter);
+        await tester.pumpAndSettle();
+        expect(captureLook?['arEffect'], lens.id);
+        // Let the intentional mocked capture-error snackbar clear the shutter.
+        await tester.pump(const Duration(seconds: 4));
+        await tester.pumpAndSettle();
+        final finger = await tester.startGesture(tester.getCenter(shutter));
+        await tester.pump(const Duration(milliseconds: 650));
+        await finger.up();
+        await tester.pumpAndSettle();
+        expect(videoLook?['arEffect'], lens.id);
+        await tester.tap(find.byTooltip('Unfavorite ${lens.name}'));
+        await tester.pump(const Duration(milliseconds: 350));
+        expect(preferences.value.favorites, isEmpty);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+      },
+    );
+  }
+
   testWidgets('zero-strength lenses do not ask for face tracking', (
     tester,
   ) async {

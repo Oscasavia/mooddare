@@ -49,6 +49,7 @@ void main() {
       final images = <List<int>>[];
       for (final lens in [
         ...BeautyLens.collection,
+        ...BeautyLens.playful,
         BeautyLens.all.firstWhere((l) => l.heartHalo),
       ]) {
         final image = await render(lens);

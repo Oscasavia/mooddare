@@ -12,7 +12,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /** Owned exclusively by the camera's render thread. No pixels cross into Dart. */
-internal class LiveBeautyRenderer(surface: Surface) {
+internal class LiveBeautyRenderer(surface: Surface, private val resources: android.content.res.Resources) {
     private val display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
     private val context: android.opengl.EGLContext
     private val window: android.opengl.EGLSurface
@@ -27,6 +27,10 @@ internal class LiveBeautyRenderer(surface: Surface) {
     private val positionAttribute: Int
     private val texture: Int
     private val maskTexture: Int
+    private var companionTexture = 0
+    private var mouthOpenness = 0f
+    private var mouthGeometry: FaceGeometry? = null
+    private var mouthAspect = 0f
     private val geometryMask = FaceGeometryMask()
     private var lastGeometry: FaceGeometry? = null
     private var shapeGeometry: FaceShapeGeometry? = null
@@ -166,6 +170,29 @@ internal class LiveBeautyRenderer(surface: Surface) {
         GLES20.glUniform1f(uniform("hasShape"), if (guides != null) 1f else 0f)
         val animation = debugAnimationSeconds ?: ((android.os.SystemClock.elapsedRealtime() - animationStarted) % 6000L) / 1000f
         GLES20.glUniform2f(uniform("ar"), if (!original && guides != null && ar.active) ar.strength else 0f, animation)
+        // Only the companion needs expression metrics; other lenses keep their existing work budget.
+        if (ar.effect == 4 && geometry != null && guides != null &&
+            (mouthGeometry !== geometry || mouthAspect != sourceAspect)) {
+            mouthOpenness = ArFaceMetrics.mouthOpenness(geometry, sourceAspect, guides.axis)
+            mouthGeometry = geometry; mouthAspect = sourceAspect
+        }
+        GLES20.glUniform1f(uniform("arKind"), ar.effect.toFloat())
+        GLES20.glUniform1f(uniform("mouthOpen"), if (guides != null) mouthOpenness else 0f)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE2)
+        if (ar.effect == 4 && companionTexture == 0) {
+            val ids = IntArray(1)
+            GLES20.glGenTextures(1, ids, 0); companionTexture = ids[0]
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, companionTexture)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+            val bitmap = android.graphics.BitmapFactory.decodeResource(resources, R.drawable.ar_mood_companion)
+            try { GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0) } finally { bitmap.recycle() }
+        }
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, companionTexture)
+        GLES20.glUniform1i(uniform("companion"), 2)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glUniform2fv(uniform("shapeAxis"), 1, guides?.axis ?: horizontalAxis, 0)
         GLES20.glUniform4fv(uniform("meshEyes[0]"), 2, guides?.eyes ?: zeros, 0)
         GLES20.glUniform2fv(uniform("eyeOpenness"), 1, guides?.eyeStrength ?: zeros, 0)
@@ -281,6 +308,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
         detachRecorder()
         GLES20.glDeleteTextures(1, intArrayOf(texture), 0)
         GLES20.glDeleteTextures(1, intArrayOf(maskTexture), 0)
+        if (companionTexture != 0) GLES20.glDeleteTextures(1, intArrayOf(companionTexture), 0)
         geometryMask.close()
         GLES20.glDeleteProgram(program)
         EGL14.eglMakeCurrent(display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
@@ -318,6 +346,9 @@ internal class LiveBeautyRenderer(surface: Surface) {
             uniform float hasGeometry;
             uniform vec2 makeup;
             uniform vec2 ar;
+            uniform float arKind;
+            uniform float mouthOpen;
+            uniform sampler2D companion;
             uniform vec3 lipColor;
             uniform vec2 stepSize;
             uniform float mirror;
@@ -349,6 +380,15 @@ internal class LiveBeautyRenderer(surface: Surface) {
             vec2 enlargeEye(vec2 p, vec4 guide, float openness) {
                 return p - (p - guide.xy) *
                     (shape.x * settings.w * openness * 0.20 * influence(p, guide));
+            }
+            float roundedBox(vec2 p, vec2 halfSize, float radius) {
+                vec2 d = abs(p) - halfSize + radius;
+                return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - radius;
+            }
+            float segment(vec2 p, vec2 a, vec2 b) {
+                vec2 ab = b-a;
+                float t = clamp(dot(p-a, ab) / max(dot(ab, ab), 0.00001), 0.0, 1.0);
+                return length(p-a-ab*t);
             }
             // A heart is the soft union of two rounded lobes and a tapered point.
             float heart(vec2 p) {
@@ -436,6 +476,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
                     vec2 center = (meshEyes[0].xy + meshEyes[1].xy) * 0.5;
                     float gap = max(0.015, meshEyes[1].x - meshEyes[0].x);
                     q = (q - center) / gap;
+                    if (arKind < 1.5) {
                     for (int i = 0; i < 5; i++) {
                         float n = float(i) - 2.0;
                         float bob = sin(ar.y * 1.04719755 + float(i) * 1.3) * 0.055;
@@ -447,6 +488,59 @@ internal class LiveBeautyRenderer(surface: Surface) {
                         float highlight = exp(-dot(h - vec2(-0.2, -0.2), h - vec2(-0.2, -0.2)) * 22.0);
                         tint = mix(tint, vec3(1.0, 0.91, 0.96), highlight * 0.5);
                         color = mix(color, tint, alpha);
+                    }
+                    } else if (arKind < 2.5) {
+                        float opacity = ar.x * settings.w;
+                        // Rounded lenses retain a view of the user's own eyes.
+                        for (int i = 0; i < 2; i++) {
+                            vec2 h = q - vec2(float(i) - 0.5, 0.0);
+                            float d = roundedBox(h, vec2(0.42, 0.27), 0.11);
+                            float fill = 1.0 - smoothstep(-0.015, 0.008, d);
+                            float rim = fill * smoothstep(-0.065, -0.043, d);
+                            color = mix(color, vec3(0.23, 0.12, 0.40), fill * opacity * 0.60);
+                            color = mix(color, vec3(0.72, 0.56, 0.95), rim * opacity);
+                            float shine = (1.0 - smoothstep(0.015, 0.055, abs(h.y + h.x * 0.65 + 0.10))) *
+                                (1.0 - rim) * fill;
+                            color = mix(color, vec3(0.92, 0.86, 1.0), shine * opacity * 0.28);
+                        }
+                        float bridge = 1.0 - smoothstep(0.018, 0.028, segment(q, vec2(-0.1, -0.05), vec2(0.1, -0.05)));
+                        float arms = max(1.0 - smoothstep(0.016, 0.025, segment(q, vec2(-0.9, -0.06), vec2(-1.04, -0.12))),
+                            1.0 - smoothstep(0.016, 0.025, segment(q, vec2(0.9, -0.06), vec2(1.04, -0.12))));
+                        color = mix(color, vec3(0.72, 0.56, 0.95), max(bridge, arms) * opacity);
+                    } else if (arKind < 3.5) {
+                        for (int i = 0; i < 3; i++) {
+                            float n = float(i) - 1.0;
+                            float t = ar.y * 1.04719755;
+                            vec2 anchor = vec2(n * 0.95 + sin(t + float(i)) * 0.05,
+                                -0.90 + abs(n) * 0.25 + sin(t * 2.0 + float(i) * 1.7) * 0.08);
+                            vec2 h = (q - anchor) / 0.38;
+                            float flap = 0.30 + 0.70 * abs(sin(t * 6.0 + float(i) * 1.4));
+                            vec2 wing = vec2(abs(h.x) / flap, h.y);
+                            float upper = ellipse(wing, vec2(0.31, -0.18), vec2(0.36, 0.40));
+                            float lower = ellipse(wing, vec2(0.24, 0.30), vec2(0.27, 0.25));
+                            float d = min(upper, lower);
+                            float wings = 1.0 - smoothstep(0.91, 1.02, d);
+                            vec3 tint = mix(vec3(0.40, 0.26, 0.74), vec3(0.94, 0.67, 0.94), clamp(1.0-d, 0.0, 1.0));
+                            color = mix(color, tint, wings * ar.x * settings.w);
+                            float body = 1.0 - smoothstep(0.85, 1.1, ellipse(h, vec2(0.0, 0.01), vec2(0.055, 0.30)));
+                            float antenna = max(1.0-smoothstep(0.012, 0.025, segment(h, vec2(-0.01,-0.22), vec2(-0.14,-0.43))),
+                                1.0-smoothstep(0.012, 0.025, segment(h, vec2(0.01,-0.22), vec2(0.14,-0.43))));
+                            color = mix(color, vec3(0.20, 0.11, 0.31), max(body, antenna) * ar.x * settings.w);
+                        }
+                    } else {
+                        // The two atlas frames come from the app's actual mascot.
+                        // Mouth openness changes expression and gives him a little hop.
+                        vec2 anchor = vec2(0.97, -0.62 - mouthOpen * 0.16 + sin(ar.y * 1.04719755) * 0.045);
+                        vec2 h = (q - anchor) / (0.75 + mouthOpen * 0.12) + 0.5;
+                        if (h.x >= 0.0 && h.x <= 1.0 && h.y >= 0.0 && h.y <= 1.0) {
+                            vec2 sampleUV = clamp(h, vec2(0.002), vec2(0.998));
+                            vec4 resting = texture2D(companion, vec2(sampleUV.x * 0.5, sampleUV.y));
+                            vec4 talking = texture2D(companion, vec2(0.5 + sampleUV.x * 0.5, sampleUV.y));
+                            vec4 sprite = mix(resting, talking, mouthOpen);
+                            // Android's uploaded bitmap uses premultiplied alpha.
+                            float opacity = ar.x * settings.w;
+                            color = color * (1.0 - sprite.a * opacity) + sprite.rgb * opacity;
+                        }
                     }
                 }
                 gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);

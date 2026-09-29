@@ -69,10 +69,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     }
     final lens = BeautyLens.all[_selected];
     return _strength > 0 &&
-        (lens.hasMakeup ||
-            lens.eyeSize > 0 ||
-            lens.faceSlim > 0 ||
-            lens.heartHalo);
+        (lens.hasMakeup || lens.eyeSize > 0 || lens.faceSlim > 0 || lens.hasAr);
   }
 
   bool get _needsFace => _isCustom
@@ -1065,11 +1062,28 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                                                     .all[_selected]
                                                     .heartHalo
                                               ? 'Face the camera for hearts'
+                                              : BeautyLens.all[_selected].hasAr
+                                              ? 'Face the camera for this effect'
                                               : 'Face the camera for shaping',
                                           style: const TextStyle(
                                             fontSize: 11,
                                             color: Colors.white70,
                                           ),
+                                        ),
+                                      ),
+                                    ),
+                                  if (_ready &&
+                                      _face &&
+                                      _geometry &&
+                                      !_comparing &&
+                                      BeautyLens.all[_selected].arEffect ==
+                                          ArEffect.moodCompanion)
+                                    const IgnorePointer(
+                                      child: Text(
+                                        'Open your mouth',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.white70,
                                         ),
                                       ),
                                     ),
