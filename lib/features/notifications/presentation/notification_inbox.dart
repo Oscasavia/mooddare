@@ -1,3 +1,4 @@
+import 'weekly_dare_notification_screen.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mooddare/core/app_routes.dart';
@@ -17,6 +18,21 @@ Future<void> openActivity(
   ActivityNotification n,
 ) async {
   try {
+    if (n.kind == 'weekly') {
+      await repository.markRead(n.id);
+      if (context.mounted) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => WeeklyDareNotificationScreen(
+              weekId: n.weeklyDareId!,
+              repository: repository,
+            ),
+          ),
+        );
+      }
+      return;
+    }
     // Resolve the current account and content, never trust a push payload URL.
     final actor = await repository.actor(n.actorId);
     if (actor == null) throw StateError('This account is no longer available.');
@@ -245,10 +261,12 @@ class _NotificationInboxState extends State<NotificationInbox> {
                         ),
                       for (final n in items)
                         FutureBuilder<UserModel?>(
-                          future: _actors.putIfAbsent(
-                            n.actorId,
-                            () => _repo.actor(n.actorId),
-                          ),
+                          future: n.kind == 'weekly'
+                              ? Future<UserModel?>.value(null)
+                              : _actors.putIfAbsent(
+                                  n.actorId,
+                                  () => _repo.actor(n.actorId),
+                                ),
                           builder: (context, a) {
                             final user = a.data;
                             final name = user?.username ?? 'Someone';
@@ -277,20 +295,32 @@ class _NotificationInboxState extends State<NotificationInbox> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        CircleAvatar(
-                                          radius: 21,
-                                          backgroundImage:
-                                              user?.photoUrl?.isNotEmpty == true
-                                              ? NetworkImage(user!.photoUrl!)
-                                              : null,
-                                          child:
-                                              user?.photoUrl?.isNotEmpty == true
-                                              ? null
-                                              : const Icon(
-                                                  Icons.person_outline_rounded,
-                                                  size: 22,
-                                                ),
-                                        ),
+                                        if (n.kind == 'weekly')
+                                          const SizedBox(
+                                            width: 42,
+                                            height: 42,
+                                            child: Center(
+                                              child: MoodWink(size: 34),
+                                            ),
+                                          )
+                                        else
+                                          CircleAvatar(
+                                            radius: 21,
+                                            backgroundImage:
+                                                user?.photoUrl?.isNotEmpty ==
+                                                    true
+                                                ? NetworkImage(user!.photoUrl!)
+                                                : null,
+                                            child:
+                                                user?.photoUrl?.isNotEmpty ==
+                                                    true
+                                                ? null
+                                                : const Icon(
+                                                    Icons
+                                                        .person_outline_rounded,
+                                                    size: 22,
+                                                  ),
+                                          ),
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: Column(
@@ -301,7 +331,9 @@ class _NotificationInboxState extends State<NotificationInbox> {
                                                 TextSpan(
                                                   children: [
                                                     TextSpan(
-                                                      text: '@$name ',
+                                                      text: n.kind == 'weekly'
+                                                          ? 'MoodDare '
+                                                          : '@$name ',
                                                       style: const TextStyle(
                                                         fontWeight:
                                                             FontWeight.w700,
@@ -342,6 +374,8 @@ class _NotificationInboxState extends State<NotificationInbox> {
                                               'follow' =>
                                                 Icons.person_add_alt_1_rounded,
                                               'dare' => Icons.inbox_outlined,
+                                              'weekly' =>
+                                                Icons.calendar_today_outlined,
                                               'postLike' ||
                                               'commentLike' ||
                                               'replyLike' =>

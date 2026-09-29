@@ -1,10 +1,12 @@
 'use strict';
+const {activeWeek} = require('./weekly');
 const {category} = require('./events');
 const pushBodies = {
   follow:'Someone started following you.', postLike:'Someone liked your moment.',
   comment:'There’s a new comment on your moment.', reply:'Someone replied to your comment.',
   commentLike:'Someone liked your comment.', replyLike:'Someone liked your reply.',
   dare:'A friend sent you a dare.',
+  weekly:'A new community dare is here. Join this week!',
 };
 async function sendPush(db, messaging, event) {
   const n = event.data.data();
@@ -12,10 +14,16 @@ async function sendPush(db, messaging, event) {
   // Claim once before sending. The durable inbox is authoritative; push is
   // best-effort so an ambiguous FCM acknowledgement never duplicates alerts.
   const claimed = await db.runTransaction(async tx => {
-    const docs = await tx.getAll(event.data.ref, db.doc(`users/${uid}`),
-      db.doc(`users/${uid}/preferences/notifications`), db.doc(`users/${uid}/blocked/${n.actorId}`),
-      db.doc(`users/${n.actorId}/blocked/${uid}`), db.doc(`users/${n.actorId}`));
-    if (!docs[0].exists || docs[0].data().pushAttempted || !docs[1].exists || !docs[5].exists || docs[2].data()?.push === false || docs[2].data()?.[category(n.kind)] === false || docs[3].exists || docs[4].exists || !pushBodies[n.kind]) return false;
+    const weekly=n.kind==='weekly';
+    if(weekly && !/^\d{4}-\d{2}-\d{2}$/.test(n.weeklyDareId || '')) return false;
+    const refs=[event.data.ref, db.doc(`users/${uid}`), db.doc(`users/${uid}/preferences/notifications`)];
+    if(weekly) refs.push(db.doc(`weeklyDares/${n.weeklyDareId}`));
+    else refs.push(db.doc(`users/${uid}/blocked/${n.actorId}`),db.doc(`users/${n.actorId}/blocked/${uid}`),db.doc(`users/${n.actorId}`));
+    const docs = await tx.getAll(...refs);
+    if (!docs[0].exists || docs[0].data().pushAttempted || !docs[1].exists || docs[2].data()?.push === false || docs[2].data()?.[category(n.kind)] === false || !pushBodies[n.kind]) return false;
+    if(weekly) {
+      if(!activeWeek(n.weeklyDareId,docs[3].data(),Date.now())) return false;
+    } else if(!docs[5].exists || docs[3].exists || docs[4].exists) return false;
     tx.update(event.data.ref, {pushAttempted:true});
     return true;
   });

@@ -58,6 +58,33 @@ integration tests; never use the Flutter integration runner on the personal phon
 because it uninstalls the app. Rebuild the ordinary APK afterward and install with
 `adb install -r` to retain data.
 
+## Weekly community dare announcements
+
+`notifyWeeklyDare` starts at Monday **00:00 UTC**, matching the existing shared
+weekly rollover. Its Scheduler expression is `*/5 * * * 1` in `Etc/UTC`: later
+Monday ticks resume interrupted batches or pick up a late-published schedule.
+Completed campaigns do no further fan-out. Deploying midweek does not backfill
+announcements. The first scheduled rollover after this deployment is 2026-10-05.
+
+The server validates the active `weeklyDares/{Monday-date}` document and pages
+through existing profiles (100 per transaction, at most five pages per invocation).
+Private `notificationCampaigns/{Monday-date}` checkpoints and stable per-user IDs
+prevent concurrent retries from duplicating announcements or resetting read state.
+Accounts created after rollover are not backfilled. Both security policies deny
+client access to campaign records.
+
+**Weekly community dare** is a separate notification preference, enabled by
+default. Disabling phone alerts still allows the inbox announcement; disabling
+this category suppresses both for new announcements. Push uses the same Mood-wink
+icon and account-scoped tap routing. The system inbox row opens the exact week's
+prompt with **Join this week**, preserving its mood and weekly ID for capture.
+Expired or removed weeks display an ended state, including rollover while viewing.
+
+Backend emulator tests cover Monday boundaries, pagination, concurrent retries,
+opt-outs, late accounts, missing schedules and push payloads. Widget tests cover
+system rows, read state, joining, expiry, preferences and narrow/large-text layouts.
+No production announcement was broadcast midweek for testing.
+
 ## Backlog: Apple push delivery
 
 User chose Android first on 2026-09-29 because their Apple Developer membership

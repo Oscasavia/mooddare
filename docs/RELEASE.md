@@ -383,3 +383,23 @@ observed exactly one inbox event from the deployed function. Temporary profiles,
 follow records and inbox data were removed immediately; no real user was alerted.
 The 20 website browser tests and 14 focused legal/welcome tests passed after the
 notification privacy disclosure update.
+
+
+## Weekly community dare notifications — 2026-09-29
+
+Added one system inbox announcement per weekly rollover, with optional Android
+push using Mood-wink and a separate Weekly community dare preference. Tapping
+opens that exact week's prompt and Join this week; expired or removed weeks show
+an ended state. Capture retains the weekly dare ID and mood.
+
+Deployed Firestore permissions, the updated push function and notifyWeeklyDare.
+Scheduler confirmed enabled for Monday 00:00 UTC (first run 2026-10-05), with
+five-minute Monday catch-up ticks, bounded pagination, durable campaign cursors
+and duplicate-safe notification IDs. Midweek deployments do not send old events.
+No production announcement was broadcast to users for testing.
+
+Validation: 411 Flutter tests, 87.97% Dart line coverage (7145/8122), 65 security
+rules tests and 23 backend tests passed. Two Android emulator integration flows
+passed, including weekly navigation, read state and removed-content handling.
+Analysis, formatting and ordinary arm64 APK build passed. Apple push remains
+backlog; the existing camera and lens implementation is unchanged.

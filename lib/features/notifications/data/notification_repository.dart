@@ -1,3 +1,4 @@
+import 'package:mooddare/features/dares/data/repositories/weekly_dare_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -6,7 +7,7 @@ import 'package:mooddare/models/user_model.dart';
 
 class ActivityNotification {
   final String id, kind, actorId;
-  final String? postId, commentId, parentId, inviteId;
+  final String? postId, commentId, parentId, inviteId, weeklyDareId;
   final DateTime createdAt;
   final bool read;
   const ActivityNotification({
@@ -19,6 +20,7 @@ class ActivityNotification {
     this.commentId,
     this.parentId,
     this.inviteId,
+    this.weeklyDareId,
   });
   static const messages = {
     'follow': 'started following you',
@@ -28,6 +30,7 @@ class ActivityNotification {
     'commentLike': 'liked your comment',
     'replyLike': 'liked your reply',
     'dare': 'sent you a dare',
+    'weekly': 'A new community dare is ready. Join this week!',
   };
   String get message => messages[kind] ?? 'shared an update';
   bool get opensComments =>
@@ -38,14 +41,20 @@ class ActivityNotification {
     final d = doc.data();
     if (d == null ||
         !messages.containsKey(d['kind']) ||
-        d['actorId'] is! String ||
+        (d['kind'] != 'weekly' && d['actorId'] is! String) ||
+        (d['kind'] == 'weekly' &&
+            (d['weeklyDareId'] is! String ||
+                !RegExp(
+                  r'^\d{4}-\d{2}-\d{2}$',
+                ).hasMatch(d['weeklyDareId'] as String))) ||
         d['createdAt'] is! Timestamp) {
       return null;
     }
     return ActivityNotification(
       id: doc.id,
       kind: d['kind'],
-      actorId: d['actorId'],
+      actorId: d['actorId'] as String? ?? '',
+      weeklyDareId: d['weeklyDareId'] as String?,
       createdAt: (d['createdAt'] as Timestamp).toDate(),
       read: d['read'] == true,
       postId: d['postId'] as String?,
@@ -99,14 +108,28 @@ class NotificationRepository {
         .snapshots()
         .map(
           (d) => {
-            for (final key in ['follows', 'likes', 'comments', 'dares', 'push'])
+            for (final key in [
+              'follows',
+              'likes',
+              'comments',
+              'dares',
+              'weeklyDares',
+              'push',
+            ])
               key: d.data()?[key] != false,
           },
         );
   }
 
   Future<void> setPreference(String key, bool value) {
-    if (!['follows', 'likes', 'comments', 'dares', 'push'].contains(key) ||
+    if (![
+          'follows',
+          'likes',
+          'comments',
+          'dares',
+          'weeklyDares',
+          'push',
+        ].contains(key) ||
         uid == null) {
       throw StateError('Invalid preference.');
     }
@@ -143,6 +166,14 @@ class NotificationRepository {
       await batch.commit();
       if (page.docs.length < 200) return;
     }
+  }
+
+  Stream<WeeklyDare?> watchWeekly(String id) {
+    if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(id)) return Stream.value(null);
+    return db
+        .doc('weeklyDares/$id')
+        .snapshots()
+        .map((d) => WeeklyDare.parse(d.id, d.data()));
   }
 
   Future<UserModel?> actor(String id) async {

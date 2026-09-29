@@ -640,10 +640,13 @@ for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
   });
   test(`${policy}: notification preferences validate keys, types and ownership`,async()=>{
     const path='users/alice/preferences/notifications';
-    await assertSucceeds(setDoc(doc(db('alice'),path),{follows:false,likes:true,comments:false,dares:true,push:false}));
+    await assertSucceeds(setDoc(doc(db('alice'),path),{follows:false,likes:true,comments:false,dares:true,weeklyDares:false,push:false}));
     await assertFails(getDoc(doc(db('bob'),path)));
     await assertFails(updateDoc(doc(db('bob'),path),{push:true}));
     await assertFails(updateDoc(doc(db('alice'),path),{likes:'true'}));
+    await assertFails(updateDoc(doc(db('alice'),path),{weeklyDares:'true'}));
+    await assertFails(setDoc(doc(db('alice'),'notificationCampaigns/2026-10-05'),{complete:false}));
+    await assertFails(getDoc(doc(db('alice'),'notificationCampaigns/2026-10-05')));
     await assertFails(updateDoc(doc(db('alice'),path),{token:'private'}));
     await assertSucceeds(deleteDoc(doc(db('alice'),path)));
   });

@@ -28,11 +28,11 @@ service cloud.firestore {
         && request.resource.data.get('coverColor', 'lavender') in ['lavender','midnight','rose','sage','ocean','sunset'];
     }
     match /{collection}/{id} {
-      allow read: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens']);
-      allow delete: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens']) && (collection != 'users' || owner(id));
-      allow create, update: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens']) && validUsernameChange(collection, id) && validCoverChange(collection, id);
+      allow read: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns']);
+      allow delete: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns']) && (collection != 'users' || owner(id));
+      allow create, update: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns']) && validUsernameChange(collection, id) && validCoverChange(collection, id);
       match /{subcollection}/{document=**} {
-        allow read, write: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens']) && !(subcollection in ['comments', 'replies', 'following', 'followers', 'blocked', 'savedDares', 'notifications', 'preferences']);
+        allow read, write: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns']) && !(subcollection in ['comments', 'replies', 'following', 'followers', 'blocked', 'savedDares', 'notifications', 'preferences']);
       }
     }
     match /users/{uid}/blocked/{authorId} {
@@ -52,11 +52,12 @@ service cloud.firestore {
     match /users/{uid}/preferences/notifications {
       allow read, delete: if owner(uid);
       allow create, update: if owner(uid)
-        && request.resource.data.keys().hasOnly(['follows','likes','comments','dares','push'])
+        && request.resource.data.keys().hasOnly(['follows','likes','comments','dares','weeklyDares','push'])
         && request.resource.data.get('follows', true) is bool
         && request.resource.data.get('likes', true) is bool
         && request.resource.data.get('comments', true) is bool
         && request.resource.data.get('dares', true) is bool
+        && request.resource.data.get('weeklyDares', true) is bool
         && request.resource.data.get('push', true) is bool;
     }
     // A registration token is a secret installation capability. Binding by

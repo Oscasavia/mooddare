@@ -1,7 +1,7 @@
 'use strict';
 const {createHash} = require('node:crypto');
-const kinds = ['follow', 'postLike', 'comment', 'reply', 'commentLike', 'replyLike', 'dare'];
-const category = kind => ({follow:'follows', postLike:'likes', commentLike:'likes', replyLike:'likes', comment:'comments', reply:'comments', dare:'dares'})[kind];
+const kinds = ['follow', 'postLike', 'comment', 'reply', 'commentLike', 'replyLike', 'dare', 'weekly'];
+const category = kind => ({follow:'follows', postLike:'likes', commentLike:'likes', replyLike:'likes', comment:'comments', reply:'comments', dare:'dares', weekly:'weeklyDares'})[kind];
 // Stable across retries and repeated unlike/re-like or follow/unfollow actions.
 const notificationId = n => createHash('sha256').update(JSON.stringify([n.kind, n.source, n.actorId, n.recipientId])).digest('hex');
 function eventsFor(path, before, after, post) {

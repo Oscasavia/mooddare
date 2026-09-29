@@ -70,6 +70,7 @@ class _NotificationSettingsScreenState
               'likes': 'Likes on moments and comments',
               'comments': 'Comments and replies',
               'dares': 'Dares from friends',
+              'weeklyDares': 'Weekly community dare',
             }.entries)
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,

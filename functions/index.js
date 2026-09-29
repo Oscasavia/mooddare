@@ -52,3 +52,7 @@ exports.expireNotifications = onSchedule('every day 03:00', async () => {
   await clear(db.collectionGroup('notifications').where('expiresAt','<=',Timestamp.now()));
   await clear(db.collection('pushTokens').where('updatedAt','<=',Timestamp.fromMillis(Date.now()-60*86400000)));
 });
+const {announceWeek} = require('./weekly');
+// Same Monday/UTC boundary as the app. Subsequent ticks resume bounded fan-out
+// or a late-published schedule; completed campaigns perform no recipient reads.
+exports.notifyWeeklyDare = onSchedule({schedule:'*/5 * * * 1', timeZone:'Etc/UTC', timeoutSeconds:300, maxInstances:1}, () => announceWeek(db));
