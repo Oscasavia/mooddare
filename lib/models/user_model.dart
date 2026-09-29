@@ -1,3 +1,4 @@
+import 'package:mooddare/core/branding/profile_cover_color.dart';
 // lib/models/user_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,6 +11,7 @@ class UserModel {
   final String? username;
   final String? photoUrl;
   final Timestamp createdAt;
+  final ProfileCoverColor coverColor;
 
   UserModel({
     required this.id,
@@ -18,6 +20,7 @@ class UserModel {
     this.name,
     this.username,
     this.photoUrl,
+    this.coverColor = ProfileCoverColor.lavender,
     required this.createdAt,
   });
 
@@ -31,6 +34,7 @@ class UserModel {
       name: data['name'],
       username: data['username'],
       photoUrl: data['photoUrl'],
+      coverColor: ProfileCoverColor.fromId(data['coverColor']),
       createdAt: data['createdAt'] ?? Timestamp.now(),
     );
   }
@@ -57,6 +61,7 @@ class UserModel {
       'name': name,
       'username': username,
       'photoUrl': photoUrl,
+      'coverColor': coverColor.name,
       'createdAt': createdAt,
     };
   }

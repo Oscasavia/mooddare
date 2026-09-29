@@ -1,3 +1,5 @@
+import 'package:mooddare/core/branding/profile_cover_color.dart';
+import '../widgets/profile_cover_header.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -25,6 +27,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _loading = true, _loadFailed = false, _busy = false, _saving = false;
   String? _photo, _error;
   File? _image;
+  ProfileCoverColor _coverColor = ProfileCoverColor.lavender;
   @override
   void initState() {
     super.initState();
@@ -51,6 +54,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _username.text = profile.username ?? '';
       _bio.text = profile.bio ?? '';
       _photo = profile.photoUrl;
+      _coverColor = profile.coverColor;
     } catch (e) {
       if (mounted) {
         _loadFailed = true;
@@ -59,6 +63,58 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _pickCover() async {
+    FocusScope.of(context).unfocus();
+    final selected = await showModalBottomSheet<ProfileCoverColor>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (context) => SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Cover color',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'A little color, a little you.',
+                style: TextStyle(color: Colors.white60),
+              ),
+              const SizedBox(height: 20),
+              Wrap(
+                spacing: 8,
+                runSpacing: 10,
+                children: [
+                  for (final tone in ProfileCoverColor.values)
+                    ChoiceChip(
+                      key: ValueKey('cover_color_${tone.name}'),
+                      avatar: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: tone.color,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const SizedBox.square(dimension: 24),
+                      ),
+                      label: Text(tone.label),
+                      selected: tone == _coverColor,
+                      onSelected: (_) => Navigator.pop(context, tone),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (mounted && selected != null) setState(() => _coverColor = selected);
   }
 
   Future<void> _pick() async {
@@ -113,6 +169,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         name: _name.text,
         bio: _bio.text,
         imageFile: _image,
+        coverColor: _coverColor.name,
       );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -177,9 +234,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Center(
-                      child: CircleAvatar(
-                        radius: 48,
+                    ProfileCoverHeader(
+                      color: _coverColor,
+                      horizontalInset: 0,
+                      avatar: CircleAvatar(
+                        radius: 50,
                         backgroundImage: _image != null
                             ? FileImage(_image!)
                             : _photo != null
@@ -190,10 +249,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             : null,
                       ),
                     ),
-                    TextButton.icon(
-                      onPressed: _busy ? null : _pick,
-                      icon: const Icon(Icons.add_a_photo_outlined),
-                      label: const Text('Change photo'),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8,
+                      children: [
+                        TextButton.icon(
+                          onPressed: _busy ? null : _pick,
+                          icon: const Icon(Icons.add_a_photo_outlined),
+                          label: const Text('Change photo'),
+                        ),
+                        TextButton.icon(
+                          onPressed: _busy ? null : _pickCover,
+                          icon: const Icon(Icons.palette_outlined),
+                          label: const Text('Cover color'),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 24),
                     TextFormField(

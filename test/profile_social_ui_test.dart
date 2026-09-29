@@ -180,6 +180,8 @@ void main() {
         expect(find.text('Following'), findsOneWidget);
         expect(find.text('Likes'), findsNothing);
         expect(find.text('Moments'), findsOneWidget);
+        await tester.drag(find.byType(NestedScrollView), const Offset(0, -220));
+        await tester.pumpAndSettle();
         final tabs = tester.widget<TabBar>(find.byType(TabBar));
         expect(tabs.splashFactory, NoSplash.splashFactory);
         expect(
@@ -193,6 +195,8 @@ void main() {
         await tester.pumpAndSettle();
         expect(tabs.controller!.index, 0);
         expect(tester.takeException(), isNull);
+        await tester.ensureVisible(find.text('Followers'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Followers'));
         await tester.pumpAndSettle();
         expect(find.byType(ConnectionsScreen), findsOneWidget);

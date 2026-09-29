@@ -590,3 +590,31 @@ for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
     await assertFails(updateDoc(target, {weeklyDareId: 'active'}));
   });
 }
+
+for (const policy of ['firestore.rules','firestore.compat.rules']) {
+  test(`${policy}: profile covers accept only owner-selected presets and remain compatible with legacy profiles`, async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({projectId:'demo-mooddare',
+      firestore:{rules:await readFile(new URL(`../../${policy}`,import.meta.url),'utf8')},
+      storage:{rules:await readFile(new URL('../../storage.rules',import.meta.url),'utf8')},
+    });
+    const alice=db('alice'), bob=db('bob'), target=doc(alice,'users/alice');
+    await assertSucceeds(setDoc(target,{id:'alice',createdAt:serverTimestamp()}));
+    for (const color of ['lavender','midnight','rose','sage','ocean','sunset']) {
+      await assertSucceeds(updateDoc(target,{coverColor:color,updatedAt:serverTimestamp()}));
+      await assertSucceeds(getDoc(doc(bob,'users/alice')));
+    }
+    for (const color of ['#ffffff','unknown',123,null,{},'https://image.invalid/cover.jpg']) {
+      await assertFails(updateDoc(target,{coverColor:color}));
+    }
+    await assertFails(updateDoc(doc(bob,'users/alice'),{coverColor:'rose'}));
+    await assertFails(setDoc(doc(bob,'users/alice'),{id:'alice',createdAt:serverTimestamp()}));
+    await assertFails(deleteDoc(doc(bob,'users/alice')));
+    await assertFails(setDoc(doc(bob,'users/other'),{id:'other',createdAt:serverTimestamp(),coverColor:'sage'}));
+    await assertFails(updateDoc(doc(env.unauthenticatedContext().firestore(),'users/alice'),{coverColor:'rose'}));
+    // An older client can still update normal fields without supplying a cover.
+    await assertSucceeds(updateDoc(target,{name:'Alice',updatedAt:serverTimestamp()}));
+    await assertSucceeds(deleteDoc(target));
+    await assertSucceeds(setDoc(target,{id:'alice',createdAt:serverTimestamp(),coverColor:'ocean'}));
+  });
+}

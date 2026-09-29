@@ -1,3 +1,4 @@
+import '../widgets/profile_cover_header.dart';
 import 'package:mooddare/features/dares/data/repositories/dare_library_repository.dart';
 import 'package:mooddare/features/dares/presentation/screens/dare_library_screen.dart';
 import 'dart:async';
@@ -315,46 +316,49 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget _buildProfileHeader(UserModel user, Map<String, int> stats) {
     return Column(
       children: [
-        const SizedBox(height: 16),
-        GestureDetector(
-          key: const ValueKey('profile_photo'),
-          onTap: user.photoUrl?.isNotEmpty != true
-              ? null
-              : () => Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => Scaffold(
-                      appBar: AppBar(
-                        title: Text('@${user.username ?? 'member'}'),
-                      ),
-                      body: Center(
-                        child: InteractiveViewer(
-                          minScale: .5,
-                          maxScale: 5,
-                          child: Image.network(
-                            user.photoUrl!,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, _, _) =>
-                                const Text('This picture is unavailable.'),
+        const SizedBox(height: 8),
+        ProfileCoverHeader(
+          color: user.coverColor,
+          avatar: GestureDetector(
+            key: const ValueKey('profile_photo'),
+            onTap: user.photoUrl?.isNotEmpty != true
+                ? null
+                : () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(
+                          title: Text('@${user.username ?? 'member'}'),
+                        ),
+                        body: Center(
+                          child: InteractiveViewer(
+                            minScale: .5,
+                            maxScale: 5,
+                            child: Image.network(
+                              user.photoUrl!,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, _, _) =>
+                                  const Text('This picture is unavailable.'),
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-          child: CircleAvatar(
-            radius: 50,
-            backgroundColor: Colors.white10,
-            foregroundImage: user.photoUrl?.isNotEmpty == true
-                ? NetworkImage(user.photoUrl!)
-                : null,
-            onForegroundImageError: user.photoUrl?.isNotEmpty == true
-                ? (_, _) {}
-                : null,
-            child: const Icon(
-              Icons.person_outline,
-              size: 50,
-              color: Colors.white54,
+            child: CircleAvatar(
+              radius: 50,
+              backgroundColor: Colors.white10,
+              foregroundImage: user.photoUrl?.isNotEmpty == true
+                  ? NetworkImage(user.photoUrl!)
+                  : null,
+              onForegroundImageError: user.photoUrl?.isNotEmpty == true
+                  ? (_, _) {}
+                  : null,
+              child: const Icon(
+                Icons.person_outline,
+                size: 50,
+                color: Colors.white54,
+              ),
             ),
           ),
         ),

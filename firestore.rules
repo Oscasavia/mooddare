@@ -11,7 +11,8 @@ service cloud.firestore {
     }
     function validProfile(uid) {
       let data = request.resource.data;
-      return data.keys().hasOnly(['id', 'name', 'username', 'username_lower', 'username_normalized', 'photoUrl', 'bio', 'createdAt', 'updatedAt'])
+      return data.keys().hasOnly(['id', 'name', 'username', 'username_lower', 'username_normalized', 'photoUrl', 'bio', 'createdAt', 'updatedAt', 'coverColor'])
+        && data.get('coverColor', 'lavender') in ['lavender','midnight','rose','sage','ocean','sunset']
         && data.id == uid
         && (!('name' in data) || data.name == null || (data.name is string && data.name.size() <= 50))
         && (!('bio' in data) || data.bio == null || (data.bio is string && data.bio.size() <= 160))
@@ -26,7 +27,7 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if owner(uid) && validProfile(uid) && request.resource.data.createdAt == request.time;
       allow update: if owner(uid) && validProfile(uid)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','username','username_lower','username_normalized','photoUrl','bio','updatedAt']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','username','username_lower','username_normalized','photoUrl','bio','updatedAt','coverColor']);
       allow delete: if owner(uid);
       match /blocked/{authorId} {
         allow read, delete: if owner(uid);

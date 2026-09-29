@@ -1,3 +1,4 @@
+import 'package:mooddare/core/branding/profile_cover_color.dart';
 import 'support/social_fakes.dart';
 import 'dart:async';
 import 'dart:io';
@@ -22,12 +23,14 @@ UserModel profile({
   String name = 'Before',
   String bio = 'Old bio',
   String username = 'before',
+  ProfileCoverColor coverColor = ProfileCoverColor.lavender,
 }) => UserModel(
   id: 'viewer',
   name: name,
   username: username,
   bio: bio,
   photoUrl: photo,
+  coverColor: coverColor,
   createdAt: Timestamp.fromMillisecondsSinceEpoch(0),
 );
 
@@ -58,11 +61,21 @@ class ProfileChanges implements UserRepository {
     String? name,
     String? bio,
     File? imageFile,
+    String? coverColor,
   }) async {
     if (failSave) {
       throw const FormatException('That username is already taken.');
     }
-    publish(profile(username: username, name: name!, bio: bio!));
+    publish(
+      profile(
+        username: username,
+        name: name!,
+        bio: bio!,
+        coverColor: coverColor == null
+            ? current.coverColor
+            : ProfileCoverColor.fromId(coverColor),
+      ),
+    );
   }
 
   @override

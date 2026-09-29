@@ -1,3 +1,4 @@
+import 'package:mooddare/core/branding/profile_cover_color.dart';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -43,7 +44,11 @@ class UserRepository {
     String? name,
     String? bio,
     File? imageFile,
+    String? coverColor,
   }) async {
+    if (coverColor != null && !ProfileCoverColor.isValid(coverColor)) {
+      throw const FormatException('Choose one of the profile cover colors.');
+    }
     final validation = validateUsername(username);
     if (validation != null) throw FormatException(validation);
     final user = _auth.currentUser;
@@ -94,16 +99,22 @@ class UserRepository {
         throw const FormatException('That username is already taken.');
       }
       tx.set(claim, {'uid': user.uid});
-      tx.set(ref, {
+      final updates = <String, dynamic>{
         if (!profile.exists) 'id': user.uid,
         if (!profile.exists) 'createdAt': FieldValue.serverTimestamp(),
         'username': username,
         'username_lower': lower,
         if (name != null) 'name': name.trim(),
         if (bio != null) 'bio': bio.trim(),
+        if (coverColor != null) 'coverColor': coverColor,
         if (photoUrl != null) 'photoUrl': photoUrl,
         'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      };
+      if (profile.exists) {
+        tx.update(ref, updates);
+      } else {
+        tx.set(ref, updates);
+      }
       if (oldClaim != null && oldReservation?.data()?['uid'] == user.uid) {
         tx.delete(oldClaim);
       }

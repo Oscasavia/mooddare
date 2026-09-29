@@ -18,9 +18,19 @@ service cloud.firestore {
         && (collection != 'users' || name == null || validUsername(name)
           || (exists(/databases/$(database)/documents/users/$(id)) && name == resource.data.get('username', null)));
     }
+    function validCoverChange(collection, id) {
+      // Keep legacy profile fields compatible while protecting the new cover field.
+      return collection != 'users' ||
+        ((!exists(/databases/$(database)/documents/users/$(id))
+            && (!('coverColor' in request.resource.data) || owner(id)))
+          || (exists(/databases/$(database)/documents/users/$(id))
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['coverColor']) || owner(id))))
+        && request.resource.data.get('coverColor', 'lavender') in ['lavender','midnight','rose','sage','ocean','sunset'];
+    }
     match /{collection}/{id} {
-      allow read, delete: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares']);
-      allow create, update: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares']) && validUsernameChange(collection, id);
+      allow read: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares']);
+      allow delete: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares']) && (collection != 'users' || owner(id));
+      allow create, update: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares']) && validUsernameChange(collection, id) && validCoverChange(collection, id);
       match /{subcollection}/{document=**} {
         allow read, write: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares']) && !(subcollection in ['comments', 'replies', 'following', 'followers', 'blocked', 'savedDares']);
       }

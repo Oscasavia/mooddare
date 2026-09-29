@@ -57,6 +57,7 @@ class ProfileMemory implements UserRepository {
     String? name,
     String? bio,
     File? imageFile,
+    String? coverColor,
   }) async {
     saves++;
     savedUsername = username;
