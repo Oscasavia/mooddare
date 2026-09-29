@@ -1,3 +1,4 @@
+import 'package:mooddare/features/notifications/data/push_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:mooddare/features/user/data/repositories/user_repository.dart';
@@ -31,6 +32,7 @@ class AuthRepository {
   }
 
   Future<void> signOut() async {
+    await PushService.instance?.detach();
     // Firebase owns the app session. A provider cleanup failure must neither
     // prevent signing out nor report failure after Firebase has signed out.
     try {

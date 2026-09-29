@@ -1,5 +1,8 @@
 package com.example.mooddare
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -18,6 +21,12 @@ class MainActivity : FlutterActivity() {
     }
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(NotificationChannel("mooddare_activity", "MoodDare activity", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Follows, likes, comments and dares"
+            })
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mooddare/settings")
             .setMethodCallHandler(SettingsPlugin(this))
         videoEdit = VideoEditPlugin(applicationContext)

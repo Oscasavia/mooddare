@@ -1,3 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'features/notifications/data/push_service.dart';
 import 'core/widgets/dismiss_keyboard.dart';
 import 'package:flutter/material.dart';
 import 'core/app_routes.dart';
@@ -47,5 +51,14 @@ Future<void> _initializeFirebase() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+  }
+  if (PushService.instance == null) {
+    final service = PushService(
+      auth: FirebaseAuth.instance,
+      db: FirebaseFirestore.instance,
+      messaging: FirebaseMessaging.instance,
+    );
+    PushService.instance = service;
+    await service.start();
   }
 }

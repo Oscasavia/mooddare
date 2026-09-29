@@ -1,3 +1,4 @@
+import 'package:mooddare/features/notifications/presentation/notification_inbox.dart';
 import 'dart:async';
 import 'package:mooddare/features/profile/data/social_repository.dart';
 import 'package:mooddare/features/profile/presentation/screens/find_people_screen.dart';
@@ -187,6 +188,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   ),
                 ),
           actions: [
+            const NotificationBell(),
             IconButton(
               tooltip: 'Find people',
               icon: const Icon(Icons.person_search_rounded),

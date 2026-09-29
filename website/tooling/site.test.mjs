@@ -210,7 +210,8 @@ test('privacy and terms load offline-style without scripts at narrow widths', as
     assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth`), true);
     assert.equal(await evaluate(`document.querySelectorAll('script').length`), 0);
     assert.match(await evaluate(`document.body.textContent`), /MoodDare team/);
-    assert.match(await evaluate(`document.body.textContent`), /Last updated September 22, 2026/);
+    if (page === 'privacy') assert.match(await evaluate(`document.body.textContent`), /Firebase Cloud Messaging processes a device registration token/);
+    assert.match(await evaluate(`document.body.textContent`), /Last updated September 29, 2026/);
   }
 });
 

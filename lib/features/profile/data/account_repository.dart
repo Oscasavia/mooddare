@@ -1,3 +1,4 @@
+import 'package:mooddare/features/notifications/data/push_service.dart';
 import 'package:mooddare/features/dares/data/repositories/dare_library_repository.dart';
 import 'social_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -25,6 +26,7 @@ class AccountRepository {
             DateTime.now().difference(signedIn) > const Duration(minutes: 4))) {
       throw FirebaseAuthException(code: 'requires-recent-login');
     }
+    await PushService.instance?.detach();
     final db = firestore ?? FirebaseFirestore.instance;
     final posts = PostRepository(
       firestore: db,
@@ -111,6 +113,21 @@ class AccountRepository {
       await storage.ref('profile_pictures/${user.uid}').delete();
     } on FirebaseException catch (e) {
       if (e.code != 'object-not-found') rethrow;
+    }
+    await db.doc('users/${user.uid}/preferences/notifications').delete();
+    for (final collection in ['notifications']) {
+      while (true) {
+        final page = await db
+            .collection('users/${user.uid}/$collection')
+            .limit(100)
+            .get();
+        if (page.docs.isEmpty) break;
+        final batch = db.batch();
+        for (final d in page.docs) {
+          batch.delete(d.reference);
+        }
+        await batch.commit();
+      }
     }
     final profile = db.collection('users').doc(user.uid);
     final data = (await profile.get()).data();

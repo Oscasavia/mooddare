@@ -1,3 +1,4 @@
+import 'package:mooddare/features/notifications/presentation/notification_settings.dart';
 import 'package:flutter/material.dart';
 import '../data/settings_repository.dart';
 
@@ -24,7 +25,7 @@ const mooddareFaq = <(String, String)>[
   ),
   (
     'Why don’t I receive notifications?',
-    'Push notifications are not available yet. Notification settings opens your phone’s controls for MoodDare; enabling them does not turn on alerts that the app does not yet send.',
+    'Open Notifications from Moments to see activity. In Notification settings, choose categories and enable phone alerts. Phone permissions must also allow alerts. Delivery needs a connection; your inbox remains available if you turn phone alerts off.',
   ),
   (
     'Can I unlock Daring and Epic?',
@@ -224,67 +225,10 @@ class _ContactScreenState extends State<ContactScreen> {
   );
 }
 
-class NotificationsScreen extends StatefulWidget {
+class NotificationsScreen extends StatelessWidget {
   final SettingsRepository repository;
   const NotificationsScreen({super.key, required this.repository});
   @override
-  State<NotificationsScreen> createState() => _NotificationsScreenState();
-}
-
-class _NotificationsScreenState extends State<NotificationsScreen> {
-  bool _busy = false;
-  String? _error;
-  Future<void> _open() async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await widget.repository.notificationSettings();
-    } catch (e) {
-      if (mounted) {
-        setState(
-          () => _error =
-              'Could not open notification settings. Open your phone’s Settings, then Apps → MoodDare → Notifications.',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Notifications')),
-    body: ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        const Icon(Icons.notifications_none_rounded, size: 48),
-        const SizedBox(height: 24),
-        Text(
-          'Stay in the moment',
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          'Push notifications are coming later. MoodDare does not send like, comment or dare alerts yet.',
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          'You can review MoodDare’s notification permissions in your phone settings. Available controls depend on your phone.',
-        ),
-        const SizedBox(height: 24),
-        FilledButton.icon(
-          onPressed: _busy ? null : _open,
-          icon: const Icon(Icons.open_in_new),
-          label: const Text('Open phone settings'),
-        ),
-        if (_error != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: Text(_error!),
-          ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) =>
+      NotificationSettingsScreen(settings: repository);
 }

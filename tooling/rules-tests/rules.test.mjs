@@ -618,3 +618,47 @@ for (const policy of ['firestore.rules','firestore.compat.rules']) {
     await assertSucceeds(setDoc(target,{id:'alice',createdAt:serverTimestamp(),coverColor:'ocean'}));
   });
 }
+
+for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
+  test(`${policy}: notifications are private, server-created, and only read state is editable`, async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({projectId:'demo-mooddare',firestore:{rules:await readFile(new URL(`../../${policy}`,import.meta.url),'utf8')},storage:{rules:await readFile(new URL('../../storage.rules',import.meta.url),'utf8')}});
+    const path='users/alice/notifications/n';
+    const value={kind:'follow',actorId:'bob',recipientId:'alice',read:false,createdAt:Timestamp.now()};
+    await assertFails(setDoc(doc(db('alice'),path),value));
+    await assertFails(setDoc(doc(db('bob'),path),value));
+    await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),path),value));
+    await assertSucceeds(getDoc(doc(db('alice'),path)));
+    await assertFails(getDoc(doc(db('bob'),path)));
+    await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(),path)));
+    await assertSucceeds(getDocs(query(collection(db('alice'),'users/alice/notifications'),orderBy('createdAt','desc'),limit(40))));
+    await assertSucceeds(updateDoc(doc(db('alice'),path),{read:true}));
+    await assertFails(updateDoc(doc(db('alice'),path),{read:false}));
+    for(const change of [{actorId:'alice'},{kind:'dare'},{postId:'fake'},{createdAt:serverTimestamp()},{pushAttempted:false}]) await assertFails(updateDoc(doc(db('alice'),path),change));
+    await assertFails(deleteDoc(doc(db('bob'),path)));
+    await assertSucceeds(deleteDoc(doc(db('alice'),path)));
+  });
+  test(`${policy}: notification preferences validate keys, types and ownership`,async()=>{
+    const path='users/alice/preferences/notifications';
+    await assertSucceeds(setDoc(doc(db('alice'),path),{follows:false,likes:true,comments:false,dares:true,push:false}));
+    await assertFails(getDoc(doc(db('bob'),path)));
+    await assertFails(updateDoc(doc(db('bob'),path),{push:true}));
+    await assertFails(updateDoc(doc(db('alice'),path),{likes:'true'}));
+    await assertFails(updateDoc(doc(db('alice'),path),{token:'private'}));
+    await assertSucceeds(deleteDoc(doc(db('alice'),path)));
+  });
+  test(`${policy}: secret device tokens bind to one signed-in account and cannot be read or listed`,async()=>{
+    const path=`pushTokens/${'secret'.repeat(12)}`;
+    await assertFails(setDoc(doc(db('alice'),path),{uid:'bob',updatedAt:serverTimestamp()}));
+    await assertSucceeds(setDoc(doc(db('alice'),path),{uid:'alice',updatedAt:serverTimestamp()}));
+    await assertFails(getDoc(doc(db('alice'),path)));
+    await assertFails(getDocs(collection(db('alice'),'pushTokens')));
+    await assertFails(deleteDoc(doc(db('bob'),path)));
+    await assertFails(updateDoc(doc(db('alice'),path),{other:'anything'}));
+    // Only the installation that knows its secret token can rebind it on login.
+    await assertSucceeds(setDoc(doc(db('bob'),path),{uid:'bob',updatedAt:serverTimestamp()}));
+    await assertFails(deleteDoc(doc(db('alice'),path)));
+    await assertSucceeds(deleteDoc(doc(db('bob'),path)));
+    await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(),path),{uid:'bob',updatedAt:serverTimestamp()}));
+  });
+}

@@ -9,7 +9,7 @@ class LegalSection {
   const LegalSection(this.title, this.body);
 }
 
-const legalUpdated = 'September 22, 2026';
+const legalUpdated = 'September 29, 2026';
 
 const termsSections = <LegalSection>[
   LegalSection(
@@ -72,6 +72,10 @@ const privacySections = <LegalSection>[
     'The app keeps sign-in state, cached content and working photo or video files on your device to provide its features. Find people stores recent searches locally for your account; you can remove individual searches or clear them from that screen. Service providers may process technical information, including IP addresses, device or app details and security logs, to authenticate requests, deliver content and protect the service.',
   ),
   LegalSection(
+    'Notifications',
+    'MoodDare stores notification preferences, activity identifiers and read status to provide your private activity inbox. If you enable phone alerts, Firebase Cloud Messaging processes a device registration token linked to your signed-in account to deliver them. You can change notification categories or disable phone alerts in Settings. Notification entries are removed after about 30 days; inactive device registrations are removed after about 60 days. Signing out removes the current device registration. Phone alerts do not include the text of comments or replies.',
+  ),
+  LegalSection(
     'Camera, microphone and face effects',
     'Camera access lets you take photos and videos. Microphone access lets you record sound. Photo-library or media permissions are used when you select or save media. You can manage these permissions in your device settings; disabling them may limit the related feature. Face detection and beauty effects process images and face landmarks on your device. MoodDare does not use these landmarks to identify you or upload them as a face template. Edited photos or videos may contain your face and are uploaded when you choose to post; a profile photo is uploaded when you save it to your profile.',
   ),
@@ -85,7 +89,7 @@ const privacySections = <LegalSection>[
   ),
   LegalSection(
     'Service providers and disclosures',
-    'MoodDare uses Google Firebase Authentication, Cloud Firestore and Cloud Storage for sign-in, database and media hosting, and Google sign-in when you choose it. These providers process information to deliver and secure those services. Information may be processed in countries other than where you live. Sharing through your phone’s share menu sends the content you select to the service or person you choose. We may also disclose information when required by law or when necessary to address fraud, abuse or threats to people’s safety.',
+    'MoodDare uses Google Firebase Authentication, Cloud Firestore, Cloud Storage, Cloud Functions and Firebase Cloud Messaging for sign-in, database, media hosting and notifications, and Google sign-in when you choose it. These providers process information to deliver and secure those services. Information may be processed in countries other than where you live. Sharing through your phone’s share menu sends the content you select to the service or person you choose. We may also disclose information when required by law or when necessary to address fraud, abuse or threats to people’s safety.',
   ),
   LegalSection(
     'Retention and deletion',

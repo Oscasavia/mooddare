@@ -36,6 +36,34 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time;
       }
     }
+    // Inbox events are server-created. Clients can only read their own and
+    // mark them read; they cannot invent actors, links, timestamps or alerts.
+    match /users/{uid}/notifications/{id} {
+      allow read, delete: if owner(uid);
+      allow update: if owner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+        && request.resource.data.read == true;
+    }
+    match /users/{uid}/preferences/notifications {
+      allow read, delete: if owner(uid);
+      allow create, update: if owner(uid)
+        && request.resource.data.keys().hasOnly(['follows','likes','comments','dares','push'])
+        && request.resource.data.get('follows', true) is bool
+        && request.resource.data.get('likes', true) is bool
+        && request.resource.data.get('comments', true) is bool
+        && request.resource.data.get('dares', true) is bool
+        && request.resource.data.get('push', true) is bool;
+    }
+    // A registration token is a secret installation capability. Binding by
+    // token gives one active account per device, including account switches.
+    // No client can list or read tokens, including another device's token.
+    match /pushTokens/{token} {
+      allow create, update: if signedIn() && token.size() >= 32 && token.size() <= 4096
+        && request.resource.data.keys().hasOnly(['uid','updatedAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if owner(resource.data.uid);
+    }
     function validDarePrompt(data) {
       return data.dareText is string && data.dareText.size() > 0 && data.dareText.size() <= 500
         && data.dareText.matches('(?s).*[^\\s].*')

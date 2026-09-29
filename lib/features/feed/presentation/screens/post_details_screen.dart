@@ -8,11 +8,13 @@ import '../../data/repositories/post_repository.dart';
 class PostDetailsScreen extends StatelessWidget {
   final DareLibraryRepository? dareLibrary;
   final PostModel post;
+  final bool openComments;
   final PostRepository? repository;
   final VoidCallback? onHidden;
   const PostDetailsScreen({
     super.key,
     required this.post,
+    this.openComments = false,
     this.dareLibrary,
     this.repository,
     this.onHidden,
@@ -23,6 +25,7 @@ class PostDetailsScreen extends StatelessWidget {
     return Scaffold(
       body: DareProofCard(
         post: post,
+        openComments: openComments,
         dareLibrary: dareLibrary,
         repository: repository,
         onHidden: onHidden,

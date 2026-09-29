@@ -47,5 +47,6 @@ jobs:
           distribution: temurin
           java-version: '17'
       - run: node --test tooling/weekly-dares/publish.test.cjs
+      - run: npm ci --ignore-scripts --prefix functions
       - run: npm ci --ignore-scripts --prefix tooling/rules-tests
-      - run: npx --yes firebase-tools@14.14.0 emulators:exec --project demo-mooddare --only firestore,storage 'npm --prefix tooling/rules-tests test'
+      - run: npx --yes firebase-tools@14.14.0 emulators:exec --project demo-mooddare --only firestore,storage 'npm --prefix tooling/rules-tests test && npm --prefix functions test'

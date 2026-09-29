@@ -338,3 +338,48 @@ Mood Buddy's two-frame transparent atlas is generated directly from `MoodWinkGeo
 Automated validation includes selection/comparison/favorites/capture settings on a narrow screen; distinct thumbnails; stable effect IDs and native input validation; mouth-response bounds and invariance under head tilt/translation/scale; real GPU rendering under translated geometry and selfie mirroring; isolated mouth reaction; fresh 2048-pixel 9:16 and 3:4 photos; H.264/AAC exports; animation; and cleanup on lens switch, comparison and lost mesh. The new effects and mascot expressions were visually reviewed with the existing public-domain portrait fixture. Physical-phone visual acceptance remains pending, and previously documented fast-motion lip lag and wider device/lighting coverage remain open.
 
 Final validation: all 389 Flutter tests passed with 88.53% Dart line coverage (6705/7574); all 39 native JVM tests passed; static analysis and repository formatting passed. Six targeted emulator integration tests passed across the new lens suite, Heart Halo, curated beauty looks, fresh makeup/shape photos, full-length recording and hold/lock/retake/lifecycle recovery. The final new-lens rerun also verified the companion-only metric cache and a mouth-opening response encoded into MP4 frames. Existing full-length recording retained 29.904 seconds of video and 29.884 seconds of audio. The ordinary APK is rebuilt after integration tests before personal-device installation.
+
+## Activity inbox and Android push — 2026-09-29
+
+Added a Moments notification bell, unread badge, All/Unread inbox, mark-all-read,
+relative timestamps, current avatars/usernames and navigation to profiles,
+moments/comments and the dare inbox. Settings provides independent category and
+phone-alert controls with an explicit device permission request. Empty states use
+Mood-wink. Camera/lens code is unchanged.
+
+A new Node 22 Firebase Functions codebase creates notifications from verified
+follows, likes, comments, replies, comment/reply likes and dare invitations. Both
+rule sets prohibit forged inbox entries and protect preferences/device tokens;
+the compatibility wildcard exclusions were extended to cover these collections.
+Server transactions suppress duplicate retries, self-events and both block
+directions. Account/block cleanup and daily 30-day notification/60-day inactive
+registration cleanup are deployed. Mark-all uses a cutoff so new arrivals remain
+unread. IDs and generic push text avoid copying comment content into alerts.
+
+Firebase Messaging handles token rotation, sign-out unbinding, account-scoped
+cold/background taps and foreground banners. Android uses the existing Mood-wink
+geometry as a monochrome status icon and a dedicated activity channel. Privacy
+notices in the app and website explain notification processing and retention.
+
+Validation: 404 Flutter tests passed; Dart line coverage 87.98% (7071/8037),
+65 Firestore/Storage security tests across both rule policies, 16 backend tests
+(including emulator transactions, concurrent replay, all social categories, FCM
+payload targeting and invalid-token cleanup), native JVM regressions and one
+Android inbox integration flow passed. Formatting and analysis passed. Ordinary
+arm64 APK built and installed on Samsung with `adb install -r`, preserving data.
+
+All nine notification functions, Firestore rules and required indexes were
+successfully deployed after initial Eventarc permission propagation. The user
+explicitly enabled phone alerts and confirmed receipt of the background FCM test
+notification with the Mood-wink icon. This verifies Android delivery on that phone;
+it is not a claim of physical testing of every multi-account social interaction.
+
+Apple push remains backlog per user instruction: renew Apple Developer membership,
+configure APNs key/provisioning and verify physical iPhone/TestFlight delivery.
+iOS entitlement/background groundwork is included. See `docs/NOTIFICATIONS.md`.
+
+A live production smoke check also created an isolated follow relationship and
+observed exactly one inbox event from the deployed function. Temporary profiles,
+follow records and inbox data were removed immediately; no real user was alerted.
+The 20 website browser tests and 14 focused legal/welcome tests passed after the
+notification privacy disclosure update.

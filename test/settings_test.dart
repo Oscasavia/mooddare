@@ -227,21 +227,21 @@ void main() {
       final repo = MemorySettings()..failOpen = true;
       await openSettings(tester, repo);
       await tapRow(tester, 'Notifications');
-      expect(find.byType(Switch), findsNothing);
+      expect(find.byType(Switch), findsWidgets);
       expect(
-        find.textContaining('Push notifications are coming later'),
+        find.textContaining('Choose what appears in your inbox'),
         findsOneWidget,
       );
       await tapRow(tester, 'Open phone settings');
       expect(
-        find.textContaining('Could not open notification settings'),
+        find.textContaining('Could not update notifications'),
         findsOneWidget,
       );
       repo.failOpen = false;
       await tapRow(tester, 'Open phone settings');
       expect(repo.notifications, 2);
       expect(
-        find.textContaining('Could not open notification settings'),
+        find.textContaining('Could not update notifications'),
         findsNothing,
       );
     },

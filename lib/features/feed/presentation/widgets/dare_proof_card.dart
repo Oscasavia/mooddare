@@ -24,6 +24,7 @@ class DareProofCard extends StatefulWidget {
   final DareLibraryRepository? dareLibrary;
   final PostModel post;
   final bool isFullScreen, isActive;
+  final bool openComments;
   final VoidCallback? onHidden;
   final PostRepository? repository;
   const DareProofCard({
@@ -31,6 +32,7 @@ class DareProofCard extends StatefulWidget {
     required this.post,
     this.dareLibrary,
     this.isFullScreen = false,
+    this.openComments = false,
     this.isActive = false,
     this.onHidden,
     this.repository,
@@ -93,6 +95,11 @@ class _DareProofCardState extends State<DareProofCard>
       }
     });
     if (widget.post.mediaType == 'video') _loadVideo();
+    if (widget.openComments) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _comments();
+      });
+    }
   }
 
   Future<void> _loadVideo() async {
