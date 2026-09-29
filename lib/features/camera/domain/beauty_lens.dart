@@ -1,11 +1,13 @@
 /// Lens strengths stay normalized; native rendering clamps every input again.
 class BeautyLens {
   final String name;
+  final String id;
   final double smooth, light, warmth, eyeSize, faceSlim, makeup;
   final double? lips, blush;
   final LipShade lipShade;
   const BeautyLens(
     this.name, {
+    this.id = '',
     this.smooth = 0,
     this.light = 0,
     this.warmth = 0,
@@ -35,12 +37,20 @@ class BeautyLens {
     };
   }
 
-  static const custom = BeautyLens('My look');
+  static const custom = BeautyLens('My look', id: 'custom');
 
   static const collection = [
-    BeautyLens('Natural', smooth: .3, light: .06, lips: .16, blush: .16),
+    BeautyLens(
+      'Natural',
+      id: 'natural',
+      smooth: .3,
+      light: .06,
+      lips: .16,
+      blush: .16,
+    ),
     BeautyLens(
       'Peach',
+      id: 'peach',
       smooth: .45,
       light: .08,
       warmth: .22,
@@ -51,6 +61,7 @@ class BeautyLens {
     ),
     BeautyLens(
       'Soft Glam',
+      id: 'soft_glam',
       smooth: .5,
       light: .08,
       eyeSize: .3,
@@ -61,6 +72,7 @@ class BeautyLens {
     ),
     BeautyLens(
       'Golden Hour',
+      id: 'golden_hour',
       smooth: .35,
       light: .18,
       warmth: .55,
@@ -71,13 +83,14 @@ class BeautyLens {
   ];
 
   static const all = [
-    BeautyLens('Original'),
-    BeautyLens('Soft', smooth: .85),
-    BeautyLens('Glow', smooth: .65, light: .3, warmth: .3),
-    BeautyLens('Wide eyes', smooth: .35, eyeSize: 1),
-    BeautyLens('Sculpt', smooth: .45, faceSlim: 1),
+    BeautyLens('Original', id: 'original'),
+    BeautyLens('Soft', id: 'soft', smooth: .85),
+    BeautyLens('Glow', id: 'glow', smooth: .65, light: .3, warmth: .3),
+    BeautyLens('Wide eyes', id: 'wide_eyes', smooth: .35, eyeSize: 1),
+    BeautyLens('Sculpt', id: 'sculpt', smooth: .45, faceSlim: 1),
     BeautyLens(
       'Studio',
+      id: 'studio',
       smooth: .65,
       light: .15,
       warmth: .15,
@@ -85,7 +98,14 @@ class BeautyLens {
       faceSlim: .85,
     ),
     ...collection,
-    BeautyLens('Rosy', smooth: .4, eyeSize: .2, faceSlim: .2, makeup: 1),
+    BeautyLens(
+      'Rosy',
+      id: 'rosy',
+      smooth: .4,
+      eyeSize: .2,
+      faceSlim: .2,
+      makeup: 1,
+    ),
     custom,
   ];
 }

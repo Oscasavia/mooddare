@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:mooddare/features/camera/data/beauty_preferences.dart';
+import 'beauty_preferences_test.dart' show MemoryBeautyPreferences;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mooddare/core/app_theme.dart';
@@ -8,6 +11,7 @@ import 'package:mooddare/features/camera/presentation/live_beauty_screen.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('mooddare/live_beauty');
+  late MemoryBeautyPreferences preferences;
   double? sentAspect;
   final zooms = <double>[];
   var texture = 0;
@@ -19,6 +23,7 @@ void main() {
   Map<String, dynamic>? videoLook;
   var geometryAvailable = false;
   setUp(() {
+    preferences = MemoryBeautyPreferences();
     sentAspect = null;
     zooms.clear();
     texture = 0;
@@ -100,7 +105,10 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.build(),
-        home: const LiveBeautyScreen(dareText: 'Timer test'),
+        home: LiveBeautyScreen(
+          preferences: preferences,
+          dareText: 'Timer test',
+        ),
       ),
     );
     for (var i = 0; i < 6; i++) {
@@ -339,7 +347,10 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.build(),
-          home: const LiveBeautyScreen(dareText: 'Rosy test'),
+          home: LiveBeautyScreen(
+            preferences: preferences,
+            dareText: 'Rosy test',
+          ),
         ),
       );
       for (var i = 0; i < 6; i++) {
@@ -380,7 +391,10 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.build(),
-        home: const LiveBeautyScreen(dareText: 'Shape test'),
+        home: LiveBeautyScreen(
+          preferences: preferences,
+          dareText: 'Shape test',
+        ),
       ),
     );
     for (var i = 0; i < 6; i++) {
@@ -402,6 +416,174 @@ void main() {
   });
 
   testWidgets(
+    'favorites sheet selects a saved lens and custom settings survive reopening',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      preferences.value = const BeautyPreferencesData(
+        look: CustomBeautyLook(
+          smooth: .4,
+          eyes: .2,
+          lips: .8,
+          blush: .3,
+          lipShade: LipShade.red,
+        ),
+        strength: .7,
+        favorites: {'golden_hour'},
+      );
+      Future<void> mount() async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.build(),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(2)),
+              child: child!,
+            ),
+            home: LiveBeautyScreen(
+              preferences: preferences,
+              dareText: 'Saved look',
+            ),
+          ),
+        );
+        for (var i = 0; i < 6; i++) {
+          await tester.pump(const Duration(milliseconds: 250));
+        }
+      }
+
+      await mount();
+      expect(find.text('Original'), findsOneWidget);
+      expect(looks.last['lipIntensity'], 0);
+      await tester.tap(find.byKey(const ValueKey('lens_library_button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Favorites'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('library_lens_golden_hour')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('library_lens_soft')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('library_lens_golden_hour')));
+      await tester.pumpAndSettle();
+      expect(find.text('Golden Hour'), findsOneWidget);
+      expect(looks.last['warmth'], closeTo(.55 * .7, .0001));
+      await tester.tap(find.byTooltip('Unfavorite Golden Hour'));
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(preferences.value.favorites, isEmpty);
+      await tester.tap(find.byKey(const ValueKey('lens_library_button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Favorites'));
+      await tester.pumpAndSettle();
+      expect(find.text('Keep your favorites close'), findsOneWidget);
+      await tester.tap(find.text('All lenses'));
+      await tester.pumpAndSettle();
+      final golden = find.byKey(const ValueKey('library_lens_golden_hour'));
+      await tester.scrollUntilVisible(
+        golden,
+        160,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(golden);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: golden,
+          matching: find.byTooltip('Favorite Golden Hour'),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(preferences.value.favorites, {'golden_hour'});
+      // Closing the sheet never changes the selected lens.
+      Navigator.of(tester.element(golden)).pop();
+      await tester.pumpAndSettle();
+      expect(find.text('Golden Hour'), findsOneWidget);
+      final page = tester.widget<PageView>(find.byType(PageView)).controller!;
+      page.jumpToPage(500 * BeautyLens.all.length + BeautyLens.all.length - 1);
+      await tester.pumpAndSettle();
+      expect(looks.last['lipShade'], 'red');
+      expect(looks.last['lipIntensity'], .8);
+      expect(looks.last['smooth'], .4);
+      tester
+          .widget<Slider>(find.byKey(const ValueKey('custom_beauty_slider')))
+          .onChanged!(.6);
+      // Dispose before the debounce fires: the newest value must still be saved.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(preferences.value.look.smooth, .6);
+      await mount();
+      expect(find.text('Original'), findsOneWidget);
+      tester
+          .widget<PageView>(find.byType(PageView))
+          .controller!
+          .jumpToPage(500 * BeautyLens.all.length + BeautyLens.all.length - 1);
+      await tester.pumpAndSettle();
+      expect(looks.last['smooth'], .6);
+      expect(looks.last['lipShade'], 'red');
+      await tester.tap(find.byTooltip('Reset my look'));
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(preferences.value.look.isOriginal, isTrue);
+      expect(preferences.value.favorites, {'golden_hour'});
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'failed preference saves keep the camera usable and later edits retry',
+    (tester) async {
+      preferences.failRead = true;
+      preferences.failWrite = true;
+      await openTimerCamera(tester, seconds: 0);
+      final page = tester.widget<PageView>(find.byType(PageView)).controller!;
+      page.jumpToPage(500 * BeautyLens.all.length + BeautyLens.all.length - 1);
+      await tester.pumpAndSettle();
+      final slider = find.byKey(const ValueKey('custom_beauty_slider'));
+      tester.widget<Slider>(slider).onChanged!(.4);
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(looks.last['smooth'], .4);
+      expect(find.textContaining('could not be saved'), findsOneWidget);
+      preferences.failWrite = false;
+      tester.widget<Slider>(slider).onChanged!(.5);
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(preferences.value.look.smooth, .5);
+      expect(preferences.writes, 2);
+      await tester.tap(find.byTooltip('Compare original'));
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(preferences.writes, 2);
+      expect(tester.takeException(), isNull);
+      await closeTimerCamera(tester);
+    },
+  );
+
+  testWidgets(
+    'delayed restoration cannot start capture early or resurrect a closed camera',
+    (tester) async {
+      preferences.pendingRead = Completer<BeautyPreferencesData>();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LiveBeautyScreen(preferences: preferences, dareText: 'Wait'),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(texture, 0);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(texture, 0);
+      await tester.pumpWidget(const SizedBox());
+      preferences.pendingRead!.complete(const BeautyPreferencesData());
+      await tester.pumpAndSettle();
+      expect(texture, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'curated carousel looks scale, compare, capture and clear makeup',
     (tester) async {
       tester.view.physicalSize = const Size(320, 640);
@@ -417,7 +599,10 @@ void main() {
             ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
-          home: const LiveBeautyScreen(dareText: 'Collection test'),
+          home: LiveBeautyScreen(
+            preferences: preferences,
+            dareText: 'Collection test',
+          ),
         ),
       );
       for (var i = 0; i < 6; i++) {
@@ -507,7 +692,10 @@ void main() {
               ).copyWith(textScaler: const TextScaler.linear(2)),
               child: child!,
             ),
-            home: const LiveBeautyScreen(dareText: 'Your own look'),
+            home: LiveBeautyScreen(
+              preferences: preferences,
+              dareText: 'Your own look',
+            ),
           ),
         );
         for (var i = 0; i < 6; i++) {
@@ -677,7 +865,10 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             theme: AppTheme.build(),
-            home: const LiveBeautyScreen(dareText: 'Flash test'),
+            home: LiveBeautyScreen(
+              preferences: preferences,
+              dareText: 'Flash test',
+            ),
           ),
         );
         for (var i = 0; i < 6; i++) {
@@ -728,7 +919,8 @@ void main() {
               ).copyWith(textScaler: const TextScaler.linear(1.5)),
               child: child!,
             ),
-            home: const LiveBeautyScreen(
+            home: LiveBeautyScreen(
+              preferences: preferences,
               dareText:
                   'A longer dare that stays out of the way while you capture your moment.',
             ),
@@ -773,7 +965,12 @@ void main() {
           expect(tester.getCenter(frame), size.center(Offset.zero));
         }
         expect(tester.getSize(find.byType(PageView)).width, size.width);
-        expect(tester.getRect(find.byType(TextButton)).bottom, lessThan(100));
+        expect(
+          tester
+              .getRect(find.byKey(const ValueKey('camera_dare_button')))
+              .bottom,
+          lessThan(100),
+        );
         expect(find.byType(SegmentedButton<bool>), findsNothing);
         expect(find.byType(Slider), findsNothing);
         await tester.drag(

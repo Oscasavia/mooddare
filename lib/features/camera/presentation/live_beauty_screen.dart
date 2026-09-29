@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../feed/presentation/screens/preview_screen.dart';
 import '../domain/beauty_lens.dart';
+import '../data/beauty_preferences.dart';
+import 'lens_library_sheet.dart';
 import 'capture_shutter.dart';
 import 'camera_zoom_surface.dart';
 import 'capture_timer.dart';
@@ -22,10 +24,12 @@ enum _CameraFrame {
 
 class LiveBeautyScreen extends StatefulWidget {
   final String dareText;
+  final BeautyPreferences? preferences;
   final String? moodId, moodName, weeklyDareId;
   const LiveBeautyScreen({
     super.key,
     required this.dareText,
+    this.preferences,
     this.moodId,
     this.moodName,
     this.weeklyDareId,
@@ -44,7 +48,12 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     viewportFraction: .23,
   );
   Future<void> _operations = Future<void>.value();
-  Timer? _poll, _lookDebounce;
+  Timer? _poll, _lookDebounce, _saveTimer;
+  late final BeautyPreferences _preferences =
+      widget.preferences ?? BeautyPreferences.instance;
+  Set<String> _favorites = {};
+  bool _preferencesDirty = false, _saveErrorShown = false;
+  bool _preferencesLoaded = false;
   final _countdown = CaptureCountdown();
   int _timerSeconds = 0;
   int? _texture;
@@ -84,7 +93,84 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _countdown.addListener(_countdownChanged);
-    _start();
+    _restoreAndStart();
+  }
+
+  Future<void> _restoreAndStart() async {
+    BeautyPreferencesData saved;
+    try {
+      saved = await _preferences.load();
+    } catch (_) {
+      saved = const BeautyPreferencesData();
+    }
+    if (!mounted) return;
+    setState(() {
+      _preferencesLoaded = true;
+      _customLook = saved.look;
+      _strength = saved.strength;
+      _favorites = {...saved.favorites};
+    });
+    await _start();
+  }
+
+  void _queueSave() {
+    _preferencesDirty = true;
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 300), _flushPreferences);
+  }
+
+  Future<void> _flushPreferences() async {
+    _saveTimer?.cancel();
+    if (!_preferencesDirty) return;
+    _preferencesDirty = false;
+    final snapshot = BeautyPreferencesData(
+      look: _customLook,
+      strength: _strength,
+      favorites: Set.of(_favorites),
+    );
+    try {
+      await _preferences.save(snapshot);
+    } catch (_) {
+      _preferencesDirty = true;
+      if (mounted && !_saveErrorShown) {
+        _saveErrorShown = true;
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Your look works here, but could not be saved on this device. Try again.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  void _toggleFavorite(BeautyLens lens) {
+    setState(() {
+      if (!_favorites.remove(lens.id)) _favorites.add(lens.id);
+    });
+    _queueSave();
+  }
+
+  Future<void> _openLensLibrary() async {
+    final lens = await showModalBottomSheet<BeautyLens>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => SizedBox(
+        height: MediaQuery.sizeOf(context).height * .7,
+        child: LensLibrarySheet(
+          selected: BeautyLens.all[_selected],
+          favorites: _favorites,
+          onToggleFavorite: _toggleFavorite,
+        ),
+      ),
+    );
+    if (!mounted || lens == null || !_carousel.hasClients) return;
+    final page = (_carousel.page ?? _initialPage.toDouble()).round();
+    _chooseLens(
+      page - page % BeautyLens.all.length + BeautyLens.all.indexOf(lens),
+    );
   }
 
   void _countdownChanged() {
@@ -101,7 +187,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   }
 
   Future<void> _start() async {
-    if (!mounted || !_active || _inPreview) return;
+    if (!mounted || !_preferencesLoaded || !_active || _inPreview) return;
     if (_interruptedClip != null) {
       final file = _interruptedClip!;
       _interruptedClip = null;
@@ -228,6 +314,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   }
 
   Future<void> _stop() async {
+    unawaited(_flushPreferences());
     _countdown.cancel();
     ++_generation;
     _poll?.cancel();
@@ -507,6 +594,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
 
   @override
   void dispose() {
+    unawaited(_flushPreferences());
     ++_generation;
     WidgetsBinding.instance.removeObserver(this);
     _poll?.cancel();
@@ -725,6 +813,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                                       ),
                                     )
                                   : TextButton(
+                                      key: const ValueKey('camera_dare_button'),
                                       onPressed: _busy ? null : _showDare,
                                       style: TextButton.styleFrom(
                                         foregroundColor: Colors.white,
@@ -843,7 +932,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
               ),
               if (_showAdjustments && !_recording)
                 Positioned(
-                  top: MediaQuery.paddingOf(context).top + 232,
+                  top: MediaQuery.paddingOf(context).top + 176,
                   left: 24,
                   right: 76,
                   child: Container(
@@ -870,6 +959,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                                   value,
                                 ),
                               );
+                              _queueSave();
                               _adjust();
                             },
                             onShadeChanged: (shade) {
@@ -878,6 +968,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                                   shade,
                                 ),
                               );
+                              _queueSave();
                               _adjust();
                             },
                             onReset: () {
@@ -885,6 +976,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                                 _customLook = const CustomBeautyLook();
                                 _comparing = false;
                               });
+                              _queueSave();
                               _adjust();
                             },
                             onCompare: () {
@@ -907,6 +999,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                                   onChanged: enabled && !_comparing
                                       ? (value) {
                                           setState(() => _strength = value);
+                                          _queueSave();
                                           _adjust();
                                         }
                                       : null,
@@ -937,7 +1030,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                     padding: const EdgeInsets.only(bottom: 16),
                     child: SizedBox(
                       width: double.infinity,
-                      height: 208,
+                      height: 280,
                       child: Stack(
                         alignment: Alignment.bottomCenter,
                         children: [
@@ -946,30 +1039,15 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                               bottom: 126,
                               left: 0,
                               right: 0,
-                              child: IgnorePointer(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      _comparing
-                                          ? 'Original'
-                                          : BeautyLens.all[_selected].name,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                        shadows: [
-                                          Shadow(
-                                            color: Colors.black87,
-                                            blurRadius: 8,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (_selected != 0 &&
-                                        _ready &&
-                                        !_comparing &&
-                                        (!_face || (_needsMesh && !_geometry)))
-                                      Padding(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (_selected != 0 &&
+                                      _ready &&
+                                      !_comparing &&
+                                      (!_face || (_needsMesh && !_geometry)))
+                                    IgnorePointer(
+                                      child: Padding(
                                         padding: const EdgeInsets.only(top: 4),
                                         child: Text(
                                           !_face
@@ -983,8 +1061,103 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                                           ),
                                         ),
                                       ),
-                                  ],
-                                ),
+                                    ),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const SizedBox(width: 40),
+                                      Flexible(
+                                        child: TextButton(
+                                          key: const ValueKey(
+                                            'lens_library_button',
+                                          ),
+                                          onPressed: enabled && !_comparing
+                                              ? _openLensLibrary
+                                              : null,
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: Colors.white,
+                                            overlayColor: Colors.transparent,
+                                            splashFactory:
+                                                NoSplash.splashFactory,
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  _comparing
+                                                      ? 'Original'
+                                                      : BeautyLens
+                                                            .all[_selected]
+                                                            .name,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 14,
+                                                    shadows: [
+                                                      Shadow(
+                                                        color: Colors.black87,
+                                                        blurRadius: 8,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              const Icon(
+                                                Icons.expand_more_rounded,
+                                                size: 18,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(
+                                        width: 40,
+                                        child: _selected == 0
+                                            ? null
+                                            : IconButton(
+                                                key: const ValueKey(
+                                                  'favorite_lens_button',
+                                                ),
+                                                tooltip:
+                                                    _favorites.contains(
+                                                      BeautyLens
+                                                          .all[_selected]
+                                                          .id,
+                                                    )
+                                                    ? 'Unfavorite ${BeautyLens.all[_selected].name}'
+                                                    : 'Favorite ${BeautyLens.all[_selected].name}',
+                                                isSelected: _favorites.contains(
+                                                  BeautyLens.all[_selected].id,
+                                                ),
+                                                onPressed:
+                                                    enabled && !_comparing
+                                                    ? () => _toggleFavorite(
+                                                        BeautyLens
+                                                            .all[_selected],
+                                                      )
+                                                    : null,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.primary,
+                                                icon: Icon(
+                                                  _favorites.contains(
+                                                        BeautyLens
+                                                            .all[_selected]
+                                                            .id,
+                                                      )
+                                                      ? Icons.star_rounded
+                                                      : Icons
+                                                            .star_outline_rounded,
+                                                ),
+                                              ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
                           Positioned(
