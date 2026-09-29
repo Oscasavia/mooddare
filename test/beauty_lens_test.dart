@@ -13,6 +13,8 @@ void main() {
       expect(original.isOriginal, isTrue);
       expect(look.isOriginal, isFalse);
       expect(look.settings(), {
+        'arEffect': 'none',
+        'arStrength': 0.0,
         'smooth': .8,
         'eyeSize': .35,
         'faceSlim': .6,
@@ -136,6 +138,21 @@ void main() {
       }
     },
   );
+
+  test('Heart Halo intensity, comparison and switching keep AR isolated', () {
+    final lens = BeautyLens.all.firstWhere((l) => l.id == 'heart_halo');
+    expect(lens.heartHalo, isTrue);
+    expect(lens.settings(.65)['arEffect'], 'heart_halo');
+    expect(lens.settings(.65)['arStrength'], .65);
+    expect(lens.settings(.65, original: true)['original'], isTrue);
+    expect(lens.settings(0)['arStrength'], 0);
+    expect(lens.settings(double.nan)['arStrength'], 0);
+    for (final other in BeautyLens.all.where((l) => !l.heartHalo)) {
+      expect(other.settings(1)['arEffect'], 'none');
+      expect(other.settings(1)['arStrength'], 0);
+    }
+    expect(const CustomBeautyLook(lips: 1).settings()['arEffect'], 'none');
+  });
 
   test('zero strength disables every lens and strength is bounded', () {
     for (final lens in BeautyLens.all) {

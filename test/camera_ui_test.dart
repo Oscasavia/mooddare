@@ -387,6 +387,47 @@ void main() {
     },
   );
 
+  testWidgets('Heart Halo keeps compare, favorites and photo/video settings', (
+    tester,
+  ) async {
+    preferences.value = const BeautyPreferencesData(favorites: {'heart_halo'});
+    await openTimerCamera(tester, seconds: 0);
+    await tester.tap(find.byKey(const ValueKey('lens_library_button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Favorites'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('library_lens_heart_halo')));
+    await tester.pumpAndSettle();
+    expect(find.text('Heart Halo'), findsOneWidget);
+    expect(find.text('Face the camera for hearts'), findsOneWidget);
+    expect(looks.last['arEffect'], 'heart_halo');
+    await tester.tap(find.byTooltip('Adjust lens'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Compare original'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(looks.last['original'], isTrue);
+    expect(find.text('Face the camera for hearts'), findsNothing);
+    await tester.tap(find.byTooltip('Show lens'));
+    await tester.pump(const Duration(milliseconds: 100));
+    geometryAvailable = true;
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Face the camera for hearts'), findsNothing);
+    final shutter = find.byKey(const ValueKey('capture_shutter'));
+    await tester.tap(shutter);
+    await tester.pumpAndSettle();
+    expect(captureLook?['arEffect'], 'heart_halo');
+    final finger = await tester.startGesture(tester.getCenter(shutter));
+    await tester.pump(const Duration(milliseconds: 650));
+    await finger.up();
+    await tester.pumpAndSettle();
+    expect(videoLook?['arEffect'], 'heart_halo');
+    await tester.tap(find.byTooltip('Unfavorite Heart Halo'));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(preferences.value.favorites, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
   testWidgets('zero-strength lenses do not ask for face tracking', (
     tester,
   ) async {

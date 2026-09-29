@@ -5,9 +5,11 @@ class BeautyLens {
   final double smooth, light, warmth, eyeSize, faceSlim, makeup;
   final double? lips, blush;
   final LipShade lipShade;
+  final bool heartHalo;
   const BeautyLens(
     this.name, {
     this.id = '',
+    this.heartHalo = false,
     this.smooth = 0,
     this.light = 0,
     this.warmth = 0,
@@ -24,6 +26,8 @@ class BeautyLens {
   Map<String, Object> settings(double strength, {bool original = false}) {
     final amount = strength.isFinite ? strength.clamp(0.0, 1.0) : 0.0;
     return {
+      'arEffect': heartHalo ? 'heart_halo' : 'none',
+      'arStrength': heartHalo ? amount : 0.0,
       'smooth': smooth * amount,
       'light': light * amount,
       'warmth': warmth * amount,
@@ -98,6 +102,7 @@ class BeautyLens {
       faceSlim: .85,
     ),
     ...collection,
+    BeautyLens('Heart Halo', id: 'heart_halo', heartHalo: true),
     BeautyLens(
       'Rosy',
       id: 'rosy',
@@ -181,6 +186,8 @@ class CustomBeautyLook {
   );
 
   Map<String, Object> settings({bool original = false}) => {
+    'arEffect': 'none',
+    'arStrength': 0.0,
     'smooth': amount(BeautyAdjustment.smooth),
     'eyeSize': amount(BeautyAdjustment.eyes),
     'faceSlim': amount(BeautyAdjustment.face),

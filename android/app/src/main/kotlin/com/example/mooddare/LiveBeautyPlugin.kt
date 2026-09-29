@@ -443,7 +443,7 @@ class LiveBeautyPlugin(
             val facesTask = detector.process(input)
             val meshTask = try {
                 if (fixtureMode || (renderer?.smooth ?: 0f) > 0f || (renderer?.makeup?.active == true) ||
-                    (renderer?.eyeSize ?: 0f) > 0f || (renderer?.faceSlim ?: 0f) > 0f) meshDetector.process(input)
+                    (renderer?.eyeSize ?: 0f) > 0f || (renderer?.faceSlim ?: 0f) > 0f || renderer?.ar?.active == true) meshDetector.process(input)
                 else Tasks.forResult(emptyList<FaceMesh>())
             }
                 catch (e: Exception) { Tasks.forException<List<FaceMesh>>(e) }
@@ -692,6 +692,9 @@ class LiveBeautyPlugin(
                         eyeSize = (call.argument<Number>("eyeSize")?.toFloat() ?: 0f).coerceIn(0f, 1f)
                         faceSlim = (call.argument<Number>("faceSlim")?.toFloat() ?: 0f).coerceIn(0f, 1f)
                         makeup = MakeupSettings.fromArguments(call.arguments as? Map<*, *> ?: emptyMap<Any, Any>())
+                        ar = ArSettings.fromArguments(call.arguments as? Map<*, *> ?: emptyMap<Any, Any>())
+                        if (fixtureMode) debugAnimationSeconds = call.argument<Number>("fixtureAnimationSeconds")
+                            ?.toFloat()?.takeIf { it.isFinite() }?.coerceIn(0f, 60f)
                         original = call.argument<Boolean>("original") ?: false
                         if (call.hasArgument("aspectRatio") && !recording) {
                             outputAspect = call.argument<Number>("aspectRatio")?.toFloat()?.coerceIn(.3f, 3f)
@@ -783,7 +786,7 @@ class LiveBeautyPlugin(
         private fun processPhoto(photo: Bitmap, anchor: FloatArray?, request: MethodChannel.Result) {
             if (closed || photoResult !== request) { photo.recycle(); return }
             val output = renderer!!
-            if (output.original || (output.smooth == 0f && output.eyeSize == 0f && output.faceSlim == 0f && !output.makeup.active)) {
+            if (!output.needsFaceTracking) {
                 try { renderStill(photo, null, 0f) } finally { photo.recycle() }
                 return
             }
@@ -812,7 +815,7 @@ class LiveBeautyPlugin(
                             "faces" to task.result.size, "candidates" to candidates.size,
                             "quality" to quality, "pitch" to picked?.first?.headEulerAngleX,
                             "yaw" to picked?.first?.headEulerAngleY, "roll" to picked?.first?.headEulerAngleZ)
-                        if (picked != null && quality > 0f && (output.smooth > 0f || output.makeup.active || output.eyeSize > 0f || output.faceSlim > 0f)) {
+                        if (picked != null && quality > 0f && output.needsFaceTracking) {
                             handedToMesh = true
                             detectPhotoMesh(photo, picked.second, quality, request, 0)
                         } else renderStill(photo, picked?.second, quality)

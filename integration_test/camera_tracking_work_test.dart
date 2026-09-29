@@ -49,6 +49,22 @@ void main() {
           (s) => (s['detections'] as num) > (after['detections'] as num),
         );
       }
+      await channel.invokeMethod<void>(
+        'setLook',
+        BeautyLens.all.first.settings(1),
+      );
+      await tester.pump(const Duration(seconds: 2));
+      final beforeAr = (await channel.invokeMapMethod<String, dynamic>(
+        'status',
+      ))!;
+      await channel.invokeMethod<void>(
+        'setLook',
+        BeautyLens.all.firstWhere((l) => l.heartHalo).settings(1),
+      );
+      await waitForState(
+        tester,
+        (s) => (s['detections'] as num) > (beforeAr['detections'] as num) + 1,
+      );
       final state = await waitForState(
         tester,
         (s) => (s['performance'] as Map).isNotEmpty,

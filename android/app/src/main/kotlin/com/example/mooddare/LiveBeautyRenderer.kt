@@ -42,9 +42,12 @@ internal class LiveBeautyRenderer(surface: Surface) {
     var eyeSize = 0f
     var faceSlim = 0f
     var makeup = MakeupSettings()
+    var ar = ArSettings()
+    var debugAnimationSeconds: Float? = null
+    private val animationStarted = android.os.SystemClock.elapsedRealtime()
     var original = false
     val needsFaceTracking: Boolean get() = !original &&
-        (smooth > 0f || eyeSize > 0f || faceSlim > 0f || makeup.active)
+        (smooth > 0f || eyeSize > 0f || faceSlim > 0f || makeup.active || ar.active)
     var outputAspect: Float? = null
     var face: FloatArray? = null
     var faceGeometry: FaceGeometry? = null
@@ -161,6 +164,8 @@ internal class LiveBeautyRenderer(surface: Surface) {
         val guides = if (geometry != null) shapeGeometry else null
         GLES20.glUniform1f(uniform("shapeAspect"), sourceAspect)
         GLES20.glUniform1f(uniform("hasShape"), if (guides != null) 1f else 0f)
+        val animation = debugAnimationSeconds ?: ((android.os.SystemClock.elapsedRealtime() - animationStarted) % 6000L) / 1000f
+        GLES20.glUniform2f(uniform("ar"), if (!original && guides != null && ar.active) ar.strength else 0f, animation)
         GLES20.glUniform2fv(uniform("shapeAxis"), 1, guides?.axis ?: horizontalAxis, 0)
         GLES20.glUniform4fv(uniform("meshEyes[0]"), 2, guides?.eyes ?: zeros, 0)
         GLES20.glUniform2fv(uniform("eyeOpenness"), 1, guides?.eyeStrength ?: zeros, 0)
@@ -312,6 +317,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
             uniform vec4 maskBounds;
             uniform float hasGeometry;
             uniform vec2 makeup;
+            uniform vec2 ar;
             uniform vec3 lipColor;
             uniform vec2 stepSize;
             uniform float mirror;
@@ -343,6 +349,14 @@ internal class LiveBeautyRenderer(surface: Surface) {
             vec2 enlargeEye(vec2 p, vec4 guide, float openness) {
                 return p - (p - guide.xy) *
                     (shape.x * settings.w * openness * 0.20 * influence(p, guide));
+            }
+            // A heart is the soft union of two rounded lobes and a tapered point.
+            float heart(vec2 p) {
+                float lobes = min(length(p - vec2(-0.24, -0.15)),
+                    length(p - vec2(0.24, -0.15))) - 0.34;
+                float tip = max(abs(p.x) - (0.6 - p.y) * 0.78,
+                    max(-0.15 - p.y, p.y - 0.6));
+                return 1.0 - smoothstep(-0.025, 0.025, min(lobes, tip));
             }
             void main() {
                 vec2 cropped = (uv - 0.5) * crop + 0.5;
@@ -413,6 +427,28 @@ internal class LiveBeautyRenderer(surface: Surface) {
                     color = mix(color, tinted, min(cheeks, 1.0) * contourMask.r * makeup.y * settings.w * 0.22);
                 }
                 color = color * exp2(settings.y * 0.6) + vec3(settings.z, 0.0, -settings.z) * (14.0 / 255.0);
+                if (ar.x > 0.0 && settings.w > 0.0 && hasShape > 0.5) {
+                    // Use the unwarped source position: AR overlays stay in the
+                    // same eye-aligned frame for preview, cropped photos and MP4.
+                    vec2 source = vec2(mix(cropped.x, 1.0 - cropped.x, mirror), cropped.y);
+                    vec2 metric = vec2(source.x * shapeAspect, source.y);
+                    vec2 q = vec2(dot(metric, shapeAxis), dot(metric, vec2(-shapeAxis.y, shapeAxis.x)));
+                    vec2 center = (meshEyes[0].xy + meshEyes[1].xy) * 0.5;
+                    float gap = max(0.015, meshEyes[1].x - meshEyes[0].x);
+                    q = (q - center) / gap;
+                    for (int i = 0; i < 5; i++) {
+                        float n = float(i) - 2.0;
+                        float bob = sin(ar.y * 1.04719755 + float(i) * 1.3) * 0.055;
+                        vec2 anchor = vec2(n * 0.44, -0.97 + abs(n) * 0.12 + bob);
+                        vec2 h = (q - anchor) / (0.30 + (2.0 - abs(n)) * 0.025);
+                        float alpha = heart(h) * ar.x * settings.w;
+                        vec3 tint = mix(vec3(0.94, 0.39, 0.57), vec3(0.67, 0.49, 0.96),
+                            mod(float(i), 2.0));
+                        float highlight = exp(-dot(h - vec2(-0.2, -0.2), h - vec2(-0.2, -0.2)) * 22.0);
+                        tint = mix(tint, vec3(1.0, 0.91, 0.96), highlight * 0.5);
+                        color = mix(color, tint, alpha);
+                    }
+                }
                 gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
             }
         """

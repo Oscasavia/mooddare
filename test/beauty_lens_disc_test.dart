@@ -47,7 +47,10 @@ void main() {
       }
 
       final images = <List<int>>[];
-      for (final lens in BeautyLens.collection) {
+      for (final lens in [
+        ...BeautyLens.collection,
+        BeautyLens.all.firstWhere((l) => l.heartHalo),
+      ]) {
         final image = await render(lens);
         for (final prior in images) {
           expect(image, isNot(orderedEquals(prior)));
@@ -80,6 +83,7 @@ void main() {
                     for (final lens in [
                       BeautyLens.all.first,
                       ...BeautyLens.collection,
+                      BeautyLens.all.firstWhere((l) => l.heartHalo),
                     ])
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 6),

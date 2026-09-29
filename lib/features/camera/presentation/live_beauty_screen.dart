@@ -69,7 +69,10 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     }
     final lens = BeautyLens.all[_selected];
     return _strength > 0 &&
-        (lens.hasMakeup || lens.eyeSize > 0 || lens.faceSlim > 0);
+        (lens.hasMakeup ||
+            lens.eyeSize > 0 ||
+            lens.faceSlim > 0 ||
+            lens.heartHalo);
   }
 
   bool get _needsFace => _isCustom
@@ -1058,6 +1061,10 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                                               ? 'Find your face'
                                               : _hasMakeup
                                               ? 'Face the camera for makeup'
+                                              : BeautyLens
+                                                    .all[_selected]
+                                                    .heartHalo
+                                              ? 'Face the camera for hearts'
                                               : 'Face the camera for shaping',
                                           style: const TextStyle(
                                             fontSize: 11,
