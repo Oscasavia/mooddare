@@ -2,6 +2,8 @@
 class BeautyLens {
   final String name;
   final double smooth, light, warmth, eyeSize, faceSlim, makeup;
+  final double? lips, blush;
+  final LipShade lipShade;
   const BeautyLens(
     this.name, {
     this.smooth = 0,
@@ -10,10 +12,15 @@ class BeautyLens {
     this.eyeSize = 0,
     this.faceSlim = 0,
     this.makeup = 0,
+    this.lips,
+    this.blush,
+    this.lipShade = LipShade.rose,
   });
 
+  bool get hasMakeup => (lips ?? makeup) > 0 || (blush ?? makeup) > 0;
+
   Map<String, Object> settings(double strength, {bool original = false}) {
-    final amount = strength.clamp(0.0, 1.0);
+    final amount = strength.isFinite ? strength.clamp(0.0, 1.0) : 0.0;
     return {
       'smooth': smooth * amount,
       'light': light * amount,
@@ -21,11 +28,47 @@ class BeautyLens {
       'eyeSize': eyeSize * amount,
       'faceSlim': faceSlim * amount,
       'makeup': makeup * amount,
+      'lipIntensity': (lips ?? makeup) * amount,
+      'blushIntensity': (blush ?? makeup) * amount,
+      'lipShade': lipShade.name,
       'original': original,
     };
   }
 
   static const custom = BeautyLens('My look');
+
+  static const collection = [
+    BeautyLens('Natural', smooth: .3, light: .06, lips: .16, blush: .16),
+    BeautyLens(
+      'Peach',
+      smooth: .45,
+      light: .08,
+      warmth: .22,
+      eyeSize: .12,
+      lips: .8,
+      blush: .35,
+      lipShade: LipShade.peach,
+    ),
+    BeautyLens(
+      'Soft Glam',
+      smooth: .5,
+      light: .08,
+      eyeSize: .3,
+      faceSlim: .25,
+      lips: .85,
+      blush: .4,
+      lipShade: LipShade.berry,
+    ),
+    BeautyLens(
+      'Golden Hour',
+      smooth: .35,
+      light: .18,
+      warmth: .55,
+      lips: .35,
+      blush: .22,
+      lipShade: LipShade.peach,
+    ),
+  ];
 
   static const all = [
     BeautyLens('Original'),
@@ -41,6 +84,7 @@ class BeautyLens {
       eyeSize: .65,
       faceSlim: .85,
     ),
+    ...collection,
     BeautyLens('Rosy', smooth: .4, eyeSize: .2, faceSlim: .2, makeup: 1),
     custom,
   ];

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mooddare/core/app_theme.dart';
+import 'package:mooddare/features/camera/domain/beauty_lens.dart';
 import 'package:mooddare/features/camera/presentation/live_beauty_screen.dart';
 
 void main() {
@@ -399,6 +400,95 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
   });
+
+  testWidgets(
+    'curated carousel looks scale, compare, capture and clear makeup',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.build(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
+            child: child!,
+          ),
+          home: const LiveBeautyScreen(dareText: 'Collection test'),
+        ),
+      );
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 250));
+      }
+      final frame = tester.getRect(find.byKey(const ValueKey('camera_frame')));
+      final carousel = tester
+          .widget<PageView>(find.byType(PageView))
+          .controller!;
+      void choose(BeautyLens lens) => carousel.jumpToPage(
+        500 * BeautyLens.all.length + BeautyLens.all.indexOf(lens),
+      );
+      for (final lens in BeautyLens.collection) {
+        choose(lens);
+        await tester.pumpAndSettle();
+        expect(find.text(lens.name), findsOneWidget);
+        expect(
+          find.byKey(ValueKey('lens_portrait_${lens.name}')),
+          findsWidgets,
+        );
+        expect(looks.last, containsPair('lipShade', lens.lipShade.name));
+        expect(find.text('Face the camera for makeup'), findsOneWidget);
+        if (find.byType(Slider).evaluate().isEmpty) {
+          await tester.tap(find.byTooltip('Adjust lens'));
+          await tester.pump();
+        }
+        tester.widget<Slider>(find.byType(Slider)).onChanged!(.5);
+        await tester.pump(const Duration(milliseconds: 60));
+        for (final entry in lens.settings(.5).entries) {
+          expect(looks.last[entry.key], entry.value);
+        }
+        await tester.tap(find.byTooltip('Compare original'));
+        await tester.pump(const Duration(milliseconds: 60));
+        expect(looks.last['original'], isTrue);
+        expect(find.text('Face the camera for makeup'), findsNothing);
+        await tester.tap(find.byTooltip('Show lens'));
+        await tester.pump(const Duration(milliseconds: 60));
+        expect(looks.last['original'], isFalse);
+        expect(
+          tester.getRect(find.byKey(const ValueKey('camera_frame'))),
+          frame,
+        );
+      }
+      await tester.tap(find.byKey(const ValueKey('capture_shutter')));
+      await tester.pumpAndSettle();
+      final selected = BeautyLens.collection.last;
+      for (final entry in selected.settings(.5).entries) {
+        expect(captureLook?[entry.key], entry.value);
+      }
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+      final hold = await tester.startGesture(
+        tester.getCenter(find.byKey(const ValueKey('capture_shutter'))),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump();
+      await hold.up();
+      await tester.pumpAndSettle();
+      for (final entry in selected.settings(.5).entries) {
+        expect(videoLook?[entry.key], entry.value);
+      }
+      choose(BeautyLens.all.first);
+      await tester.pumpAndSettle();
+      expect(looks.last['lipIntensity'], 0);
+      expect(looks.last['blushIntensity'], 0);
+      expect(looks.last['warmth'], 0);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
 
   for (final size in [const Size(320, 640), const Size(768, 1024)]) {
     testWidgets(

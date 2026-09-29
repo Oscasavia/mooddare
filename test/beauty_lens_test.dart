@@ -92,6 +92,51 @@ void main() {
     expect(const CustomBeautyLook(lipShade: LipShade.red).isOriginal, isTrue);
   });
 
+  test(
+    'curated looks blend independent makeup and preserve established presets',
+    () {
+      expect(BeautyLens.collection.map((l) => l.name), [
+        'Natural',
+        'Peach',
+        'Soft Glam',
+        'Golden Hour',
+      ]);
+      expect(
+        BeautyLens.all.map((l) => l.name).toSet().length,
+        BeautyLens.all.length,
+      );
+      final natural = BeautyLens.collection.first;
+      expect(natural.eyeSize, 0);
+      expect(natural.faceSlim, 0);
+      for (final lens in BeautyLens.collection) {
+        expect(BeautyLens.all, contains(lens));
+        expect(lens.hasMakeup, isTrue);
+        final half = lens.settings(.5);
+        expect(half['lipIntensity'], lens.lips! * .5);
+        expect(half['blushIntensity'], lens.blush! * .5);
+        expect(half['lipShade'], lens.lipShade.name);
+        expect(half['eyeSize'], lens.eyeSize * .5);
+        expect(half['faceSlim'], lens.faceSlim * .5);
+        expect(half['original'], isFalse);
+        expect(lens.settings(.5, original: true), {...half, 'original': true});
+        expect(lens.settings(double.nan), lens.settings(0));
+        expect(lens.settings(double.infinity), lens.settings(0));
+      }
+      final rosy = BeautyLens.all
+          .firstWhere((l) => l.name == 'Rosy')
+          .settings(.65);
+      expect(rosy['makeup'], .65);
+      expect(rosy['lipIntensity'], .65);
+      expect(rosy['blushIntensity'], .65);
+      expect(rosy['lipShade'], 'rose');
+      for (final lens in BeautyLens.all.where((l) => !l.hasMakeup)) {
+        expect(lens.settings(1)['lipIntensity'], 0);
+        expect(lens.settings(1)['blushIntensity'], 0);
+        expect(lens.settings(1)['lipShade'], 'rose');
+      }
+    },
+  );
+
   test('zero strength disables every lens and strength is bounded', () {
     for (final lens in BeautyLens.all) {
       final off = lens.settings(0);

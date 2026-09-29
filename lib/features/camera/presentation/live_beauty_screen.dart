@@ -8,6 +8,7 @@ import 'capture_shutter.dart';
 import 'camera_zoom_surface.dart';
 import 'capture_timer.dart';
 import 'custom_beauty_panel.dart';
+import 'beauty_lens_disc.dart';
 
 enum _CameraFrame {
   story('9:16', 9 / 16),
@@ -59,12 +60,12 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     }
     final lens = BeautyLens.all[_selected];
     return _strength > 0 &&
-        (lens.makeup > 0 || lens.eyeSize > 0 || lens.faceSlim > 0);
+        (lens.hasMakeup || lens.eyeSize > 0 || lens.faceSlim > 0);
   }
 
   bool get _hasMakeup => _isCustom
       ? _customLook.lips > 0 || _customLook.blush > 0
-      : BeautyLens.all[_selected].makeup > 0;
+      : BeautyLens.all[_selected].hasMakeup;
 
   bool _ready = false, _face = false, _geometry = false, _front = true;
   bool _busy = false, _comparing = false, _active = true, _inPreview = false;
@@ -521,51 +522,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
     super.dispose();
   }
 
-  static const _lensIcons = [
-    null, // Original is a plain branded circle.
-    Icons.blur_on_rounded,
-    Icons.wb_sunny_outlined,
-    Icons.visibility_outlined,
-    Icons.face_retouching_natural,
-    Icons.auto_awesome,
-    Icons.local_florist_outlined,
-    Icons.tune_rounded,
-  ];
-  static const _lensColors = [
-    <Color>[], // Original uses the translucent theme accent below.
-    [Color(0xFFF0C9C2), Color(0xFFAD7593)],
-    [Color(0xFFFFE2AA), Color(0xFFE99773)],
-    [Color(0xFFB6DCEE), Color(0xFF697FBD)],
-    [Color(0xFFCDC3F1), Color(0xFF8774B3)],
-    [Color(0xFFF2CEEA), Color(0xFFA583CB)],
-    [Color(0xFFFFB8C8), Color(0xFFC4597C)],
-    [Color(0xFFA9E5D8), Color(0xFF548EAA)],
-  ];
-
-  Widget _lensDisc(int index) {
-    if (index == 0) {
-      return DecoratedBox(
-        key: const ValueKey('original_lens_disc'),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: .25),
-        ),
-        child: const SizedBox.expand(),
-      );
-    }
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: _lensColors[index],
-        ),
-        border: Border.all(color: Colors.white.withValues(alpha: .4)),
-      ),
-      child: Icon(_lensIcons[index], color: Colors.white, size: 28),
-    );
-  }
+  Widget _lensDisc(int index) => BeautyLensDisc(lens: BeautyLens.all[index]);
 
   void _chooseLens(int index) {
     if (_busy || _recording || index < 0) {
