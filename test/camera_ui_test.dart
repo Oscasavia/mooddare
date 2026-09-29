@@ -472,6 +472,24 @@ void main() {
         await adjust('smooth', .8);
         await adjust('eyes', .35);
         await adjust('face', .6);
+        await adjust('lips', .75);
+        final shade = find.byKey(const ValueKey('lip_shade_berry'));
+        await tester.ensureVisible(shade);
+        await tester.tap(shade);
+        await tester.pump(const Duration(milliseconds: 60));
+        expect(looks.last['lipShade'], 'berry');
+        expect(looks.last['lipIntensity'], .75);
+        expect(find.text('Face the camera for makeup'), findsOneWidget);
+        await tester.tap(find.byTooltip('Compare original'));
+        await tester.pump(const Duration(milliseconds: 60));
+        expect(tester.widget<TextButton>(shade).onPressed, isNull);
+        expect(find.text('Face the camera for makeup'), findsNothing);
+        await tester.tap(find.byTooltip('Show my look'));
+        await tester.pump(const Duration(milliseconds: 60));
+        expect(tester.widget<TextButton>(shade).onPressed, isNotNull);
+        await adjust('blush', .3);
+        expect(looks.last['blushIntensity'], .3);
+        expect(looks.last['lipIntensity'], .75);
         expect(looks.last, containsPair('smooth', .8));
         expect(looks.last, containsPair('eyeSize', .35));
         expect(looks.last, containsPair('faceSlim', .6));
@@ -487,7 +505,7 @@ void main() {
         await tester.tap(find.byTooltip('Show my look'));
         await tester.pump(const Duration(milliseconds: 60));
         expect(looks.last['original'], isFalse);
-        expect(tester.widget<Slider>(slider).value, .6);
+        expect(tester.widget<Slider>(slider).value, .3);
 
         // Switching through Original and a preset must not overwrite custom amounts.
         for (var i = 0; i < 2; i++) {
@@ -520,6 +538,9 @@ void main() {
         await tester.pumpAndSettle();
         expect(captureLook?['eyeSize'], .45);
         expect(captureLook?['smooth'], .8);
+        expect(captureLook?['lipIntensity'], .75);
+        expect(captureLook?['blushIntensity'], .3);
+        expect(captureLook?['lipShade'], 'berry');
         for (var i = 0; i < 6; i++) {
           await tester.pump(const Duration(milliseconds: 250));
         }
@@ -535,6 +556,9 @@ void main() {
         await tester.pumpAndSettle();
         expect(videoLook?['eyeSize'], .45);
         expect(videoLook?['faceSlim'], .6);
+        expect(videoLook?['lipIntensity'], .75);
+        expect(videoLook?['blushIntensity'], .3);
+        expect(videoLook?['lipShade'], 'berry');
         await tester.tap(find.byTooltip('Adjust lens'));
         await tester.pump();
         await tester.tap(find.byTooltip('Reset my look'));
@@ -542,6 +566,9 @@ void main() {
         expect(looks.last['smooth'], 0);
         expect(looks.last['eyeSize'], 0);
         expect(looks.last['faceSlim'], 0);
+        expect(looks.last['lipIntensity'], 0);
+        expect(looks.last['blushIntensity'], 0);
+        expect(looks.last['lipShade'], 'rose');
         expect(tester.widget<Slider>(slider).value, 0);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());

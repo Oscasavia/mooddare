@@ -54,11 +54,17 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   BeautyAdjustment _customAdjustment = BeautyAdjustment.smooth;
   bool get _isCustom => BeautyLens.all[_selected] == BeautyLens.custom;
   bool get _needsMesh {
-    if (_isCustom) return _customLook.eyes > 0 || _customLook.face > 0;
+    if (_isCustom) {
+      return _customLook.eyes > 0 || _customLook.face > 0 || _hasMakeup;
+    }
     final lens = BeautyLens.all[_selected];
     return _strength > 0 &&
         (lens.makeup > 0 || lens.eyeSize > 0 || lens.faceSlim > 0);
   }
+
+  bool get _hasMakeup => _isCustom
+      ? _customLook.lips > 0 || _customLook.blush > 0
+      : BeautyLens.all[_selected].makeup > 0;
 
   bool _ready = false, _face = false, _geometry = false, _front = true;
   bool _busy = false, _comparing = false, _active = true, _inPreview = false;
@@ -909,6 +915,14 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                               );
                               _adjust();
                             },
+                            onShadeChanged: (shade) {
+                              setState(
+                                () => _customLook = _customLook.withLipShade(
+                                  shade,
+                                ),
+                              );
+                              _adjust();
+                            },
                             onReset: () {
                               setState(() {
                                 _customLook = const CustomBeautyLook();
@@ -1003,10 +1017,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
                                         child: Text(
                                           !_face
                                               ? 'Find your face'
-                                              : BeautyLens
-                                                        .all[_selected]
-                                                        .makeup >
-                                                    0
+                                              : _hasMakeup
                                               ? 'Face the camera for makeup'
                                               : 'Face the camera for shaping',
                                           style: const TextStyle(

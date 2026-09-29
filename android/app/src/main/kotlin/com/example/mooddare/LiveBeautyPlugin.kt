@@ -415,7 +415,7 @@ class LiveBeautyPlugin(
             val input = InputImage.fromBitmap(bitmap, 0)
             val facesTask = detector.process(input)
             val meshTask = try {
-                if (fixtureMode || (renderer?.smooth ?: 0f) > 0f || (renderer?.makeup ?: 0f) > 0f ||
+                if (fixtureMode || (renderer?.smooth ?: 0f) > 0f || (renderer?.makeup?.active == true) ||
                     (renderer?.eyeSize ?: 0f) > 0f || (renderer?.faceSlim ?: 0f) > 0f) meshDetector.process(input)
                 else Tasks.forResult(emptyList<FaceMesh>())
             }
@@ -664,7 +664,7 @@ class LiveBeautyPlugin(
                         warmth = (call.argument<Number>("warmth")?.toFloat() ?: 0f).coerceIn(-1f, 1f)
                         eyeSize = (call.argument<Number>("eyeSize")?.toFloat() ?: 0f).coerceIn(0f, 1f)
                         faceSlim = (call.argument<Number>("faceSlim")?.toFloat() ?: 0f).coerceIn(0f, 1f)
-                        makeup = (call.argument<Number>("makeup")?.toFloat() ?: 0f).coerceIn(0f, 1f)
+                        makeup = MakeupSettings.fromArguments(call.arguments as? Map<*, *> ?: emptyMap<Any, Any>())
                         original = call.argument<Boolean>("original") ?: false
                         if (call.hasArgument("aspectRatio") && !recording) {
                             outputAspect = call.argument<Number>("aspectRatio")?.toFloat()?.coerceIn(.3f, 3f)
@@ -756,7 +756,7 @@ class LiveBeautyPlugin(
         private fun processPhoto(photo: Bitmap, anchor: FloatArray?, request: MethodChannel.Result) {
             if (closed || photoResult !== request) { photo.recycle(); return }
             val output = renderer!!
-            if (output.original || (output.smooth == 0f && output.eyeSize == 0f && output.faceSlim == 0f && output.makeup == 0f)) {
+            if (output.original || (output.smooth == 0f && output.eyeSize == 0f && output.faceSlim == 0f && !output.makeup.active)) {
                 try { renderStill(photo, null, 0f) } finally { photo.recycle() }
                 return
             }
@@ -785,7 +785,7 @@ class LiveBeautyPlugin(
                             "faces" to task.result.size, "candidates" to candidates.size,
                             "quality" to quality, "pitch" to picked?.first?.headEulerAngleX,
                             "yaw" to picked?.first?.headEulerAngleY, "roll" to picked?.first?.headEulerAngleZ)
-                        if (picked != null && quality > 0f && (output.smooth > 0f || output.makeup > 0f || output.eyeSize > 0f || output.faceSlim > 0f)) {
+                        if (picked != null && quality > 0f && (output.smooth > 0f || output.makeup.active || output.eyeSize > 0f || output.faceSlim > 0f)) {
                             handedToMesh = true
                             detectPhotoMesh(photo, picked.second, quality, request, 0)
                         } else renderStill(photo, picked?.second, quality)

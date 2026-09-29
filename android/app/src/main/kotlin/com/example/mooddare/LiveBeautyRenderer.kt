@@ -37,7 +37,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
     var warmth = 0f
     var eyeSize = 0f
     var faceSlim = 0f
-    var makeup = 0f
+    var makeup = MakeupSettings()
     var original = false
     var outputAspect: Float? = null
     var face: FloatArray? = null
@@ -141,7 +141,10 @@ internal class LiveBeautyRenderer(surface: Surface) {
         GLES20.glUniform1i(uniform("geometryMask"), 1)
         GLES20.glUniform1f(uniform("hasGeometry"), if (geometry != null) 1f else 0f)
         GLES20.glUniform4fv(uniform("maskBounds"), 1, geometryMask.bounds, 0)
-        GLES20.glUniform1f(uniform("makeup"), if (original || geometry == null) 0f else makeup)
+        val showMakeup = !original && geometry != null
+        GLES20.glUniform2f(uniform("makeup"), if (showMakeup) makeup.lips else 0f,
+            if (showMakeup) makeup.blush else 0f)
+        GLES20.glUniform3fv(uniform("lipColor"), 1, makeup.color, 0)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         val sourceAspect = sourceWidth.toFloat() / sourceHeight
         if (geometry != null && shapeAspect != sourceAspect) {
@@ -301,7 +304,8 @@ internal class LiveBeautyRenderer(surface: Surface) {
             uniform sampler2D geometryMask;
             uniform vec4 maskBounds;
             uniform float hasGeometry;
-            uniform float makeup;
+            uniform vec2 makeup;
+            uniform vec3 lipColor;
             uniform vec2 stepSize;
             uniform float mirror;
             uniform vec2 crop;
@@ -385,12 +389,13 @@ internal class LiveBeautyRenderer(surface: Surface) {
                         color = mix(color, sum / total, settings.x * settings.w * mask * 0.72);
                     }
                 }
-                if (makeup > 0.0 && settings.w > 0.0) {
+                if ((makeup.x > 0.0 || makeup.y > 0.0) && settings.w > 0.0) {
                     float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
                     // Preserve luminance and local texture rather than paint opaque lipstick.
                     vec3 rose = vec3(0.76, 0.24, 0.36);
                     vec3 tinted = clamp(rose * luma / dot(rose, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
-                    color = mix(color, tinted, contourMask.g * makeup * settings.w * 0.5);
+                    vec3 lips = clamp(lipColor * luma / dot(lipColor, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+                    color = mix(color, lips, contourMask.g * makeup.x * settings.w * 0.5);
                     vec2 leftCheek = mix(eyes.xy, features.xy, 0.45);
                     vec2 rightCheek = mix(eyes.zw, features.xy, 0.45);
                     leftCheek.x += sign(eyes.x - features.z) * face.z * 0.08;
@@ -398,7 +403,7 @@ internal class LiveBeautyRenderer(surface: Surface) {
                     float cheeks = exp(-ellipse(p, leftCheek, face.zw * vec2(0.15, 0.09)) * 2.0) +
                         exp(-ellipse(p, rightCheek, face.zw * vec2(0.15, 0.09)) * 2.0);
                     cheeks *= protect(p, features.zw, face.zw * vec2(0.20, 0.14));
-                    color = mix(color, tinted, min(cheeks, 1.0) * contourMask.r * makeup * settings.w * 0.22);
+                    color = mix(color, tinted, min(cheeks, 1.0) * contourMask.r * makeup.y * settings.w * 0.22);
                 }
                 color = color * exp2(settings.y * 0.6) + vec3(settings.z, 0.0, -settings.z) * (14.0 / 255.0);
                 gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);

@@ -51,12 +51,20 @@ void main() {
               BeautyLens.all.first.settings(0),
             );
             final original = await detectedStill();
-            for (final lens in const [
-              BeautyLens('Lips', makeup: 1),
-              BeautyLens('Eyes', eyeSize: 1),
-              BeautyLens('Jaw', faceSlim: 1),
+            for (final (name, settings) in [
+              ('Rosy', const BeautyLens('Lips', makeup: 1).settings(1)),
+              (
+                'Red lips only',
+                const CustomBeautyLook(
+                  lips: 1,
+                  lipShade: LipShade.red,
+                ).settings(),
+              ),
+              ('Blush only', const CustomBeautyLook(blush: 1).settings()),
+              ('Eyes', const BeautyLens('Eyes', eyeSize: 1).settings(1)),
+              ('Jaw', const BeautyLens('Jaw', faceSlim: 1).settings(1)),
             ]) {
-              await channel.invokeMethod<void>('setLook', lens.settings(1));
+              await channel.invokeMethod<void>('setLook', settings);
               final photo = await detectedStill();
               final diagnostic =
                   (await channel.invokeMapMethod<String, dynamic>(
@@ -64,7 +72,7 @@ void main() {
                       ))!['photoDetection']
                       as Map;
               debugPrint(
-                'Fresh ${lens.name} photo $height, front=$front: $diagnostic',
+                'Fresh $name photo $height, front=$front: $diagnostic',
               );
               expect(diagnostic['matched'], isTrue);
               expect(diagnostic['meshSucceeded'], isTrue);
@@ -81,7 +89,7 @@ void main() {
               expect(
                 difference(original, photo),
                 greaterThan(.02),
-                reason: 'Fresh still detection must retain ${lens.name}',
+                reason: 'Fresh still detection must retain $name',
               );
               expect(photo.height, height);
               final reviewed = img.decodeJpg(
@@ -94,7 +102,7 @@ void main() {
                 difference(reviewedOriginal, reviewed),
                 greaterThan(.02),
                 reason:
-                    'Opening the captured image in the editor must preserve baked ${lens.name}',
+                    'Opening the captured image in the editor must preserve baked $name',
               );
             }
             await channel.invokeMethod<void>('stop');

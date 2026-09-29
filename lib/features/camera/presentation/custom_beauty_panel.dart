@@ -8,6 +8,7 @@ class CustomBeautyPanel extends StatelessWidget {
   final bool enabled, comparing;
   final ValueChanged<BeautyAdjustment> onSelect;
   final ValueChanged<double> onChanged;
+  final ValueChanged<LipShade> onShadeChanged;
   final VoidCallback onReset, onCompare;
 
   const CustomBeautyPanel({
@@ -18,6 +19,7 @@ class CustomBeautyPanel extends StatelessWidget {
     required this.comparing,
     required this.onSelect,
     required this.onChanged,
+    required this.onShadeChanged,
     required this.onReset,
     required this.onCompare,
   });
@@ -74,6 +76,47 @@ class CustomBeautyPanel extends StatelessWidget {
             ),
           ],
         ),
+        if (selected == BeautyAdjustment.lips)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final shade in LipShade.values)
+                  Semantics(
+                    selected: look.lipShade == shade,
+                    child: TextButton.icon(
+                      key: ValueKey('lip_shade_${shade.name}'),
+                      onPressed: enabled && !comparing
+                          ? () => onShadeChanged(shade)
+                          : null,
+                      style: TextButton.styleFrom(
+                        foregroundColor: look.lipShade == shade
+                            ? Colors.white
+                            : Colors.white60,
+                        overlayColor: Colors.transparent,
+                        splashFactory: NoSplash.splashFactory,
+                      ),
+                      icon: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(shade.swatch),
+                        ),
+                        child: look.lipShade == shade
+                            ? const Icon(
+                                Icons.check_rounded,
+                                size: 16,
+                                color: Colors.white,
+                              )
+                            : null,
+                      ),
+                      label: Text(shade.label),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         Row(
           children: [
             SizedBox(

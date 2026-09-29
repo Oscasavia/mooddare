@@ -19,6 +19,9 @@ void main() {
         'light': 0.0,
         'warmth': 0.0,
         'makeup': 0.0,
+        'lipIntensity': 0.0,
+        'blushIntensity': 0.0,
+        'lipShade': 'rose',
         'original': false,
       });
       expect(
@@ -52,6 +55,8 @@ void main() {
           smooth: amount,
           eyes: amount,
           face: amount,
+          lips: amount,
+          blush: amount,
         );
         for (final adjustment in BeautyAdjustment.values) {
           expect(look.amount(adjustment), expected);
@@ -65,6 +70,27 @@ void main() {
       }
     },
   );
+
+  test('lip shade and blush remain independent of each other and shaping', () {
+    for (final shade in LipShade.values) {
+      final look = const CustomBeautyLook(smooth: .4, eyes: .3, face: .2)
+          .withAmount(BeautyAdjustment.lips, .8)
+          .withAmount(BeautyAdjustment.blush, .25)
+          .withLipShade(shade);
+      expect(look.settings()['lipShade'], shade.name);
+      expect(look.settings()['lipIntensity'], .8);
+      expect(look.settings()['blushIntensity'], .25);
+      expect(look.settings()['eyeSize'], .3);
+      expect(look.settings()['smooth'], .4);
+      expect(look.settings()['faceSlim'], .2);
+      expect(look.withAmount(BeautyAdjustment.lips, 0).blush, .25);
+      expect(look.withAmount(BeautyAdjustment.blush, 0).lipShade, shade);
+      expect(look.settings(original: true)['original'], isTrue);
+    }
+    expect(const CustomBeautyLook(lips: .1).isOriginal, isFalse);
+    expect(const CustomBeautyLook(blush: .1).isOriginal, isFalse);
+    expect(const CustomBeautyLook(lipShade: LipShade.red).isOriginal, isTrue);
+  });
 
   test('zero strength disables every lens and strength is bounded', () {
     for (final lens in BeautyLens.all) {
