@@ -442,3 +442,29 @@ restoration with a new working media link, and continued rejection of the origin
 link against production Firestore/Storage using isolated temporary content. All
 test media, reports, archive and audit records were cleaned up. No real user post
 was changed. The owner confirmed successful real Google dashboard sign-in.
+
+## Reviewed mood catalog — September 29, 2026
+
+Expanded and rewrote the catalog to 318 original prompts across 29 collections:
+12 per free/holiday card and 10 per locked premium card. Prompts use plain English,
+short capture outcomes and optional gentle activities; they make no treatment
+promises. Five gentle breaths remains in Relaxed, with recording afterward.
+The research sources and authoring rules are in `docs/DARE_CONTENT_GUIDE.md`.
+
+Published all 27 existing remote mood lists atomically with update-time
+preconditions and a temporary before backup; verified the resulting arrays.
+Updates affect only `dareList`, preserving IDs, tiers and lock metadata.
+Christmas/New Year and offline starter cards use the generated reviewed source.
+Existing posts, saved/sent dares and the active weekly challenge retain their text.
+Compatibility rules now reject client writes to the curated catalog, including
+nested bypasses; authenticated reading still works.
+
+Validation: 419 Flutter tests passed (87.97% Dart line coverage), 77 Firebase
+rules tests passed under strict/compatibility policies, four editorial-validator
+tests and three publisher tests passed. Formatting, analysis and the ordinary
+arm64 Android build passed. Editorial checks and source/bundle parity run in CI.
+The checks support human review; they cannot prove all prompts safe or clinically
+effective. Activities are informed by NHS/WHO guidance, not clinical validation
+of MoodDare's individual dares.
+The tested compatibility rules are deployed and the ordinary APK was installed
+in place on the connected Samsung, preserving app data.

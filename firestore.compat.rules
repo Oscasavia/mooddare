@@ -39,11 +39,11 @@ service cloud.firestore {
         && request.resource.data.get('coverColor', 'lavender') in ['lavender','midnight','rose','sage','ocean','sunset'];
     }
     match /{collection}/{id} {
-      allow read: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts']);
-      allow delete: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts']) && (collection != 'users' || owner(id));
-      allow create, update: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts']) && validUsernameChange(collection, id) && validCoverChange(collection, id);
+      allow read: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts', 'dares']);
+      allow delete: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts', 'dares']) && (collection != 'users' || owner(id));
+      allow create, update: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts', 'dares']) && validUsernameChange(collection, id) && validCoverChange(collection, id);
       match /{subcollection}/{document=**} {
-        allow read, write: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts']) && !(subcollection in ['comments', 'replies', 'following', 'followers', 'blocked', 'savedDares', 'notifications', 'preferences']);
+        allow read, write: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts', 'dares']) && !(subcollection in ['comments', 'replies', 'following', 'followers', 'blocked', 'savedDares', 'notifications', 'preferences']);
       }
     }
     match /users/{uid}/blocked/{authorId} {
@@ -145,6 +145,10 @@ service cloud.firestore {
         && !existsAfter(/databases/$(database)/documents/users/$(follower)/following/$(target));
     }
     // Published by trusted administration only, never by an app client.
+    match /dares/{id} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
     match /weeklyDares/{weekId} {
       allow read: if signedIn();
       allow write: if false;

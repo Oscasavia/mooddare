@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:mooddare/models/mood_model.dart';
 import '../../domain/mood_catalog.dart';
+import '../../domain/curated_dares.dart';
 
 class DaresRepository {
   final Future<List<MoodModel>> Function() _loadMoods;
@@ -120,11 +121,7 @@ class DaresRepository {
       season: 'Christmas',
       description:
           'Festive details, thoughtful gestures, and a little holiday magic.',
-      dareList: [
-        'Capture a decoration that makes a place feel festive.',
-        'Make a small handmade decoration using something you already have.',
-        'Write a thoughtful holiday note for someone you appreciate.',
-      ],
+      dareList: curatedDares['christmas']!,
     ),
     MoodModel(
       id: 'season-new-year',
@@ -136,11 +133,7 @@ class DaresRepository {
       season: 'New Year',
       description:
           'Fresh starts, favorite memories, and something to look forward to.',
-      dareList: [
-        'Capture one small thing you want to bring into your new year.',
-        'Write a kind note to your future self.',
-        'Recreate a favorite moment from the past year in a photo or short video.',
-      ],
+      dareList: curatedDares['new year']!,
     ),
   ];
 
@@ -153,11 +146,7 @@ class DaresRepository {
       pack: 'basic',
       color: const Color(0xFFBCA7F3),
       isLocked: false,
-      dareList: [
-        'Turn three things on your desk into a tiny sculpture.',
-        'Photograph something ordinary from an unexpected angle.',
-        'Draw your mood without lifting your pen.',
-      ],
+      dareList: curatedDares['creative']!,
     ),
     MoodModel(
       id: 'happy',
@@ -166,11 +155,7 @@ class DaresRepository {
       pack: 'basic',
       color: const Color(0xFFF0CE7D),
       isLocked: false,
-      dareList: [
-        'Capture something that made you smile today.',
-        'Dance to the chorus of your favorite song.',
-        'Send a friend a specific compliment.',
-      ],
+      dareList: curatedDares['happy']!,
     ),
     MoodModel(
       id: 'chill',
@@ -179,11 +164,7 @@ class DaresRepository {
       pack: 'basic',
       color: const Color(0xFF9DC7B2),
       isLocked: false,
-      dareList: [
-        'Make your favorite drink and take a quiet moment.',
-        'Find a little patch of nature and photograph it.',
-        'Stretch gently for one minute.',
-      ],
+      dareList: curatedDares['chill']!,
     ),
     MoodModel(
       id: 'curious',
@@ -192,11 +173,7 @@ class DaresRepository {
       pack: 'basic',
       color: const Color(0xFF9EBCE8),
       isLocked: false,
-      dareList: [
-        'Find an object you have never noticed in your room.',
-        'Learn one new word and use it in a sentence.',
-        'Photograph an interesting shadow.',
-      ],
+      dareList: curatedDares['curious']!,
     ),
     MoodModel(
       id: 'silly',
@@ -205,11 +182,7 @@ class DaresRepository {
       pack: 'basic',
       color: const Color(0xFFE9A9BD),
       isLocked: false,
-      dareList: [
-        'Give an everyday object a dramatic movie introduction.',
-        'Draw a self-portrait with your other hand.',
-        'Invent a five-second celebration dance.',
-      ],
+      dareList: curatedDares['silly']!,
     ),
     MoodModel(
       id: 'energized',
@@ -218,11 +191,7 @@ class DaresRepository {
       pack: 'basic',
       color: const Color(0xFFF0B38D),
       isLocked: false,
-      dareList: [
-        'Tidy one small corner and capture the result.',
-        'Take a short walk and find three different colors.',
-        'Try a new pose for your next selfie.',
-      ],
+      dareList: curatedDares['energized']!,
     ),
   ];
 }

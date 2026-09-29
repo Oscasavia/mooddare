@@ -726,3 +726,24 @@ for (const policy of ['firestore.rules','firestore.compat.rules']) {
     await assertSucceeds(getDoc(doc(db('bob'),'posts/one/comments/c')));
   });
 }
+
+for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
+  test(`${policy}: reviewed dare catalog is readable but cannot be rewritten by clients`, async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({projectId: 'demo-mooddare',
+      firestore: {rules: await readFile(new URL(`../../${policy}`, import.meta.url), 'utf8')},
+      storage: {rules: await readFile(new URL('../../storage.rules', import.meta.url), 'utf8')},
+    });
+    await env.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), 'dares/relaxed'), {moodName: 'Relaxed', pack: 'basic', dareList: ['Take a photo.']});
+    });
+    const alice = db('alice');
+    await assertSucceeds(getDoc(doc(alice, 'dares/relaxed')));
+    await assertSucceeds(getDocs(collection(alice, 'dares')));
+    await assertFails(updateDoc(doc(alice, 'dares/relaxed'), {dareList: ['Unreviewed prompt']}));
+    await assertFails(deleteDoc(doc(alice, 'dares/relaxed')));
+    await assertFails(setDoc(doc(alice, 'dares/new'), {moodName: 'New', dareList: ['Unreviewed']}));
+    await assertFails(setDoc(doc(alice, 'dares/relaxed/overrides/new'), {dareList: ['Bypass']}));
+    await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'dares/relaxed')));
+  });
+}

@@ -58,6 +58,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - run: python3 -m unittest discover -s tooling/dares -p "*_test.py"
+      - run: node --test tooling/dares/publish.test.cjs
       - run: node --test tooling/weekly-dares/publish.test.cjs
       - run: npm ci --ignore-scripts --prefix functions
       - run: npm ci --ignore-scripts --prefix tooling/rules-tests

@@ -188,7 +188,7 @@ void main() {
       ]);
       for (final seasonal in DaresRepository.seasonalMoods) {
         expect(seasonal.isAvailable, isTrue);
-        expect(seasonal.dareList, hasLength(3));
+        expect(seasonal.dareList.length, greaterThanOrEqualTo(10));
       }
     },
   );
