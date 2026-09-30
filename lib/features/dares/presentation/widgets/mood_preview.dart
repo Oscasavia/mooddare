@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../models/mood_model.dart';
+import '../../../membership/membership_preview.dart';
 
 Future<void> showMoodPreview(BuildContext context, MoodModel mood) =>
     showModalBottomSheet<void>(
@@ -65,6 +66,17 @@ class MoodPreviewContent extends StatelessWidget {
         style: const TextStyle(color: Colors.white60, height: 1.5),
       ),
       const SizedBox(height: 24),
+      if (membershipPreviewEnabled && mood.isPremium) ...[
+        TextButton(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => MembershipPreviewScreen(initialTier: mood.tier),
+            ),
+          ),
+          child: const Text('Preview membership ideas'),
+        ),
+        const SizedBox(height: 8),
+      ],
       FilledButton(
         onPressed: () => Navigator.maybePop(context),
         child: const Text('Back to moods'),

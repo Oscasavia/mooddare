@@ -12,6 +12,7 @@ import 'package:mooddare/features/settings/presentation/about_screen.dart';
 import 'package:mooddare/features/settings/presentation/licenses_screen.dart';
 import 'package:mooddare/features/settings/presentation/legal_screen.dart';
 import 'package:mooddare/features/auth/data/welcome_history.dart';
+import 'package:mooddare/features/membership/membership_preview.dart';
 
 class SettingsScreen extends StatefulWidget {
   final SettingsRepository? repository;
@@ -240,6 +241,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ),
+                if (membershipPreviewEnabled)
+                  _section('Design preview', [
+                    _tile(
+                      'Membership preview',
+                      Icons.workspace_premium_outlined,
+                      () => _open(const MembershipPreviewScreen()),
+                      subtitle: 'Free, Daring and Epic · No purchases',
+                    ),
+                  ]),
                 _section('Account', [
                   _tile(
                     'Edit profile',

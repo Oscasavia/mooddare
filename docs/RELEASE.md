@@ -468,3 +468,27 @@ effective. Activities are informed by NHS/WHO guidance, not clinical validation
 of MoodDare's individual dares.
 The tested compatibility rules are deployed and the ordinary APK was installed
 in place on the connected Samsung, preserving app data.
+
+## Membership comparison prototype — September 29, 2026
+
+Added a development-only Free/Daring/Epic comparison, tier details and a
+monthly/yearly selector. Proposed Daring benefits include new beauty looks;
+Epic adds future AR and profile colors. Existing lenses (including Golden Hour),
+camera controls and social features remain available. The preview makes no
+purchases, saves no plan selection and grants no entitlements. No prices or
+unimplemented purchase/restore buttons are presented.
+
+Both entry points (Settings and locked mood previews) require debug mode plus
+`--dart-define=MOODDARE_MEMBERSHIP_PREVIEW=true`. Ordinary builds default to
+hidden; release/profile builds cannot expose these entries even with the flag.
+The comparison lists what each tier includes and labels paid additions as
+planned. See `docs/MEMBERSHIPS.md` for benefits, rollout gates and billing backlog.
+
+Validation: 429 Flutter tests passed with 88.02% Dart line coverage. All ten
+membership tests also passed with the opt-in flag, covering narrow/tablet layouts,
+2x text scaling, temporary tier/period changes, entry visibility and return
+navigation. Android emulator acceptance passed for Settings → preview → Epic →
+yearly → comparison → back, without account mutations. Analysis and builds
+passed. Installed the ordinary app with the preview flag on Samsung in place;
+rebuilt the standard sharing APK without the flag afterward. No backend, store
+products, rules or billing services were changed.
