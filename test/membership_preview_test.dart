@@ -1,3 +1,6 @@
+import 'package:mooddare/features/profile/presentation/screens/profile_screen.dart';
+import 'profile_updates_test.dart' show ProfileChanges, ProfilePosts;
+import 'support/social_fakes.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -77,15 +80,24 @@ void main() {
           expect(tester.takeException(), isNull);
         }
         for (final label in [
-          'At a glance',
+          'Find your next dare',
           'Current lenses & My look',
-          'Epic moods, new AR & profile colors',
-          'Back to MoodDare',
+          'New playful AR & profile colors',
+          'Better together',
         ]) {
           await reveal(tester, find.text(label));
           expect(tester.takeException(), isNull);
         }
-        await tester.tap(find.text('Back to MoodDare'));
+        await tester.tap(find.text('View plan options'));
+        await tester.pumpAndSettle();
+        await reveal(tester, find.byKey(const ValueKey('membership_yearly')));
+        await tester.tap(find.byKey(const ValueKey('membership_yearly')));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        await reveal(tester, find.text('Keep exploring'));
+        await tester.tap(find.text('Keep exploring'));
+        await tester.pumpAndSettle();
+        await tester.pageBack();
         await tester.pumpAndSettle();
         expect(find.text('Open preview'), findsOneWidget);
       });
@@ -96,6 +108,8 @@ void main() {
     (tester) async {
       final lenses = [for (final lens in BeautyLens.all) lens.settings(1)];
       await openPreview(tester);
+      await tester.tap(find.text('View plan options'));
+      await tester.pumpAndSettle();
       final yearly = find.byKey(const ValueKey('membership_yearly'));
       await reveal(tester, yearly);
       await tester.tap(yearly);
@@ -104,6 +118,8 @@ void main() {
         find.text('One payment per year · Pricing to come'),
         findsOneWidget,
       );
+      await tester.tap(find.text('Keep exploring'));
+      await tester.pumpAndSettle();
       final free = find.byKey(const ValueKey('membership_basic'));
       await reveal(tester, free);
       await tester.tap(free);
@@ -114,28 +130,94 @@ void main() {
       await reveal(tester, epic);
       await tester.tap(epic);
       await tester.pumpAndSettle();
+      await tester.tap(find.text('View plan options'));
+      await tester.pumpAndSettle();
       expect(
         find.text('One payment per year · Pricing to come'),
         findsOneWidget,
       );
-      expect(find.text('Everything in Daring'), findsOneWidget);
+      await tester.tap(find.text('Keep exploring'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Everything in Daring, with more room to play.'),
+        findsOneWidget,
+      );
       for (final mood in DaresRepository.premiumPreviews) {
         expect(mood.isAvailable, isFalse);
         expect(mood.isLocked, isTrue);
       }
       expect([for (final lens in BeautyLens.all) lens.settings(1)], lenses);
-      await reveal(tester, find.text('Back to MoodDare'));
-      await tester.tap(find.text('Back to MoodDare'));
+      await tester.pageBack();
       await tester.pumpAndSettle();
       await tester.tap(find.text('Open preview'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('View plan options'));
       await tester.pumpAndSettle();
       expect(
         find.text('One payment per month · Pricing to come'),
         findsOneWidget,
       );
+      await tester.tap(find.text('Keep exploring'));
+      await tester.pumpAndSettle();
       expect(find.text('A little more adventure.'), findsOneWidget);
     },
   );
+  testWidgets('swiping plans updates comparisons and action label', (
+    tester,
+  ) async {
+    await openPreview(tester);
+    await tester.drag(
+      find.byKey(const ValueKey('membership_carousel')),
+      const Offset(-320, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Epic · Coming soon'), findsOneWidget);
+    expect(find.text('Starts with Epic · Planned'), findsNothing);
+    await tester.drag(
+      find.byKey(const ValueKey('membership_carousel')),
+      const Offset(320, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Daring · Coming soon'), findsOneWidget);
+    expect(find.text('Starts with Epic · Planned'), findsNWidgets(2));
+  });
+  for (final self in [true, false]) {
+    testWidgets('profile banner gate and navigation self=$self', (
+      tester,
+    ) async {
+      final users = ProfileChanges();
+      final social = MemorySocial();
+      addTearDown(users.updates.close);
+      addTearDown(social.changed.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.build(),
+          home: ProfileScreen(
+            isGuest: false,
+            userId: self ? null : 'other',
+            repository: users,
+            postRepository: ProfilePosts(),
+            socialRepository: social,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final banner = find.byKey(const ValueKey('profile_membership_banner'));
+      expect(
+        banner,
+        self && membershipPreviewEnabled ? findsOneWidget : findsNothing,
+      );
+      if (self && membershipPreviewEnabled) {
+        await reveal(tester, banner);
+        await tester.tap(banner);
+        await tester.pumpAndSettle();
+        expect(find.byType(MembershipPreviewScreen), findsOneWidget);
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        expect(find.byType(ProfileScreen), findsOneWidget);
+      }
+    });
+  }
   testWidgets(
     'settings entry follows development gate and preserves account actions',
     (tester) async {

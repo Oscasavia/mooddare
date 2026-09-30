@@ -50,6 +50,8 @@ void main() {
       await screenshot('membership-daring');
       await tester.tap(find.byKey(const ValueKey('membership_epic')));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('View plan options'));
+      await tester.pumpAndSettle();
       final yearly = find.byKey(const ValueKey('membership_yearly'));
       await tester.ensureVisible(yearly);
       await tester.tap(yearly);
@@ -59,11 +61,12 @@ void main() {
         findsOneWidget,
       );
       await screenshot('membership-epic');
-      await tester.ensureVisible(find.text('At a glance'));
+      await tester.tap(find.text('Keep exploring'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Make it your look'));
       await tester.pumpAndSettle();
       await screenshot('membership-comparison');
-      await tester.ensureVisible(find.text('Back to MoodDare'));
-      await tester.tap(find.text('Back to MoodDare'));
+      await tester.pageBack();
       await tester.pumpAndSettle();
       expect(find.byType(SettingsScreen), findsOneWidget);
       expect(repo.deletions + repo.signOuts, 0);

@@ -75,3 +75,17 @@ References checked September 29, 2026:
 tier/cadence selection, navigation, narrow/large-text layouts and unchanged lens
 settings. Repeat with `--dart-define=MOODDARE_MEMBERSHIP_PREVIEW=true` to exercise
 both development entry points. Existing mood tests retain locked-access checks.
+
+## Updated preview flow
+
+The owner's profile now has a Mood-wink banner below the profile statistics,
+above Dares/Saved/Stats. It follows the same opt-in/debug gate as Settings and
+locked mood previews; other users' profiles and guest profiles never show it.
+
+Swipe the Free/Daring/Epic cards or tap their labels to change tiers. The same
+benefit groups remain visible across plans: dares, camera looks and community.
+Checks indicate inclusion in the selected concept; locks name the required tier.
+Planned benefits are explicitly labeled, so checks do not imply current access.
+A fixed bottom action opens a separate monthly/yearly chooser. Closing it returns
+to the comparison and preserves only the current screen's temporary selection.
+The free plan returns to MoodDare. No subscribe, restore or payment action exists.

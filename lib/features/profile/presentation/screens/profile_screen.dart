@@ -1,3 +1,4 @@
+import 'package:mooddare/features/membership/membership_preview.dart';
 import '../widgets/profile_cover_header.dart';
 import 'package:mooddare/features/dares/data/repositories/dare_library_repository.dart';
 import 'package:mooddare/features/dares/presentation/screens/dare_library_screen.dart';
@@ -399,6 +400,11 @@ class _ProfileScreenState extends State<ProfileScreen>
             child: FollowButton(userId: user.id, repository: _social),
           ),
         const SizedBox(height: 16),
+        if (_self && !widget.isGuest && membershipPreviewEnabled)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 20),
+            child: MembershipPreviewBanner(),
+          ),
         if (widget.isGuest && widget.userId == null) const SignInPromptCard(),
       ],
     );

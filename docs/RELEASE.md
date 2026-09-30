@@ -492,3 +492,26 @@ yearly → comparison → back, without account mutations. Analysis and builds
 passed. Installed the ordinary app with the preview flag on Samsung in place;
 rebuilt the standard sharing APK without the flag afterward. No backend, store
 products, rules or billing services were changed.
+
+## Membership preview flow refinement — September 29, 2026
+
+Reworked the design into swipeable tier cards with synchronized label controls,
+grouped check/lock benefit comparisons and a fixed bottom action. Plan options
+open a separate monthly/yearly bottom sheet. MoodDare colors, Mood-wink and
+rounded borderless surfaces retain the app's visual identity. Existing feature
+access is unchanged; paid benefits stay clearly planned.
+
+Added an own-profile banner beneath the profile statistics. The banner uses the
+same debug-only opt-in as the original prototype and is absent on other profiles
+and guest profiles. No new public paywall or billing backend is enabled.
+
+Validation: 432 app tests passed at 88.07% line coverage; 13 opt-in preview tests
+passed including swipe/control synchronization, narrow widths, 2x text, sheet
+navigation, ephemeral selections, profile visibility and return navigation.
+Enlarged-text tests caught and fixed a plan-card overflow. Visually inspected the
+Android plan screen. The emulator's previously documented 16-KB compatibility
+notice still applies; native dependencies were not changed in this UI task.
+Android flow acceptance passed through plan selection, yearly options and return
+navigation. Formatting, analysis and both APK builds passed. Installed the opt-in
+preview on Samsung preserving app data; rebuilt the ordinary sharing APK with
+preview entries hidden afterward.
