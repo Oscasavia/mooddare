@@ -515,3 +515,26 @@ Android flow acceptance passed through plan selection, yearly options and return
 navigation. Formatting, analysis and both APK builds passed. Installed the opt-in
 preview on Samsung preserving app data; rebuilt the ordinary sharing APK with
 preview entries hidden afterward.
+
+## Restore client uploads after moderation rollout — September 29, 2026
+
+Phone logs showed Storage 403/unauthorized responses. The live rules correctly
+used Firestore moderation checks, but the Storage service agent lacked
+`roles/firebaserules.firestoreServiceAgent`. Added only that service role using
+a versioned IAM policy update. Owner, moderation, size and MIME checks remain
+unchanged. Live authenticated JPEG/MP4 permission probes succeeded; a cross-user
+upload still returned 403. Removed the temporary test account and objects. The
+owner retried the original butterfly recording and confirmed it posted.
+
+Added a read-only-by-default deployment preflight with an explicit repair mode
+and three IAM planner regression tests. It detects an infrastructure dependency
+not covered by local rules emulation. See `docs/MODERATION.md` for operation.
+PreviewScreen now distinguishes permission, session, quota, cancellation and
+network failures, preserves validation messages and avoids exposing raw server
+error details. A UI regression confirms a denied upload keeps its capture and
+reuses its post ID on successful retry.
+
+Validation: 435 Flutter tests passed, 88.11% line coverage, three IAM planner
+tests passed, analysis and the Android build passed. No lens rendering or camera
+capture code changed; no rules were loosened and no real user content was changed
+by the diagnostic probe.

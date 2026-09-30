@@ -125,3 +125,25 @@ restoration with a new working media link, and continued rejection of the origin
 link against production Firestore/Storage using isolated temporary content. All
 test media, reports, archive and audit records were cleaned up. No real user post
 was changed. The owner confirmed successful real Google dashboard sign-in.
+
+### Storage uploads and cross-service IAM
+
+Storage moderation rules read Firestore's `accountRestrictions` and
+`moderationPosts`. The Firebase Storage service agent also needs
+`roles/firebaserules.firestoreServiceAgent` on the project. Without that role,
+valid client photo/video uploads fail with 403 even when emulator rules tests
+pass. CLI non-interactive deployments can skip the cross-service IAM prompt.
+
+Run `node tooling/storage/check-access.cjs` before deploying rules that use
+Firestore; it exits nonzero when the role is missing. The explicit `--apply`
+option adds only that role for MoodDare's Storage service agent, preserving
+existing bindings, conditions and the IAM etag. Its change planner has tests.
+Do not relax owner checks or moderation conditions to work around missing IAM.
+
+On September 29 this missing role was repaired. Live tests used a temporary
+Firebase Auth user and the Firebase client authentication header: own JPEG/MP4
+uploads succeeded, another user's path returned 403, and all temporary objects
+and the test account were deleted. No feed post was created by the test. The
+owner also confirmed retrying the original butterfly video successfully posted.
+
+Reference: https://firebase.google.com/docs/rules/manage-deploy#manage_permissions_for_cross-service_cloud_storage_security_rules

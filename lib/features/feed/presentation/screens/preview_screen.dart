@@ -16,6 +16,7 @@ import '../../../camera/presentation/photo_crop_screen.dart';
 import '../../../camera/presentation/photo_adjustments_panel.dart';
 import '../../../camera/presentation/photo_review_frame.dart';
 import '../../data/repositories/post_repository.dart';
+import '../../domain/post_error_message.dart';
 
 class PreviewScreen extends StatefulWidget {
   final File mediaFile;
@@ -241,10 +242,10 @@ class _PreviewScreenState extends State<PreviewScreen>
               : box.localToGlobal(Offset.zero) & box.size,
         );
       }
-    } catch (_) {
+    } catch (error) {
       _message(
         action == 'post'
-            ? 'Could not post. Check your connection and try again.'
+            ? postErrorMessage(error)
             : action == 'save'
             ? 'Could not save. Check photo permissions in Settings.'
             : 'Could not share. Please try again.',
