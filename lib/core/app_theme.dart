@@ -4,7 +4,7 @@ class AppTheme {
   static const background = Color(0xFF0D0E14);
   static const surface = Color(0xFF191B25);
   static const accent = Color(0xFFC5B4FF);
-  static const likedHeart = Color(0xFFE8868E);
+  static const likedHeart = Color(0xFFF05264);
 
   static ThemeData build() {
     final scheme = ColorScheme.fromSeed(

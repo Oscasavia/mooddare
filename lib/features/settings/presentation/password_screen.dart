@@ -1,3 +1,4 @@
+import 'package:mooddare/core/widgets/compact_switch_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:mooddare/core/user_message.dart';
 import '../data/settings_repository.dart';
@@ -112,7 +113,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
               validator: (v) =>
                   v != _next.text ? 'The passwords do not match.' : null,
             ),
-            SwitchListTile(
+            CompactSwitchTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Show passwords'),
               value: _visible,

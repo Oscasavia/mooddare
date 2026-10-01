@@ -1,3 +1,4 @@
+import 'package:mooddare/core/widgets/compact_switch_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:mooddare/features/settings/data/settings_repository.dart';
 import '../data/notification_repository.dart';
@@ -72,7 +73,7 @@ class _NotificationSettingsScreenState
               'dares': 'Dares from friends',
               'weeklyDares': 'Weekly community dare',
             }.entries)
-              SwitchListTile(
+              CompactSwitchTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(entry.value),
                 value: s.data![entry.key] ?? true,
@@ -81,7 +82,7 @@ class _NotificationSettingsScreenState
                     : (v) => _run(() => _repo.setPreference(entry.key, v)),
               ),
             const SizedBox(height: 16),
-            SwitchListTile(
+            CompactSwitchTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Phone alerts'),
               subtitle: const Text(
@@ -112,7 +113,21 @@ class _NotificationSettingsScreenState
               icon: const Icon(Icons.notifications_active_outlined),
               label: const Text('Enable on this device'),
             ),
-            TextButton(
+            const SizedBox(height: 8),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                side: BorderSide(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: .4),
+                  width: .5,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                minimumSize: const Size(48, 48),
+              ),
               onPressed: _busy
                   ? null
                   : () => _run(

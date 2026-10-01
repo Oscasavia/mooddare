@@ -1,3 +1,4 @@
+import 'package:mooddare/core/app_theme.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,6 +34,12 @@ void main() {
       await openFeed(tester, repo);
       await doubleTapPost(tester);
       expect(find.byKey(const ValueKey('double_tap_heart')), findsOneWidget);
+      expect(
+        tester
+            .widget<Icon>(find.byKey(const ValueKey('double_tap_heart')))
+            .color,
+        AppTheme.likedHeart,
+      );
       await doubleTapPost(tester);
       expect(repo.likes, 1);
       repo.pending.completeError(StateError('Offline'));
@@ -70,6 +77,7 @@ void main() {
           await doubleTapPost(tester);
           final heart = find.byKey(const ValueKey('double_tap_heart'));
           expect(heart, findsOneWidget);
+          expect(tester.widget<Icon>(heart).color, AppTheme.likedHeart);
           expect(
             tester.getCenter(heart),
             tester.getCenter(
@@ -81,6 +89,7 @@ void main() {
           expect(heart, findsNothing);
           await doubleTapPost(tester);
           expect(heart, findsOneWidget);
+          expect(tester.widget<Icon>(heart).color, AppTheme.likedHeart);
           expect(repo.likes, 1);
           await tester.pumpAndSettle();
           await tester.tap(find.byTooltip('Unlike'));

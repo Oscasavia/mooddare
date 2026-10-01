@@ -233,6 +233,18 @@ void main() {
         findsOneWidget,
       );
       await tapRow(tester, 'Open phone settings');
+      final phoneSettings = find.ancestor(
+        of: find.text('Open phone settings'),
+        matching: find.byWidgetPredicate((w) => w is OutlinedButton),
+      );
+      final border = tester
+          .widget<OutlinedButton>(phoneSettings)
+          .style!
+          .side!
+          .resolve({});
+      expect(border!.width, .5);
+      expect(border.style, BorderStyle.solid);
+
       expect(
         find.textContaining('Could not update notifications'),
         findsOneWidget,
