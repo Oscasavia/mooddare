@@ -1,12 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:firebase_storage_mocks/firebase_storage_mocks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mooddare/features/user/data/repositories/user_repository.dart';
 
-class UserWithoutMetadata extends MockUser {
-  UserWithoutMetadata() : super(uid: 'new', email: 'private@example.invalid');
+class UserWithoutMetadata extends Fake implements User {
+  @override
+  String get uid => 'new';
+  @override
+  String? get email => 'private@example.invalid';
   @override
   String? get displayName => null;
   @override
@@ -66,7 +70,7 @@ void main() {
       final user = UserWithoutMetadata();
       final repo = UserRepository(
         firestore: db,
-        auth: MockFirebaseAuth(mockUser: user, signedIn: true),
+        auth: MockFirebaseAuth(),
         storage: MockFirebaseStorage(),
       );
       await repo.upsertUser(user);
