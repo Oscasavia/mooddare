@@ -149,7 +149,7 @@ void main() {
       expect(find.text('Send dare'), findsOneWidget);
       final sendButton = find.ancestor(
         of: find.text('Send dare'),
-        matching: find.byWidgetPredicate((widget) => widget is TextButton),
+        matching: find.byWidgetPredicate((widget) => widget is OutlinedButton),
       );
       expect(
         find.descendant(
@@ -165,6 +165,13 @@ void main() {
         ),
         findsNothing,
       );
+      final border = tester
+          .widget<OutlinedButton>(sendButton)
+          .style!
+          .side!
+          .resolve({});
+      expect(border!.width, .5);
+      expect(border.style, BorderStyle.solid);
       await tester.ensureVisible(find.byTooltip('Save dare'));
       await tester.tap(find.byTooltip('Save dare'));
       await tester.pumpAndSettle();

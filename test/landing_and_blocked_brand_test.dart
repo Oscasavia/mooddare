@@ -7,7 +7,7 @@ import 'package:mooddare/features/auth/presentation/screens/auth_form_screen.dar
 import 'package:mooddare/features/auth/presentation/screens/welcome_screen.dart';
 import 'package:mooddare/features/auth/presentation/widgets/welcome_artwork.dart';
 import 'package:mooddare/features/profile/presentation/screens/blocked_accounts_screen.dart';
-import 'entry_polish_test.dart' show mount, ProfileMemory;
+import 'entry_polish_test.dart' show mount, ProfileMemory, tapWelcomeSignIn;
 import 'support/moments_fakes.dart';
 
 class BlockedPosts extends MemoryPosts {
@@ -44,7 +44,9 @@ void main() {
           } else {
             expect(art.bottom, lessThan(title.top));
           }
-          expect(find.byType(MoodWink), findsNWidgets(3));
+          expect(find.byType(MoodWink), findsOneWidget);
+          expect(find.byIcon(Icons.auto_awesome_rounded), findsNothing);
+          expect(find.byType(TextButton), findsNothing);
           expect(find.text('Explore as a guest'), findsNothing);
           for (final signup in [true, false]) {
             final button = find.text(
@@ -52,7 +54,11 @@ void main() {
             );
             await tester.ensureVisible(button);
             await tester.pumpAndSettle();
-            await tester.tap(button);
+            if (signup) {
+              await tester.tap(button);
+            } else {
+              await tapWelcomeSignIn(tester);
+            }
             await tester.pumpAndSettle();
             expect(
               tester.widget<AuthFormScreen>(find.byType(AuthFormScreen)).signUp,

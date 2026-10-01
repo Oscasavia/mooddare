@@ -1,3 +1,4 @@
+import 'package:flutter/rendering.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -133,6 +134,20 @@ Future<void> profile(
   await tester.pump(const Duration(milliseconds: 400));
 }
 
+Future<void> tapWelcomeSignIn(WidgetTester tester) async {
+  final label = find.text('Already a member? Sign in');
+  final rich = find.descendant(of: label, matching: find.byType(RichText));
+  final paragraph = tester.renderObject<RenderParagraph>(rich);
+  final text = paragraph.text.toPlainText();
+  final start = text.indexOf('Sign in');
+  final box = paragraph
+      .getBoxesForSelection(
+        TextSelection(baseOffset: start, extentOffset: text.length),
+      )
+      .first;
+  await tester.tapAt(paragraph.localToGlobal(box.toRect().center));
+}
+
 void main() {
   for (final scale in [1.0, 2.0]) {
     testWidgets(
@@ -159,7 +174,11 @@ void main() {
           );
           await tester.ensureVisible(action);
           await tester.pumpAndSettle();
-          await tester.tap(action);
+          if (signup) {
+            await tester.tap(action);
+          } else {
+            await tapWelcomeSignIn(tester);
+          }
           await tester.pumpAndSettle();
           expect(
             tester.widget<AuthFormScreen>(find.byType(AuthFormScreen)).signUp,

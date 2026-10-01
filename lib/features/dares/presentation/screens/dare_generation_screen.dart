@@ -325,7 +325,19 @@ class _DareDisplayScreenState extends State<DareDisplayScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        TextButton.icon(
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            side: BorderSide(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primary.withValues(alpha: .4),
+                              width: .5,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
                           onPressed: hasDares && !_openingCamera
                               ? () => showSendDare(
                                   context,

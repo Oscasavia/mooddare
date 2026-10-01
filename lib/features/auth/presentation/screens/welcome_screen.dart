@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:mooddare/core/widgets/mooddare_wordmark.dart';
 import 'package:mooddare/core/widgets/legal_notice.dart';
@@ -6,8 +7,19 @@ import '../widgets/welcome_arrow.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
 
-class WelcomeScreen extends StatelessWidget {
+class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
+  @override
+  State<WelcomeScreen> createState() => _WelcomeScreenState();
+}
+
+class _WelcomeScreenState extends State<WelcomeScreen> {
+  final _signInLink = TapGestureRecognizer();
+  @override
+  void dispose() {
+    _signInLink.dispose();
+    super.dispose();
+  }
 
   Widget _brand(double width) => Align(
     alignment: Alignment.centerLeft,
@@ -55,40 +67,31 @@ class WelcomeScreen extends StatelessWidget {
           ),
         ),
       ),
-      const SizedBox(height: 8),
-      Center(
-        child: TextButton(
-          style: TextButton.styleFrom(
-            splashFactory: NoSplash.splashFactory,
-            overlayColor: Colors.transparent,
-          ),
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
-          ),
-          child: Text.rich(
-            TextSpan(
-              children: [
-                const TextSpan(
-                  text: 'Already a member? ',
-                  style: TextStyle(
-                    color: Colors.white60,
-                    fontWeight: FontWeight.normal,
-                  ),
-                ),
-                TextSpan(
-                  text: 'Sign in',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ],
+      const SizedBox(height: 24),
+      Text.rich(
+        TextSpan(
+          children: [
+            const TextSpan(
+              text: 'Already a member? ',
+              style: TextStyle(color: Colors.white60),
             ),
-            textAlign: TextAlign.center,
-          ),
+            TextSpan(
+              text: 'Sign in',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+              recognizer: _signInLink
+                ..onTap = () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                ),
+            ),
+          ],
         ),
+        textAlign: TextAlign.center,
       ),
-      const SizedBox(height: 8),
+      const SizedBox(height: 24),
       const LegalNotice(),
     ],
   );
