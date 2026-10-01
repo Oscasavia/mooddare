@@ -32,7 +32,7 @@ class ActionMenuLabel extends StatelessWidget {
       MenuAction.download => Icons.download_outlined,
       MenuAction.saveDare => Icons.bookmark_border_rounded,
       MenuAction.hide => Icons.visibility_off_outlined,
-      MenuAction.share => Icons.send_outlined,
+      MenuAction.share => Icons.share_outlined,
     };
     return Row(
       children: [

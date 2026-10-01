@@ -147,6 +147,24 @@ void main() {
       );
       expect(find.text('Open camera'), findsOneWidget);
       expect(find.text('Send dare'), findsOneWidget);
+      final sendButton = find.ancestor(
+        of: find.text('Send dare'),
+        matching: find.byWidgetPredicate((widget) => widget is TextButton),
+      );
+      expect(
+        find.descendant(
+          of: sendButton,
+          matching: find.byIcon(Icons.send_outlined),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: sendButton,
+          matching: find.byIcon(Icons.share_outlined),
+        ),
+        findsNothing,
+      );
       await tester.ensureVisible(find.byTooltip('Save dare'));
       await tester.tap(find.byTooltip('Save dare'));
       await tester.pumpAndSettle();

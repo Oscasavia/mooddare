@@ -1,5 +1,4 @@
 import 'package:mooddare/features/profile/data/social_repository.dart';
-import 'package:mooddare/core/widgets/share_icon.dart';
 import '../../data/repositories/dare_library_repository.dart';
 import '../widgets/dare_actions.dart';
 import '../widgets/send_dare_sheet.dart';
@@ -335,7 +334,7 @@ class _DareDisplayScreenState extends State<DareDisplayScreen> {
                                   social: widget.social,
                                 )
                               : null,
-                          icon: const ShareIcon(),
+                          icon: const Icon(Icons.send_outlined, size: 18),
                           label: const Text('Send dare'),
                         ),
                         const SizedBox(height: 4),
