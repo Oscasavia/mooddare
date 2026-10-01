@@ -227,7 +227,11 @@ void main() {
       await openFeed(tester, MemoryPosts([post]));
       await tester.tap(find.byTooltip('Share moment'));
       await tester.pumpAndSettle();
-      expect(calls.single.arguments['text'], contains(post.mediaUrl));
+      expect(
+        calls.single.arguments['text'],
+        contains('https://mooddare.web.app/moment/share'),
+      );
+      expect(calls.single.arguments['text'], isNot(contains(post.mediaUrl)));
       expect(calls.single.arguments['text'], contains(post.dareText));
       expect(find.byType(PostDetailsScreen), findsNothing);
       await tapMedia(tester);

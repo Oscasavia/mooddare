@@ -1,3 +1,5 @@
+import '../../../drafts/data/capture_draft.dart';
+import '../../../drafts/data/draft_repository.dart';
 import 'package:mooddare/core/widgets/action_menu_label.dart';
 import '../../../camera/data/video_editor.dart';
 import '../../../camera/presentation/video_adjustments_panel.dart';
@@ -19,6 +21,8 @@ import '../../data/repositories/post_repository.dart';
 import '../../domain/post_error_message.dart';
 
 class PreviewScreen extends StatefulWidget {
+  final DraftRepository? drafts;
+  final CaptureDraft? draft;
   final File mediaFile;
   final String mediaType;
   final String dareText;
@@ -31,6 +35,8 @@ class PreviewScreen extends StatefulWidget {
     required this.mediaType,
     required this.dareText,
     this.liveLens,
+    this.drafts,
+    this.draft,
     this.repository,
     this.moodId,
     this.moodName,
@@ -42,7 +48,114 @@ class PreviewScreen extends StatefulWidget {
 
 class _PreviewScreenState extends State<PreviewScreen>
     with WidgetsBindingObserver {
-  final _postId = const Uuid().v4();
+  late final _postId = widget.draft?.id ?? const Uuid().v4();
+  late final _draftOwner =
+      widget.draft?.ownerId ?? widget.drafts?.currentUserId();
+  bool _allowExit = false, _leaving = false, _completed = false;
+  Timer? _draftDebounce;
+  bool get _hasDrafts => widget.drafts != null && _draftOwner != null;
+
+  CaptureDraft _snapshot() => CaptureDraft(
+    id: _postId,
+    ownerId: _draftOwner!,
+    mediaFile: widget.mediaFile,
+    mediaType: widget.mediaType,
+    dareText: widget.dareText,
+    moodId: widget.moodId,
+    moodName: widget.moodName,
+    weeklyDareId: widget.weeklyDareId,
+    liveLens: widget.liveLens,
+    adjustments: _settings,
+    crop: _crop,
+    videoEdits: _videoEdits,
+    updatedAt: DateTime.now(),
+  );
+  Future<bool> _saveDraft({bool notify = false}) async {
+    if (!_hasDrafts || _completed) return false;
+    _draftDebounce?.cancel();
+    try {
+      await widget.drafts!.save(_snapshot());
+      return true;
+    } catch (_) {
+      if (notify) {
+        _message(
+          'Could not save this draft. Check device storage and try again.',
+        );
+      }
+      return false;
+    }
+  }
+
+  void _queueDraft() {
+    if (!_hasDrafts || _completed) return;
+    _draftDebounce?.cancel();
+    _draftDebounce = Timer(
+      const Duration(milliseconds: 400),
+      () => _saveDraft(),
+    );
+  }
+
+  void _finish(bool posted) {
+    if (!mounted) return;
+    setState(() => _allowExit = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).pop(posted);
+    });
+  }
+
+  Future<void> _leave({bool saveOnly = false}) async {
+    if (_leaving || _busy) return;
+    _leaving = true;
+    _video?.pause();
+    try {
+      final choice = saveOnly
+          ? 'save'
+          : await showDialog<String>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Keep this moment?'),
+                content: const Text(
+                  'Save a private draft to finish later on this device.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Keep editing'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, 'discard'),
+                    child: Text(
+                      'Discard',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, 'save'),
+                    child: const Text('Save draft'),
+                  ),
+                ],
+              ),
+            );
+      if (!mounted || choice == null) return;
+      setState(() => _busy = true);
+      _draftDebounce?.cancel();
+      if (choice == 'save') {
+        if (!await _saveDraft(notify: true)) return;
+      } else {
+        await widget.drafts!.delete(_draftOwner!, _postId);
+      }
+      _completed = true;
+      _finish(false);
+    } catch (_) {
+      _message('Could not update this draft. Please try again.');
+    } finally {
+      _leaving = false;
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   VideoPlayerController? _video;
   PhotoEditor? _editor;
   VideoEditor? _videoEditor;
@@ -72,6 +185,11 @@ class _PreviewScreenState extends State<PreviewScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (widget.draft != null) {
+      _settings = widget.draft!.adjustments;
+      _crop = widget.draft!.crop;
+      _videoEdits = widget.draft!.videoEdits;
+    }
     _load();
   }
 
@@ -81,6 +199,8 @@ class _PreviewScreenState extends State<PreviewScreen>
       _error = null;
     });
     try {
+      // Copy the original before the camera can remove its temporary file.
+      if (_hasDrafts && widget.draft == null) await _saveDraft(notify: true);
       if (_isPhoto) {
         final editor = await PhotoEditor.open(widget.mediaFile);
         if (!mounted) {
@@ -90,7 +210,11 @@ class _PreviewScreenState extends State<PreviewScreen>
         _editor = editor;
         _rendered = editor.original;
         _fullRendered = editor.original;
-        _comparison = editor.original;
+        _comparison = await compute(cropPhoto, {
+          'bytes': editor.original,
+          'crop': _crop,
+        });
+        if (_hasEdits || _crop != fullPhotoCrop) await _render();
       } else {
         final video = VideoPlayerController.file(widget.mediaFile);
         _video = video;
@@ -100,13 +224,18 @@ class _PreviewScreenState extends State<PreviewScreen>
           widget.mediaFile,
           video.value.duration.inMilliseconds,
         );
-        _videoEdits = VideoEdits(
-          startMs: 0,
-          endMs: video.value.duration.inMilliseconds,
-        );
+        _videoEdits =
+            widget.draft?.videoEdits ??
+            VideoEdits(startMs: 0, endMs: video.value.duration.inMilliseconds);
+        _videoEdits!.validate(video.value.duration.inMilliseconds);
+        await video.setVolume(_videoEdits!.muted ? 0 : 1);
+        if (_videoEdits!.startMs > 0) {
+          await video.seekTo(Duration(milliseconds: _videoEdits!.startMs));
+        }
         video.addListener(_loopTrim);
         await video.setLooping(true);
         await video.play();
+        _queueDraft();
       }
     } catch (_) {
       if (mounted) _error = 'Could not open this capture. Please retake it.';
@@ -124,6 +253,7 @@ class _PreviewScreenState extends State<PreviewScreen>
       _revision++;
     });
     _debounce = Timer(const Duration(milliseconds: 250), _render);
+    _queueDraft();
   }
 
   Future<void> _render() async {
@@ -191,6 +321,7 @@ class _PreviewScreenState extends State<PreviewScreen>
         _comparison = comparison;
         _original = false;
       });
+      _queueDraft();
     } catch (_) {
       _message('Could not crop this photo. Your previous edit is unchanged.');
     } finally {
@@ -199,6 +330,10 @@ class _PreviewScreenState extends State<PreviewScreen>
   }
 
   Future<void> _useMedia(String action) async {
+    if (action == 'draft') {
+      await _leave(saveOnly: true);
+      return;
+    }
     if (_busy || _loading || _rendering || _error != null) return;
     setState(() => _busy = true);
     try {
@@ -206,6 +341,9 @@ class _PreviewScreenState extends State<PreviewScreen>
           ? await _editor!.export(_rendered!)
           : await _videoEditor!.export(_videoEdits!);
       if (action == 'post') {
+        if (_hasDrafts && widget.drafts!.currentUserId() != _draftOwner) {
+          throw StateError('Sign in to the account that captured this moment.');
+        }
         await (widget.repository ?? PostRepository()).createPost(
           dareText: widget.dareText,
           moodId: widget.moodId,
@@ -215,9 +353,18 @@ class _PreviewScreenState extends State<PreviewScreen>
           mediaType: widget.mediaType,
           postId: _postId,
         );
+        _completed = true;
+        _draftDebounce?.cancel();
+        if (_hasDrafts) {
+          try {
+            await widget.drafts!.delete(_draftOwner!, _postId, posted: true);
+          } catch (_) {
+            /* Stable post ID makes a later retry harmless. */
+          }
+        }
         if (mounted) {
           _message('Your dare is live!');
-          Navigator.of(context).pop(true);
+          _finish(true);
         }
       } else if (action == 'save') {
         if (!await Gal.hasAccess()) {
@@ -257,13 +404,18 @@ class _PreviewScreenState extends State<PreviewScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) _video?.pause();
+    if (state != AppLifecycleState.resumed) {
+      _video?.pause();
+      unawaited(_saveDraft());
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _debounce?.cancel();
+    _draftDebounce?.cancel();
+    if (!_completed) unawaited(_saveDraft());
     _revision++;
     _video?.removeListener(_loopTrim);
     unawaited(_video?.dispose());
@@ -334,6 +486,7 @@ class _PreviewScreenState extends State<PreviewScreen>
 
   void _editVideo(VideoEdits edits) {
     setState(() => _videoEdits = edits);
+    _queueDraft();
     _video?.setVolume(edits.muted ? 0 : 1);
     unawaited(_seekVideoPreview(edits.startMs, pause: false));
   }
@@ -473,7 +626,10 @@ class _PreviewScreenState extends State<PreviewScreen>
     final blocked = _loading || _busy || _rendering || _error != null;
     final canAdjust = _isPhoto && _editor != null;
     return PopScope(
-      canPop: !_busy,
+      canPop: !_busy && (!_hasDrafts || _allowExit),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _hasDrafts && !_busy) unawaited(_leave());
+      },
       child: Scaffold(
         backgroundColor: Colors.black,
         appBar: AppBar(
@@ -491,7 +647,15 @@ class _PreviewScreenState extends State<PreviewScreen>
               tooltip: 'Save or share',
               enabled: !blocked,
               onSelected: _useMedia,
-              itemBuilder: (_) => const [
+              itemBuilder: (_) => [
+                if (_hasDrafts)
+                  const PopupMenuItem(
+                    value: 'draft',
+                    child: ActionMenuLabel(
+                      action: MenuAction.saveDare,
+                      text: 'Save draft',
+                    ),
+                  ),
                 PopupMenuItem(
                   value: 'save',
                   child: ActionMenuLabel(

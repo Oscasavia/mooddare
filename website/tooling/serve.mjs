@@ -11,7 +11,8 @@ export function makeServer() {
   return createServer(async (req, res) => {
     try {
       const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
-      const path = resolve(root, '.' + (pathname.endsWith('/') ? pathname + 'index.html' : pathname));
+      const route = pathname === '/.well-known/assetlinks.json' ? '/assetlinks.json' : pathname.startsWith('/moment/') ? '/moment.html' : pathname;
+      const path = resolve(root, '.' + (route.endsWith('/') ? route + 'index.html' : route));
       if (!path.startsWith(root + sep) || /\/(tooling|node_modules)\//.test(path) || !types[extname(path)]) {
         res.writeHead(404); res.end('Not found'); return;
       }

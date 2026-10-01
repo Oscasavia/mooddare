@@ -1,3 +1,4 @@
+import '../../../drafts/data/draft_repository.dart';
 import 'package:mooddare/core/widgets/action_menu_label.dart';
 import 'package:mooddare/features/membership/membership_preview.dart';
 import '../widgets/profile_cover_header.dart';
@@ -301,6 +302,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                           children: [
                             MyDaresGrid(
                               userId: _displayUserId,
+                              drafts: _self && !widget.isGuest
+                                  ? DraftRepository.instance
+                                  : null,
                               repository: _postRepository,
                             ),
                             if (_self)

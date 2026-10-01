@@ -1,3 +1,4 @@
+import 'package:mooddare/features/drafts/data/draft_repository.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -464,6 +465,7 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
       final posted = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (_) => PreviewScreen(
+            drafts: DraftRepository.instance,
             mediaFile: file,
             mediaType: type,
             dareText: widget.dareText,

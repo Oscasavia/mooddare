@@ -1,3 +1,5 @@
+import '../../../links/moment_links.dart';
+import '../../../links/shared_moment_screen.dart';
 import 'dart:async';
 import 'package:mooddare/features/notifications/data/push_service.dart';
 import 'package:mooddare/features/notifications/data/notification_repository.dart';
@@ -21,13 +23,32 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _index = 1;
   final _push = PushService.instance;
   bool _openingNotification = false;
+  bool _openingLink = false;
+  final _links = MomentLinks.instance;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _links.pending.addListener(_openLink);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openLink());
     _push?.pending.addListener(_openPush);
     _push?.foreground.addListener(_foregroundPush);
     WidgetsBinding.instance.addPostFrameCallback((_) => _openPush());
+  }
+
+  Future<void> _openLink() async {
+    final id = _links.pending.value;
+    if (!mounted || widget.isGuest || id == null || _openingLink) return;
+    _openingLink = true;
+    _links.pending.value = null;
+    try {
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => SharedMomentScreen(postId: id)));
+    } finally {
+      _openingLink = false;
+      if (mounted && _links.pending.value != null) unawaited(_openLink());
+    }
   }
 
   void _foregroundPush() {
@@ -99,6 +120,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _links.pending.removeListener(_openLink);
     _push?.pending.removeListener(_openPush);
     _push?.foreground.removeListener(_foregroundPush);
     super.dispose();

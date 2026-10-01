@@ -1,3 +1,4 @@
+import '../../../links/moment_links.dart';
 import 'package:mooddare/features/dares/data/repositories/weekly_dare_repository.dart';
 import 'package:mooddare/features/profile/data/social_repository.dart';
 import 'package:gal/gal.dart';
@@ -32,6 +33,24 @@ class PostRepository {
       .doc('moderationPosts/$id')
       .snapshots()
       .map((doc) => doc.exists);
+
+  Future<PostModel?> getSharedPost(String id) async {
+    final uid = currentUserId;
+    if (uid == null || !MomentLinks.validId(id)) return null;
+    final doc = await _firestore
+        .doc('posts/$id')
+        .get(const GetOptions(source: Source.server));
+    if (!doc.exists || doc.data()?['deleting'] == true) return null;
+    final post = PostModel.fromFirestore(doc);
+    final blocked = await _firestore
+        .doc('users/$uid/blocked/${post.authorId}')
+        .get(const GetOptions(source: Source.server));
+    final removed = await _firestore
+        .doc('moderationPosts/$id')
+        .get(const GetOptions(source: Source.server));
+    if (currentUserId != uid || blocked.exists || removed.exists) return null;
+    return post;
+  }
 
   Future<UserModel?> getAuthor(String uid) async {
     final doc = await _firestore.collection('users').doc(uid).get();

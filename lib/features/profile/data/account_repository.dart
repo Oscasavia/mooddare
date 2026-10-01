@@ -1,3 +1,4 @@
+import '../../drafts/data/draft_repository.dart';
 import 'package:mooddare/features/notifications/data/push_service.dart';
 import 'package:mooddare/features/dares/data/repositories/dare_library_repository.dart';
 import 'social_repository.dart';
@@ -9,10 +10,16 @@ import 'package:mooddare/features/feed/data/repositories/post_repository.dart';
 /// Client cleanup is retryable while the auth account still exists. Production
 /// should additionally run trusted server cleanup for interrupted deletions.
 class AccountRepository {
+  final Future<void> Function(String) deleteLocalDrafts;
   final FirebaseFirestore? firestore;
   final FirebaseAuth? auth;
   final FirebaseStorage? storage;
-  AccountRepository({this.firestore, this.auth, this.storage});
+  AccountRepository({
+    this.firestore,
+    this.auth,
+    this.storage,
+    Future<void> Function(String)? deleteLocalDrafts,
+  }) : deleteLocalDrafts = deleteLocalDrafts ?? DraftRepository.instance.clear;
   Future<void> deleteAccount() async {
     final user = (auth ?? FirebaseAuth.instance).currentUser;
     if (user == null) throw StateError('Not signed in');
@@ -26,6 +33,7 @@ class AccountRepository {
             DateTime.now().difference(signedIn) > const Duration(minutes: 4))) {
       throw FirebaseAuthException(code: 'requires-recent-login');
     }
+    await deleteLocalDrafts(user.uid);
     await PushService.instance?.detach();
     final db = firestore ?? FirebaseFirestore.instance;
     final posts = PostRepository(

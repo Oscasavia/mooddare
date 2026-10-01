@@ -1,3 +1,4 @@
+import '../../../links/moment_links.dart';
 import 'package:mooddare/core/widgets/action_menu_label.dart';
 import 'package:mooddare/features/dares/data/repositories/dare_library_repository.dart';
 import 'package:mooddare/features/dares/presentation/widgets/dare_actions.dart';
@@ -400,7 +401,7 @@ class _DareProofCardState extends State<DareProofCard>
     final box = context.findRenderObject() as RenderBox?;
     try {
       await Share.share(
-        '${widget.post.dareText}\n${widget.post.mediaUrl}\n#MoodDare',
+        '${widget.post.dareText}\n${MomentLinks.url(widget.post.id)}\n#MoodDare',
         sharePositionOrigin: box == null
             ? null
             : box.localToGlobal(Offset.zero) & box.size,

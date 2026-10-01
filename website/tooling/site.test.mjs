@@ -286,3 +286,26 @@ test('reduced motion and JavaScript-free content remain usable', async () => {
   }
   assert.deepEqual(errors, []);
 });
+
+test('shared moment landing is responsive, private and offers an Android app action', async () => {
+  await cdp.send('Network.setUserAgentOverride', {userAgent:'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36'});
+  await cdp.send('Emulation.setDeviceMetricsOverride', {width:360,height:800,deviceScaleFactor:1,mobile:true});
+  await cdp.send('Page.navigate', {url:base+'/moment/test-moment'});
+  await until("document.querySelector('#open-app') && !document.querySelector('#open-app').hidden");
+  assert.equal(await evaluate("document.querySelector('#open-app').getAttribute('href')"),'intent://mooddare.web.app/moment/test-moment#Intent;scheme=https;package=com.example.mooddare;end');
+  assert.equal(await evaluate("document.querySelector('meta[name=robots]').content"),'noindex, nofollow');
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'),true);
+  assert.equal(await evaluate("document.querySelector('.secondary').getAttribute('href')"),'/#downloads');
+  const response=await fetch(base+'/.well-known/assetlinks.json');
+  assert.equal(response.status,200);assert.match(response.headers.get('content-type'),/application\/json/);
+  const links=await response.json();assert.equal(links[0].target.package_name,'com.example.mooddare');assert.match(links[0].target.sha256_cert_fingerprints[0],/^([A-F0-9]{2}:){31}[A-F0-9]{2}$/);
+});
+
+test('malformed shared links never create an app intent or inject URL content', async () => {
+  for(const suffix of ['/moment/','/moment/a?redirect=https://evil.invalid','/moment/a/b','/moment/%3Cscript%3E']) {
+    await cdp.send('Page.navigate', {url:base+suffix});
+    await until("document.querySelector('h1')?.textContent === 'This link looks incomplete.'");
+    assert.equal(await evaluate("document.querySelector('#open-app').hidden"),true);
+    assert.equal(await evaluate("document.querySelector('#open-app').hasAttribute('href')"),false);
+  }
+});

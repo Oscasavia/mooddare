@@ -122,7 +122,7 @@ void main() {
           expect(icon.size, tooltip == 'Share moment' ? 18 : 22);
           expect(icon.color, Colors.white);
         }
-        expect(find.byIcon(Icons.send_outlined), findsOneWidget);
+        expect(find.byIcon(Icons.share_outlined), findsOneWidget);
         final count = tester.widget<Text>(
           find.byKey(const ValueKey('moment_comment_count')),
         );

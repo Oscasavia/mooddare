@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:mooddare/features/drafts/data/draft_repository.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -21,7 +22,9 @@ void main() {
   testWidgets(
     'native trim removes excluded footage and mute removes audio while retaining lens pixels',
     (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+      await tester.pumpWidget(
+        MaterialApp(theme: AppTheme.build(), home: const SizedBox()),
+      );
       await allowCameraAndAudio();
       final directory = await (await getTemporaryDirectory()).createTemp(
         'edit-fixture-',
@@ -38,6 +41,7 @@ void main() {
         );
         await tester.pumpWidget(
           MaterialApp(
+            theme: AppTheme.build(),
             home: Texture(textureId: (session!['textureId'] as num).toInt()),
           ),
         );
@@ -178,10 +182,15 @@ void main() {
           }),
           throwsA(isA<PlatformException>()),
         );
+        final drafts = DraftRepository(
+          currentUserId: () => 'video-fixture',
+          directory: () async => directory,
+        );
         await tester.pumpWidget(
           MaterialApp(
             theme: AppTheme.build(),
             home: PreviewScreen(
+              drafts: drafts,
               mediaFile: original,
               mediaType: 'video',
               dareText: 'Preview seeking test',
@@ -202,6 +211,8 @@ void main() {
           const RangeValues(1000, 3000),
         );
         await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(find.byTooltip('Remove audio'));
+        await tester.pump(const Duration(milliseconds: 500));
         final selected = tester
             .widget<VideoAdjustmentsPanel>(find.byType(VideoAdjustmentsPanel))
             .edits;
@@ -233,9 +244,66 @@ void main() {
         await tester.pump(const Duration(milliseconds: 500));
         expect(previewController.value.isPlaying, isTrue);
         expect(previewController.value.hasError, isFalse);
-        await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+        await tester.pumpWidget(
+          MaterialApp(theme: AppTheme.build(), home: const SizedBox()),
+        );
         await tester.pump(const Duration(seconds: 1));
         expect(await original.exists(), true);
+        final recovered = (await drafts.list('video-fixture')).single;
+        expect(recovered.videoEdits!.sameAs(selected), isTrue);
+        expect(recovered.videoEdits!.muted, isTrue);
+        await original.delete();
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.build(),
+            home: PreviewScreen(
+              mediaFile: recovered.mediaFile,
+              mediaType: 'video',
+              dareText: recovered.dareText,
+              draft: recovered,
+              drafts: drafts,
+            ),
+          ),
+        );
+        for (
+          var i = 0;
+          i < 40 && find.byType(VideoPlayer).evaluate().isEmpty;
+          i++
+        ) {
+          await tester.pump(const Duration(milliseconds: 250));
+        }
+        final restoredPlayer = tester
+            .widget<VideoPlayer>(find.byType(VideoPlayer))
+            .controller;
+        expect(restoredPlayer.value.volume, 0);
+        await tester.tap(find.byTooltip('Edit video'));
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<VideoAdjustmentsPanel>(find.byType(VideoAdjustmentsPanel))
+              .edits
+              .sameAs(selected),
+          isTrue,
+        );
+        final restoredEditor = VideoEditor(
+          recovered.mediaFile,
+          restoredPlayer.value.duration.inMilliseconds,
+        );
+        final restoredExport = await restoredEditor.export(
+          recovered.videoEdits!,
+        );
+        expect(
+          (await tracks(
+            restoredExport,
+          )).where((t) => (t['mime'] as String).startsWith('audio/')),
+          isEmpty,
+        );
+        await restoredEditor.dispose();
+        await tester.pumpWidget(
+          MaterialApp(theme: AppTheme.build(), home: const SizedBox()),
+        );
+        await tester.pump(const Duration(seconds: 1));
+        await drafts.clear('video-fixture');
       } finally {
         await channel.invokeMethod<void>('stop');
         await editor?.dispose();

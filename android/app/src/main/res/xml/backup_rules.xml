@@ -3,4 +3,5 @@
      another installation can make future sign-ins impossible to persist. -->
 <full-backup-content>
     <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="mooddare-drafts/" />
 </full-backup-content>

@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mooddare/core/widgets/dismiss_keyboard.dart';
@@ -41,17 +40,13 @@ void main() {
     },
   );
   testWidgets(
-    'share mark faces top right and inherits consistent size and color',
+    'share mark differs from Send dare and keeps consistent size and color',
     (tester) async {
       await tester.pumpWidget(
         const MaterialApp(home: ShareIcon(color: Colors.white)),
       );
-      final transform = tester
-          .widget<Transform>(find.byType(Transform).last)
-          .transform;
-      expect(transform.entry(0, 0), closeTo(math.sqrt(.5), .0001));
-      expect(transform.entry(1, 0), closeTo(-math.sqrt(.5), .0001));
-      final icon = tester.widget<Icon>(find.byIcon(Icons.send_outlined));
+      expect(find.byIcon(Icons.send_outlined), findsNothing);
+      final icon = tester.widget<Icon>(find.byIcon(Icons.share_outlined));
       expect(icon.size, 18);
       expect(icon.color, Colors.white);
     },

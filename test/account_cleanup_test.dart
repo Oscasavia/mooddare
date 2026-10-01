@@ -89,12 +89,18 @@ void main() {
         'userId': 'bob',
         'reason': 'spam',
       });
+      String? clearedDraftOwner;
       await AccountRepository(
+        deleteLocalDrafts: (uid) async {
+          clearedDraftOwner = uid;
+          expect(user.deleted, false);
+        },
         firestore: db,
         auth: auth,
         storage: storage,
       ).deleteAccount();
       expect(user.deleted, true);
+      expect(clearedDraftOwner, 'alice');
       expect((await db.doc('users/alice').get()).exists, false);
       expect((await db.doc('usernames/alice').get()).exists, false);
       expect((await db.collectionGroup('following').get()).docs, isEmpty);

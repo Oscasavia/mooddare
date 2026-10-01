@@ -1,3 +1,4 @@
+import 'package:mooddare/features/drafts/data/draft_repository.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
@@ -221,6 +222,7 @@ class _CameraScreenState extends State<BasicCameraScreen>
       final posted = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (_) => PreviewScreen(
+            drafts: DraftRepository.instance,
             mediaFile: File(file.path),
             mediaType: _videoMode ? 'video' : 'image',
             dareText: widget.dareText,
