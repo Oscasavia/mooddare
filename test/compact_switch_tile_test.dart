@@ -5,7 +5,7 @@ import 'package:mooddare/core/widgets/compact_switch_tile.dart';
 
 void main() {
   testWidgets(
-    'compact switch retains a full tap target, row toggling and disabled behavior',
+    'splash-free compact switch retains a full tap target, row toggling and disabled behavior',
     (tester) async {
       var value = false;
       var calls = 0;
@@ -19,6 +19,7 @@ void main() {
               builder: (context, set) {
                 update = set;
                 return CompactSwitchTile(
+                  showSplash: false,
                   title: const Text('Phone alerts'),
                   value: value,
                   onChanged: enabled

@@ -74,6 +74,7 @@ class _NotificationSettingsScreenState
               'weeklyDares': 'Weekly community dare',
             }.entries)
               CompactSwitchTile(
+                showSplash: false,
                 contentPadding: EdgeInsets.zero,
                 title: Text(entry.value),
                 value: s.data![entry.key] ?? true,
@@ -83,6 +84,7 @@ class _NotificationSettingsScreenState
               ),
             const SizedBox(height: 16),
             CompactSwitchTile(
+              showSplash: false,
               contentPadding: EdgeInsets.zero,
               title: const Text('Phone alerts'),
               subtitle: const Text(
