@@ -14,27 +14,24 @@
 - Explicit post authorization, consistent media metadata, stable IDs for retrying posts, release Internet permission and no debug signing fallback for release.
 - Local Firestore/Storage access-rule tests, image-processing tests, widget tests, Android integration test and GitHub CI configuration.
 
-## Current comments rollout and remaining profile migration
+## Profile privacy migration completed — 2026-09-30
 
-On 2026-09-19, the live Firestore policy was inspected: it allowed every authenticated user to read/write every document. The comments rollout deploys `firestore.compat.rules` using `firebase.compat.json`. Posts now enforce author identity, immutable content, self-only likes and owner-only deletion; nested comments enforce parent existence, author identity, 1–500 nonblank characters, server timestamps, and deletion by comment/post owner. The follow-up rules allow author-only text edits with server editedAt timestamps and caller-only likes, preserving immutable author/creation metadata. Both the compatibility policy and full target policy pass the comment/mood/cleanup emulator tests. Existing non-post permissions are preserved to avoid breaking unmigrated profiles, and remain a release gate. Storage policy was not changed in this rollout.
+The old compatibility policy has been retired. Live Firestore now uses `firestore.rules`: signed-in users may read public profiles, but only owners may change their profiles; username reservations must match the profile in an atomic write, cannot be stolen, and cannot be listed. Unknown collections and nested paths are denied by default. Existing comment, post, follow, notification, moderation and Storage protections remain in place.
 
-Deploy this compatibility configuration until the migration below is complete:
+All three existing profiles and their three username reservations were audited and privately backed up. Identity fields, creation dates, names, avatars, bios, covers and username reservations already matched the strict schema. One legacy public email field was removed using an update-time precondition; sign-in email remains in Firebase Authentication. Accounts, posts, media and login sessions were preserved. Removing the server copy does not retract data someone already downloaded.
+
+`node tooling/profiles/migrate.cjs` is read-only by default. `--apply` removes only public email fields after validation, writes a private mode-0600 backup outside the repository, uses an atomic commit with version preconditions, and verifies the result. Unknown fields, collisions, orphaned claims and invalid profile metadata stop the migration for manual review; it never silently renames users or reassigns claims. Keep backups private and remove them after the operational retention period.
+
+Both `firebase.json` and the retained `firebase.compat.json` now deploy `firestore.rules`. The old filename `firestore.compat.rules` contains an identical strict policy for legacy tooling/tests. CI verifies parity so compatibility deployment cannot reopen the broad allowance. Do not roll back to the historical permissive policy or restore public emails.
 
 ```sh
-firebase deploy --project mooddare --config firebase.compat.json --only firestore
+node tooling/profiles/migrate.cjs
+firebase deploy --project mooddare --only firestore:rules
 ```
 
-New post metadata is optional for older clients and paired for newer ones (`moodId`, `moodName`). Feed filtering uses the `moodId`/`expiresAt` composite index. Existing posts without mood metadata are available under All moods; they are not guessed or backfilled. Comment account cleanup uses the collection-group author index. Post deletion removes comment batches before deleting its parent. Account deletion removes the caller's comments on other posts too. Trusted server cleanup is still needed for interrupted deletion and races with newly arriving comments. Comments stream the latest 100; older-comment pagination, spam throttling and comment reporting are future moderation work.
+Verification includes 81 Firestore/Storage emulator tests and four migration/configuration tests. Isolated live test accounts confirmed signup/profile creation, public profile editing, atomic username rename and profile/claim deletion, plus rejection of cross-user edits, claim theft, private email fields and unknown-collection writes. Temporary test accounts/profiles/claims were removed afterward. Real users' profiles were not edited by the permission probes.
 
-The full `firestore.rules` profile policy and username collection must be rolled out together after these steps:
-
-1. Export/back up existing Firestore data. Audit current rules and enabled Auth/Storage services.
-2. Migrate public `users/{uid}` documents: remove `email` and any other private fields (Firebase Auth remains the email source); populate `id`, `createdAt`, and lowercase `username_lower`; keep only fields allowed by `validProfile`. Resolve usernames that do not match the new 3–20 letters/numbers/underscore format.
-3. Check ALL usernames case-insensitively for collisions, including legacy profiles without helper fields. Create matching `usernames/{lowercase}` documents with `{uid}` using trusted admin tooling. Resolve collisions manually before opening signups. Client compatibility queries are not a replacement for this migration.
-4. Test a migrated staging copy, including old posts/avatar paths, signup, guest linking, profile rename, likes, block/unblock, account deletion and failed uploads.
-5. Deploy reviewed Firestore rules, Storage rules and indexes to the intended project. There is no automatic production deployment in CI. Existing rules may deny new username/report/block operations until rollout.
-
-Do not deploy the policy onto unmigrated profiles: old public email fields will otherwise remain readable, and profile updates may be rejected.
+This completes the profile/database release gate. It does not complete all store-release requirements: signing, 16-KB native dependency compatibility, moderation operations/retention and other outstanding items below still need their own review. Drafts and shared-post deep links remain deferred.
 
 ## Moments interaction verification
 
@@ -130,7 +127,7 @@ Implemented a shared northeast share icon, global mobile tap-outside focus dismi
 
 Firestore replies live at `posts/{post}/replies/{reply}` with immutable `parentId` and validated `rootAuthorId`. Root comments remain compatible with legacy documents. Aggregate post comment counts include replies. Root/post deletion marks `deleting: true` before cleanup so new replies/comments are refused. Interrupted deletions can resume; account deletion also removes own replies and orphaned replies to the caller's threads. Trusted server cleanup is still needed for clients that never resume deletion.
 
-Follows use atomic mirrored `users/{follower}/following/{target}` and `users/{target}/followers/{follower}` records. Rules reject self/forged/one-sided follows, require profiles, and check blocks in both directions. Block removes both directions; account deletion removes paired relationships in batches of ten pairs to respect rule document-access limits. Counts derive from records, never client-supplied counters. The compatibility policy now excludes replies/follows/blocks from its legacy broad subcollection allowance. The existing profile/username migration above remains a production release requirement.
+Follows use atomic mirrored `users/{follower}/following/{target}` and `users/{target}/followers/{follower}` records. Rules reject self/forged/one-sided follows, require profiles, and check blocks in both directions. Block removes both directions; account deletion removes paired relationships in batches of ten pairs to respect rule document-access limits. Counts derive from records, never client-supplied counters. The compatibility policy now excludes replies/follows/blocks from its legacy broad subcollection allowance. The profile/username migration was subsequently completed on 2026-09-30; see the current migration section above.
 
 Validation: 169 Flutter tests passed; executable Dart line coverage was 3708/4723 (78.51%), with no coverage exclusions. GitHub Actions now enforces 75%. Twenty-nine Firestore/Storage emulator tests passed. Coverage is a Dart line metric, not a substitute for native or device tests. Added regression cases cover thread collapse/reopen, reply retries/edit/like/delete, multi-page cleanup, paired follow cleanup, permission denial, gallery download byte preservation, expanded avatars/large text, trim/reset/error handling, and the same edited bytes reaching save/share/post. The real Android MP4 test checks clip duration, audio-track absence/restoration, frame dimensions, playback and retained lens pixels, including that excluded initial footage is absent.
 
@@ -538,3 +535,13 @@ Validation: 435 Flutter tests passed, 88.11% line coverage, three IAM planner
 tests passed, analysis and the Android build passed. No lens rendering or camera
 capture code changed; no rules were loosened and no real user content was changed
 by the diagnostic probe.
+
+## Participation Stats and overflow-menu consistency — 2026-09-30
+
+Profile Stats now show shared moments, distinct moods explored and distinct community weeks. Levels earn 10 points per shared moment; likes no longer contribute points or milestones. The new mood milestone celebrates sharing in three different moods. These are counts from posts still on the profile, not an immutable lifetime ledger; deleting a post can reduce them. Empty/malformed legacy mood and week metadata does not inflate distinct counts, and other users' posts are excluded.
+
+Overflow actions across feed/full-screen moments, comments/replies, profiles, connections and capture review use one shared icon/label component. Delete and Block use the theme's error color; report and other actions remain neutral, and disabled actions keep their disabled appearance. Existing authorization, action order, confirmation and handlers are preserved.
+
+First-time public-profile creation bounds provider display names and excludes non-HTTPS/oversized avatar URLs so stricter rules do not unnecessarily block Google sign-in. Repeated sign-in preserves profile edits and does not copy the private email field.
+
+Validation: 447 Flutter tests passed; Dart line coverage 7512/8515 (88.22%); Flutter analysis and formatting clean. The real Android-emulator Moments regression passed, including native video playback/muting/seeking, feed/viewer navigation, and comment create/like/edit/delete. Its selectors now distinguish post pixels from branding imagery and reflect the current empty-comment label. Security migration validation is documented above. Camera rendering/native capture code was not changed.

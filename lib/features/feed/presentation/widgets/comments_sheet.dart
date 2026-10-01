@@ -1,3 +1,4 @@
+import 'package:mooddare/core/widgets/action_menu_label.dart';
 import 'package:mooddare/core/comment_time.dart';
 import 'package:mooddare/core/app_theme.dart';
 import 'package:mooddare/core/branding/mood_wink.dart';
@@ -395,17 +396,26 @@ class _CommentsSheetState extends State<CommentsSheet> {
                     if (uid == comment.authorId)
                       const PopupMenuItem(
                         value: 'edit',
-                        child: Text('Edit comment'),
+                        child: ActionMenuLabel(
+                          action: MenuAction.edit,
+                          text: 'Edit comment',
+                        ),
                       ),
                     if (uid != comment.authorId)
                       const PopupMenuItem(
                         value: 'report',
-                        child: Text('Report comment'),
+                        child: ActionMenuLabel(
+                          action: MenuAction.report,
+                          text: 'Report comment',
+                        ),
                       ),
                     if (uid == comment.authorId || uid == widget.post.authorId)
                       const PopupMenuItem(
                         value: 'delete',
-                        child: Text('Delete comment'),
+                        child: ActionMenuLabel(
+                          action: MenuAction.delete,
+                          text: 'Delete comment',
+                        ),
                       ),
                   ],
                 ),

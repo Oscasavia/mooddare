@@ -87,7 +87,7 @@ class ProfilePosts implements PostRepository {
   @override
   Future<Map<String, int>> getUserStats(String uid) async {
     statsReads++;
-    return {'daresCompleted': 2, 'totalLikes': 3};
+    return {'daresCompleted': 2, 'moodsExplored': 3};
   }
 
   @override

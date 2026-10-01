@@ -1,3 +1,4 @@
+import 'package:mooddare/core/widgets/action_menu_label.dart';
 import 'package:mooddare/features/dares/data/repositories/dare_library_repository.dart';
 import 'package:mooddare/features/dares/presentation/widgets/dare_actions.dart';
 import 'package:mooddare/core/app_theme.dart';
@@ -531,37 +532,57 @@ class _DareProofCardState extends State<DareProofCard>
                               PopupMenuItem(
                                 value: 'download',
                                 enabled: !_downloading,
-                                child: Text(
-                                  _downloading ? 'Saving…' : 'Download moment',
+                                child: ActionMenuLabel(
+                                  action: MenuAction.download,
+                                  enabled: !_downloading,
+                                  text: _downloading
+                                      ? 'Saving…'
+                                      : 'Download moment',
                                 ),
                               ),
                               if (DarePrompt.fromPost(widget.post).isValid)
                                 PopupMenuItem(
                                   value: 'saveDare',
                                   enabled: !_savingDare,
-                                  child: Text(
-                                    _savingDare ? 'Saving dare…' : 'Save dare',
+                                  child: ActionMenuLabel(
+                                    action: MenuAction.saveDare,
+                                    enabled: !_savingDare,
+                                    text: _savingDare
+                                        ? 'Saving dare…'
+                                        : 'Save dare',
                                   ),
                                 ),
                               if (widget.post.authorId == _uid)
                                 const PopupMenuItem(
                                   value: 'delete',
-                                  child: Text('Delete moment'),
+                                  child: ActionMenuLabel(
+                                    action: MenuAction.delete,
+                                    text: 'Delete moment',
+                                  ),
                                 ),
                               if (widget.post.authorId != _uid) ...[
                                 const PopupMenuItem(
                                   value: 'report',
-                                  child: Text('Report moment'),
+                                  child: ActionMenuLabel(
+                                    action: MenuAction.report,
+                                    text: 'Report moment',
+                                  ),
                                 ),
                                 const PopupMenuItem(
                                   value: 'block',
-                                  child: Text('Block account'),
+                                  child: ActionMenuLabel(
+                                    action: MenuAction.block,
+                                    text: 'Block account',
+                                  ),
                                 ),
                               ],
                               if (widget.onHidden != null)
                                 const PopupMenuItem(
                                   value: 'hide',
-                                  child: Text('Hide for now'),
+                                  child: ActionMenuLabel(
+                                    action: MenuAction.hide,
+                                    text: 'Hide for now',
+                                  ),
                                 ),
                             ],
                           ),

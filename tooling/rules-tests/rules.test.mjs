@@ -747,3 +747,46 @@ for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
     await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'dares/relaxed')));
   });
 }
+
+for (const policy of ['firestore.rules','firestore.compat.rules']) {
+  test(`${policy}: migrated profiles allow editing, renaming and account cleanup without exposing email or permitting takeover`, async () => {
+    await env.cleanup();
+    env = await initializeTestEnvironment({projectId:'demo-mooddare',firestore:{rules:await readFile(new URL(`../../${policy}`,import.meta.url),'utf8')},storage:{rules:await readFile(new URL('../../storage.rules',import.meta.url),'utf8')}});
+    const alice=db('alice'), bob=db('bob');
+    const create=writeBatch(alice);
+    create.set(doc(alice,'users/alice'),{id:'alice',name:'Alice',username:'Alice',username_lower:'alice',createdAt:serverTimestamp()});
+    create.set(doc(alice,'usernames/alice'),{uid:'alice'});
+    await assertSucceeds(create.commit());
+    await assertSucceeds(updateDoc(doc(alice,'users/alice'),{bio:'New bio',photoUrl:'https://example.invalid/avatar.jpg',coverColor:'rose',updatedAt:serverTimestamp()}));
+    const publicProfile=await assertSucceeds(getDoc(doc(bob,'users/alice')));
+    if ('email' in publicProfile.data()) throw Error('Public email exposed');
+    for(const fields of [{name:'Impersonated'},{bio:'Changed'},{photoUrl:'https://example.invalid/fake.jpg'},{username:'Stolen',username_lower:'stolen'}]) await assertFails(updateDoc(doc(bob,'users/alice'),fields));
+    for(const fields of [{email:'private@example.invalid'},{id:'bob'},{admin:true},{createdAt:serverTimestamp()},{name:'x'.repeat(51)},{bio:'x'.repeat(161)},{photoUrl:'http://example.invalid/avatar.jpg'}]) await assertFails(updateDoc(doc(alice,'users/alice'),fields));
+    await assertFails(deleteDoc(doc(bob,'users/alice')));
+    await assertFails(deleteDoc(doc(bob,'usernames/alice')));
+    await assertFails(setDoc(doc(bob,'usernames/alice'),{uid:'bob'}));
+    await assertFails(getDocs(collection(bob,'usernames')));
+    await assertFails(updateDoc(doc(alice,'users/alice'),{username:'Alice_new',username_lower:'alice_new'}));
+    const rename=writeBatch(alice);
+    rename.update(doc(alice,'users/alice'),{username:'Alice_new',username_lower:'alice_new',updatedAt:serverTimestamp()});
+    rename.set(doc(alice,'usernames/alice_new'),{uid:'alice'});
+    rename.delete(doc(alice,'usernames/alice'));
+    await assertSucceeds(rename.commit());
+    const remove=writeBatch(alice);
+    remove.delete(doc(alice,'usernames/alice_new'));
+    remove.delete(doc(alice,'users/alice'));
+    await assertSucceeds(remove.commit());
+    await assertSucceeds(getDoc(doc(bob,'users/alice')));
+  });
+  test(`${policy}: unknown root and nested collections fail closed, including signed-in owners`,async()=>{
+    await env.cleanup();
+    env=await initializeTestEnvironment({projectId:'demo-mooddare',firestore:{rules:await readFile(new URL(`../../${policy}`,import.meta.url),'utf8')},storage:{rules:await readFile(new URL('../../storage.rules',import.meta.url),'utf8')}});
+    for(const target of ['unreviewed/x','users/alice/private/x','users/alice/preferences/unknown']){
+      await env.withSecurityRulesDisabled(ctx=>setDoc(doc(ctx.firestore(),target),{secret:'private'}));
+      for(const uid of ['alice','bob']){
+        const ref=doc(db(uid),target);
+        await assertFails(getDoc(ref));await assertFails(setDoc(ref,{secret:'changed'}));await assertFails(deleteDoc(ref));
+      }
+    }
+  });
+}

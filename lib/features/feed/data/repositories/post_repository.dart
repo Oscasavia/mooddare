@@ -173,12 +173,15 @@ class PostRepository {
       'weeklyDaresCompleted': snapshot.docs
           .map((doc) => doc.data()['weeklyDareId'])
           .whereType<String>()
+          .where((id) => id.trim().isNotEmpty)
           .toSet()
           .length,
-      'totalLikes': snapshot.docs.fold(
-        0,
-        (total, doc) => total + ((doc.data()['likedBy'] as List?)?.length ?? 0),
-      ),
+      'moodsExplored': snapshot.docs
+          .map((doc) => doc.data()['moodId'])
+          .whereType<String>()
+          .where((id) => id.trim().isNotEmpty)
+          .toSet()
+          .length,
     };
   }
 

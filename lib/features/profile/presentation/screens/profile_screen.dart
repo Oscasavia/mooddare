@@ -1,3 +1,4 @@
+import 'package:mooddare/core/widgets/action_menu_label.dart';
 import 'package:mooddare/features/membership/membership_preview.dart';
 import '../widgets/profile_cover_header.dart';
 import 'package:mooddare/features/dares/data/repositories/dare_library_repository.dart';
@@ -208,12 +209,19 @@ class _ProfileScreenState extends State<ProfileScreen>
                   itemBuilder: (_) => [
                     const PopupMenuItem(
                       value: 'report',
-                      child: Text('Report user'),
+                      child: ActionMenuLabel(
+                        action: MenuAction.report,
+                        text: 'Report user',
+                      ),
                     ),
                     PopupMenuItem(
                       value: 'block',
                       enabled: !_blocked,
-                      child: Text(_blocked ? 'Blocked' : 'Block user'),
+                      child: ActionMenuLabel(
+                        action: MenuAction.block,
+                        text: _blocked ? 'Blocked' : 'Block user',
+                        enabled: !_blocked,
+                      ),
                     ),
                   ],
                 ),
@@ -299,7 +307,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                               DareLibraryList(repository: widget.dareLibrary),
                             StatsAndBadges(
                               daresCompleted: stats['daresCompleted'] ?? 0,
-                              totalLikes: stats['totalLikes'] ?? 0,
+                              moodsExplored: stats['moodsExplored'] ?? 0,
                               weeklyDaresCompleted:
                                   stats['weeklyDaresCompleted'] ?? 0,
                             ),

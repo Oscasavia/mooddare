@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'stat_item.dart';
 
 class StatsAndBadges extends StatelessWidget {
-  final int daresCompleted, totalLikes, weeklyDaresCompleted;
+  final int daresCompleted, moodsExplored, weeklyDaresCompleted;
   const StatsAndBadges({
     super.key,
     required this.daresCompleted,
-    required this.totalLikes,
+    this.moodsExplored = 0,
     this.weeklyDaresCompleted = 0,
   });
   @override
   Widget build(BuildContext context) {
-    final points = daresCompleted * 10 + totalLikes * 2;
+    final points = daresCompleted * 10;
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -24,8 +24,11 @@ class StatsAndBadges extends StatelessWidget {
               runSpacing: 16,
               children: [
                 StatItem(value: '$daresCompleted', label: 'Moments'),
-                StatItem(value: '$totalLikes', label: 'Likes'),
-                StatItem(value: '$points', label: 'Points'),
+                StatItem(value: '$moodsExplored', label: 'Moods explored'),
+                StatItem(
+                  value: '$weeklyDaresCompleted',
+                  label: 'Community weeks',
+                ),
               ],
             ),
           ),
@@ -43,8 +46,13 @@ class StatsAndBadges extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          '${100 - points % 100} points to your next level',
+          '$points points · ${100 - points % 100} to your next level',
           style: const TextStyle(color: Colors.white54),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '10 points per shared moment. Stats reflect moments on your profile.',
+          style: TextStyle(color: Colors.white54),
         ),
         const SizedBox(height: 28),
         const Text(
@@ -91,12 +99,12 @@ class StatsAndBadges extends StatelessWidget {
         ),
         ListTile(
           leading: Icon(
-            totalLikes >= 10
+            moodsExplored >= 3
                 ? Icons.check_circle
                 : Icons.radio_button_unchecked,
           ),
-          title: const Text('Spreading good energy'),
-          subtitle: const Text('Receive 10 likes'),
+          title: const Text('A little of everything'),
+          subtitle: const Text('Share moments from 3 different moods'),
         ),
       ],
     );

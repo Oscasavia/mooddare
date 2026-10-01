@@ -29,10 +29,21 @@ class UserRepository {
       final doc = await tx.get(ref);
       // Preserve edits and avoid copying email addresses into public profiles.
       if (!doc.exists) {
+        // Provider metadata may exceed our public profile limits. Keep sign-in
+        // working and let the person edit their display name afterward.
+        final displayName = name ?? user.displayName;
+        final photoUrl = user.photoURL;
         tx.set(ref, {
           'id': user.uid,
-          'name': name ?? user.displayName,
-          'photoUrl': user.photoURL,
+          'name': displayName == null
+              ? null
+              : String.fromCharCodes(displayName.runes.take(50)),
+          'photoUrl':
+              photoUrl != null &&
+                  photoUrl.length <= 2048 &&
+                  photoUrl.startsWith('https://')
+              ? photoUrl
+              : null,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }

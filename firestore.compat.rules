@@ -1,6 +1,3 @@
-// Compatibility rollout: preserve existing profile/username behavior until
-// the profile migration in docs/RELEASE.md is complete. Posts and comments
-// use the tested production rules. Do not use the legacy allowance for new features.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -23,34 +20,32 @@ service cloud.firestore {
         && name.matches('^[a-zA-Z0-9].*[a-zA-Z0-9]$')
         && !name.matches('.*__.*');
     }
-    function validUsernameChange(collection, id) {
-      let name = request.resource.data.get('username', null);
-      return (collection != 'usernames' || validUsername(id))
-        && (collection != 'users' || name == null || validUsername(name)
-          || (exists(/databases/$(database)/documents/users/$(id)) && name == resource.data.get('username', null)));
+    function validProfile(uid) {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['id', 'name', 'username', 'username_lower', 'username_normalized', 'photoUrl', 'bio', 'createdAt', 'updatedAt', 'coverColor'])
+        && data.get('coverColor', 'lavender') in ['lavender','midnight','rose','sage','ocean','sunset']
+        && data.id == uid
+        && (!('name' in data) || data.name == null || (data.name is string && data.name.size() <= 50))
+        && (!('bio' in data) || data.bio == null || (data.bio is string && data.bio.size() <= 160))
+        && (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 2048 && data.photoUrl.matches('https://.*')))
+        && (!('username' in data) || data.username == null || (
+          data.username is string && (validUsername(data.username)
+            || (exists(/databases/$(database)/documents/users/$(uid)) && data.username == resource.data.get('username', null)))
+          && data.username_lower == data.username.lower()
+          && getAfter(/databases/$(database)/documents/usernames/$(data.username_lower)).data.uid == uid));
     }
-    function validCoverChange(collection, id) {
-      // Keep legacy profile fields compatible while protecting the new cover field.
-      return collection != 'users' ||
-        ((!exists(/databases/$(database)/documents/users/$(id))
-            && (!('coverColor' in request.resource.data) || owner(id)))
-          || (exists(/databases/$(database)/documents/users/$(id))
-            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['coverColor']) || owner(id))))
-        && request.resource.data.get('coverColor', 'lavender') in ['lavender','midnight','rose','sage','ocean','sunset'];
-    }
-    match /{collection}/{id} {
-      allow read: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts', 'dares']);
-      allow delete: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts', 'dares']) && (collection != 'users' || owner(id));
-      allow create, update: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts', 'dares']) && validUsernameChange(collection, id) && validCoverChange(collection, id);
-      match /{subcollection}/{document=**} {
-        allow read, write: if signedIn() && !(collection in ['posts', 'reports', 'dareInvites', 'weeklyDares', 'pushTokens', 'notificationCampaigns', 'accountRestrictions', 'moderationStaff', 'moderationContent', 'moderationActions', 'moderationLocks', 'moderationReviews', 'moderationPosts', 'dares']) && !(subcollection in ['comments', 'replies', 'following', 'followers', 'blocked', 'savedDares', 'notifications', 'preferences']);
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create: if owner(uid) && validProfile(uid) && request.resource.data.createdAt == request.time;
+      allow update: if owner(uid) && validProfile(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','username','username_lower','username_normalized','photoUrl','bio','updatedAt','coverColor']);
+      allow delete: if owner(uid);
+      match /blocked/{authorId} {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid) && authorId != uid
+          && request.resource.data.keys().hasOnly(['createdAt'])
+          && request.resource.data.createdAt == request.time;
       }
-    }
-    match /users/{uid}/blocked/{authorId} {
-      allow read, delete: if owner(uid);
-      allow create, update: if owner(uid) && uid != authorId
-        && request.resource.data.keys().hasOnly(['createdAt'])
-        && request.resource.data.createdAt == request.time;
     }
     // Inbox events are server-created. Clients can only read their own and
     // mark them read; they cannot invent actors, links, timestamps or alerts.
@@ -144,11 +139,24 @@ service cloud.firestore {
       allow delete: if signedIn() && (request.auth.uid == follower || request.auth.uid == target)
         && !existsAfter(/databases/$(database)/documents/users/$(follower)/following/$(target));
     }
-    // Published by trusted administration only, never by an app client.
+    match /usernames/{name} {
+      allow get: if signedIn();
+      allow create, update: if signedIn()
+        && validUsername(name)
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid
+        && (!exists(/databases/$(database)/documents/usernames/$(name)) || resource.data.uid == request.auth.uid)
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.username_lower == name;
+      allow delete: if owner(resource.data.uid)
+        && (!existsAfter(/databases/$(database)/documents/users/$(request.auth.uid))
+          || getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.username_lower != name);
+    }
     match /dares/{id} {
       allow read: if signedIn();
+      // Curated content is managed through trusted administrative tooling.
       allow write: if false;
     }
+    // Published by trusted administration only, never by an app client.
     match /weeklyDares/{weekId} {
       allow read: if signedIn();
       allow write: if false;

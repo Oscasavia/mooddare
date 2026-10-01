@@ -60,6 +60,7 @@ jobs:
           distribution: temurin
           java-version: '17'
       - run: python3 -m unittest discover -s tooling/dares -p "*_test.py"
+      - run: node --test tooling/profiles/migrate.test.cjs
       - run: node --test tooling/storage/check-access.test.cjs
       - run: node --test tooling/dares/publish.test.cjs
       - run: node --test tooling/weekly-dares/publish.test.cjs

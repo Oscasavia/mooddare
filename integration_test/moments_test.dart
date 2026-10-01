@@ -105,20 +105,28 @@ void main() {
           tester
               .widget<Image>(
                 find.byWidgetPredicate(
-                  (widget) => widget is Image && widget.image is NetworkImage,
+                  (widget) =>
+                      widget is Image &&
+                      widget.image is NetworkImage &&
+                      (widget.image as NetworkImage).url == photo.mediaUrl,
                 ),
               )
               .fit,
           BoxFit.cover,
         );
-        for (
-          var i = 0;
-          i < 50 && find.byType(RawImage).evaluate().isEmpty;
-          i++
-        ) {
+        final photoPixels = find.descendant(
+          of: find.byWidgetPredicate(
+            (widget) =>
+                widget is Image &&
+                widget.image is NetworkImage &&
+                (widget.image as NetworkImage).url == photo.mediaUrl,
+          ),
+          matching: find.byType(RawImage),
+        );
+        for (var i = 0; i < 50 && photoPixels.evaluate().isEmpty; i++) {
           await tester.pump(const Duration(milliseconds: 100));
         }
-        expect(tester.widget<RawImage>(find.byType(RawImage)).image, isNotNull);
+        expect(tester.widget<RawImage>(photoPixels).image, isNotNull);
         await tester.tap(find.text(photo.dareText));
         await tester.pumpAndSettle();
         expect(find.byType(PostDetailsScreen), findsOneWidget);
@@ -126,7 +134,10 @@ void main() {
           tester
               .widget<Image>(
                 find.byWidgetPredicate(
-                  (widget) => widget is Image && widget.image is NetworkImage,
+                  (widget) =>
+                      widget is Image &&
+                      widget.image is NetworkImage &&
+                      (widget.image as NetworkImage).url == photo.mediaUrl,
                 ),
               )
               .fit,
@@ -210,7 +221,7 @@ void main() {
         await tester.tap(find.text('Delete comment'));
         await tester.pumpAndSettle();
         expect(find.text('Edited native comment'), findsNothing);
-        expect(find.text('Start the conversation ✨'), findsOneWidget);
+        expect(find.text('Start the conversation'), findsOneWidget);
         expect(repository.comments, isEmpty);
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();

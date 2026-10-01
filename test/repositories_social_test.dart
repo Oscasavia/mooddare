@@ -357,7 +357,7 @@ void main() {
         await expectLater(posts.toggleLike('p', 'other'), throwsStateError);
         expect(await posts.getUserStats('alice'), {
           'daresCompleted': 1,
-          'totalLikes': 0,
+          'moodsExplored': 1,
           'weeklyDaresCompleted': 0,
         });
         await posts.reportPost('p');

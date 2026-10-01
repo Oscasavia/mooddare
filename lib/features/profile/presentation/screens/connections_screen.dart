@@ -1,3 +1,4 @@
+import 'package:mooddare/core/widgets/action_menu_label.dart';
 import 'package:mooddare/core/widgets/stable_popup_menu.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -115,7 +116,13 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       tooltip: 'Account options',
       onSelected: (_) => _block(user),
       itemBuilder: (_) => [
-        const PopupMenuItem(value: 'block', child: Text('Block account')),
+        const PopupMenuItem(
+          value: 'block',
+          child: ActionMenuLabel(
+            action: MenuAction.block,
+            text: 'Block account',
+          ),
+        ),
       ],
     );
     if (MediaQuery.textScalerOf(context).scale(14) > 20) {

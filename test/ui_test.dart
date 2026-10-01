@@ -104,12 +104,12 @@ void main() {
       MaterialApp(
         theme: AppTheme.build(),
         home: const Scaffold(
-          body: StatsAndBadges(daresCompleted: 2, totalLikes: 5),
+          body: StatsAndBadges(daresCompleted: 2, moodsExplored: 5),
         ),
       ),
     );
-    expect(find.text('30'), findsOneWidget);
+    expect(find.text('5'), findsOneWidget);
     expect(find.text('Level 1'), findsOneWidget);
-    expect(find.text('70 points to your next level'), findsOneWidget);
+    expect(find.text('20 points · 80 to your next level'), findsOneWidget);
   });
 }

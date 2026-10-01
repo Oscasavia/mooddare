@@ -356,7 +356,7 @@ void main() {
             home: Scaffold(
               body: StatsAndBadges(
                 daresCompleted: 0,
-                totalLikes: 0,
+                moodsExplored: 0,
                 weeklyDaresCompleted: weeks,
               ),
             ),

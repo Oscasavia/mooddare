@@ -1,6 +1,6 @@
+import 'package:mooddare/core/widgets/action_menu_label.dart';
 import '../../../camera/data/video_editor.dart';
 import '../../../camera/presentation/video_adjustments_panel.dart';
-import 'package:mooddare/core/widgets/share_icon.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -494,18 +494,16 @@ class _PreviewScreenState extends State<PreviewScreen>
               itemBuilder: (_) => const [
                 PopupMenuItem(
                   value: 'save',
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.download_outlined),
-                    title: Text('Save to photos'),
+                  child: ActionMenuLabel(
+                    action: MenuAction.download,
+                    text: 'Save to photos',
                   ),
                 ),
                 PopupMenuItem(
                   value: 'share',
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: ShareIcon(),
-                    title: Text('Share capture'),
+                  child: ActionMenuLabel(
+                    action: MenuAction.share,
+                    text: 'Share capture',
                   ),
                 ),
               ],
