@@ -1,6 +1,6 @@
 # Android Play release preparation
 
-The store package is `com.mooddare.app`, version 1.0.0 build 3. Development builds retain `com.example.mooddare`; native Kotlin namespace remains unchanged. These install side by side. A store installation starts with its own local data and requires sign-in; signing into an existing account restores its server profile and content. Do not uninstall the development app to test the release.
+The store package is `com.mooddare.app`, version 1.0.0 build 3. Development builds retain `com.example.mooddare` and use the launcher label **MoodDare Dev** (debug and profile). Release builds keep **MoodDare**; native Kotlin namespace remains unchanged. These install side by side. A store installation starts with its own local data and requires sign-in; signing into an existing account restores its server profile and content. Do not uninstall the development app to test the release.
 
 Release Firebase registration: `1:1010705723283:android:c08f77f47d452ca3270266`. Its public configuration is in `android/app/src/release/google-services.json`. Dart selects the matching Firebase options in release mode. The release upload SHA-1/SHA-256 certificates are registered in Firebase, including its Android OAuth client. Debug/profile builds retain their original registration. Membership previews remain unavailable in release.
 
