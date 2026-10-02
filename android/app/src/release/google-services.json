@@ -66,6 +66,14 @@
           }
         },
         {
+          "client_id": "1010705723283-h0i0ve9seo6kah5ualalpp769c2iilf3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mooddare.app",
+            "certificate_hash": "c4aeca7dffdf498688a27d1ad2915fcfefd75036"
+          }
+        },
+        {
           "client_id": "1010705723283-7j377hotplnp6lgmqh4cforgm3vnid8a.apps.googleusercontent.com",
           "client_type": 3
         }

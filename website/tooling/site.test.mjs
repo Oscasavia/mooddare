@@ -292,13 +292,18 @@ test('shared moment landing is responsive, private and offers an Android app act
   await cdp.send('Emulation.setDeviceMetricsOverride', {width:360,height:800,deviceScaleFactor:1,mobile:true});
   await cdp.send('Page.navigate', {url:base+'/moment/test-moment'});
   await until("document.querySelector('#open-app') && !document.querySelector('#open-app').hidden");
-  assert.equal(await evaluate("document.querySelector('#open-app').getAttribute('href')"),'intent://mooddare.web.app/moment/test-moment#Intent;scheme=https;package=com.example.mooddare;end');
+  assert.equal(await evaluate("document.querySelector('#open-app').getAttribute('href')"),'intent://mooddare.web.app/moment/test-moment#Intent;scheme=https;package=com.mooddare.app;end');
   assert.equal(await evaluate("document.querySelector('meta[name=robots]').content"),'noindex, nofollow');
   assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'),true);
   assert.equal(await evaluate("document.querySelector('.secondary').getAttribute('href')"),'/#downloads');
   const response=await fetch(base+'/.well-known/assetlinks.json');
   assert.equal(response.status,200);assert.match(response.headers.get('content-type'),/application\/json/);
-  const links=await response.json();assert.equal(links[0].target.package_name,'com.example.mooddare');assert.match(links[0].target.sha256_cert_fingerprints[0],/^([A-F0-9]{2}:){31}[A-F0-9]{2}$/);
+  const links=await response.json();
+  const release=links.find(link=>link.target.package_name==='com.mooddare.app');
+  assert.ok(release,'Play release must support verified app links');
+  assert.ok(release.relation.includes('delegate_permission/common.handle_all_urls'));
+  assert.ok(release.target.sha256_cert_fingerprints.includes('DE:04:72:8B:B0:4F:FE:51:6A:7B:D5:6B:F1:D5:AB:A2:AF:21:0A:A0:4B:9B:3F:A1:CA:3A:63:4B:26:C1:DF:E4'));
+  assert.ok(links.some(link=>link.target.package_name==='com.example.mooddare'),'Existing development links stay supported');
 });
 
 test('malformed shared links never create an app intent or inject URL content', async () => {

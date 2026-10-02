@@ -6,7 +6,7 @@ if (!match || location.search || location.hash) {
 } else if (/Android/i.test(navigator.userAgent)) {
   // User-initiated Android intent, restricted to this package and HTTPS host.
   // No automatic redirects, arbitrary destinations or public post/media fetches.
-  button.href = `intent://mooddare.web.app/moment/${match[1]}#Intent;scheme=https;package=com.example.mooddare;end`;
+  button.href = `intent://mooddare.web.app/moment/${match[1]}#Intent;scheme=https;package=com.mooddare.app;end`;
   button.hidden = false;
   document.querySelector('#availability').textContent = 'Already have the Android test app? Tap above. Otherwise, public downloads are coming soon.';
 }

@@ -19,7 +19,8 @@
       "namespace": "android_app",
       "package_name": "com.mooddare.app",
       "sha256_cert_fingerprints": [
-        "D9:32:7F:DA:F9:CC:B6:C1:CB:5E:0C:4B:20:3E:E5:E9:D4:37:1F:FA:23:5D:EB:27:04:9A:22:94:4C:68:2E:42"
+        "D9:32:7F:DA:F9:CC:B6:C1:CB:5E:0C:4B:20:3E:E5:E9:D4:37:1F:FA:23:5D:EB:27:04:9A:22:94:4C:68:2E:42",
+        "DE:04:72:8B:B0:4F:FE:51:6A:7B:D5:6B:F1:D5:AB:A2:AF:21:0A:A0:4B:9B:3F:A1:CA:3A:63:4B:26:C1:DF:E4"
       ]
     }
   }
