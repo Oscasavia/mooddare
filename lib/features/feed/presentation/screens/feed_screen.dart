@@ -48,13 +48,16 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Future<void> _setOrder(FeedOrder order) async {
     try {
-      await _preferences?.setOrder(order);
+      final syncing = _preferences?.setOrder(order);
       if (mounted) _refresh();
+      await syncing?.timeout(const Duration(seconds: 8));
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Could not save your feed preference. Try again.'),
+            content: Text(
+              'Feed order changed on this device. Could not sync it yet.',
+            ),
           ),
         );
       }

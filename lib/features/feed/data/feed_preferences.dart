@@ -120,8 +120,10 @@ class FeedPreferences {
 
   Future<void> setOrder(FeedOrder value) async {
     if (!isCurrentUser()) throw StateError('Account changed');
-    await _preference.set({'order': value.name});
+    // Respect an opt-out immediately, including while an offline write is queued.
+    // Do not roll it back on a sync failure and silently resume learning.
     order = value;
+    await _preference.set({'order': value.name});
   }
 
   Future<void> reset() async {

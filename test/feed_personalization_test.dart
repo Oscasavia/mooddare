@@ -203,9 +203,15 @@ void main() {
     'latest pauses recording, survives restart and sign-out prevents writes',
     () async {
       await preferences.load();
-      await preferences.setOrder(FeedOrder.latest);
+      final syncing = preferences.setOrder(FeedOrder.latest);
+      expect(
+        preferences.order,
+        FeedOrder.latest,
+        reason: 'Learning must stop before the server acknowledges the write',
+      );
       await preferences.record(post('one'), FeedActivity.like);
       expect(preferences.history, isEmpty);
+      await syncing;
       await preferences.load();
       expect(preferences.order, FeedOrder.latest);
       await preferences.setOrder(FeedOrder.forYou);
