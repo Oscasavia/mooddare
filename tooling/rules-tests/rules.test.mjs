@@ -790,3 +790,30 @@ for (const policy of ['firestore.rules','firestore.compat.rules']) {
     }
   });
 }
+
+test('accepted account deletion blocks all writes and uploads, with private server-owned job status', async () => {
+  await env.withSecurityRulesDisabled(async c => {
+    const f=c.firestore();
+    await setDoc(doc(f,'users/alice'),{id:'alice'});
+    await setDoc(doc(f,'posts/one'),post());
+    await setDoc(doc(f,'posts/one/comments/root'),{authorId:'alice',text:'root',createdAt:Timestamp.now(),likedBy:[]});
+    await setDoc(doc(f,'accountDeletions/alice'),{status:'pending'});
+    await setDoc(doc(f,'accountRestrictions/alice'),{status:'deleting'});
+  });
+  await assertSucceeds(getDoc(doc(db('alice'),'accountDeletions/alice')));
+  await assertFails(getDoc(doc(db('bob'),'accountDeletions/alice')));
+  await assertFails(setDoc(doc(db('alice'),'accountDeletions/alice'),{status:'complete'}));
+  await assertFails(deleteDoc(doc(db('alice'),'accountDeletions/alice')));
+  await assertFails(updateDoc(doc(db('alice'),'users/alice'),{bio:'recreate'}));
+  await assertFails(setDoc(doc(db('alice'),'posts/two'),{...post(),mediaPath:'posts/alice/two.jpg'}));
+  await assertFails(setDoc(doc(db('bob'),'posts/one/comments/new'),{authorId:'bob',text:'late comment',createdAt:serverTimestamp(),likedBy:[]}));
+  await assertFails(setDoc(doc(db('bob'),'users/bob/blocked/alice'),{createdAt:serverTimestamp()}));
+  await assertFails(uploadBytes(ref(env.authenticatedContext('alice').storage(),'posts/alice/late.jpg'),new Uint8Array([1]),{contentType:'image/jpeg'}));
+  await assertSucceeds(uploadBytes(ref(env.authenticatedContext('bob').storage(),'posts/bob/live.jpg'),new Uint8Array([1]),{contentType:'image/jpeg'}));
+});
+test('an abandoned-upload fence prevents a late post commit and storage overwrite',async()=>{
+  await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'moderationPosts/one'),{removed:true,reason:'abandoned-upload',ownerId:'alice',replacementPostId:'replacement'}));
+  await assertFails(setDoc(doc(db('alice'),'posts/one'),post()));
+  await assertFails(uploadBytes(ref(env.authenticatedContext('alice').storage(),'posts/alice/one.jpg'),new Uint8Array([1]),{contentType:'image/jpeg'}));
+  await assertSucceeds(setDoc(doc(db('alice'),'posts/replacement'),{...post(),mediaPath:'posts/alice/replacement.jpg'}));
+});

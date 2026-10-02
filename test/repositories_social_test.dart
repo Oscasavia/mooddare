@@ -373,4 +373,39 @@ void main() {
       }
     },
   );
+  test(
+    'expired draft uploads follow a stable replacement without duplicate posts or overwriting other owners',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('post-retry-');
+      try {
+        final file = await File(
+          '${directory.path}/photo.jpg',
+        ).writeAsBytes([1, 2, 3]);
+        await db.doc('moderationPosts/old').set({
+          'reason': 'abandoned-upload',
+          'ownerId': 'alice',
+          'replacementPostId': 'replacement',
+        });
+        Future<void> create() => posts.createPost(
+          dareText: 'Try again',
+          mediaFile: file,
+          mediaType: 'image',
+          postId: 'old',
+        );
+        await create();
+        await create();
+        expect((await db.collection('posts').get()).docs.map((d) => d.id), [
+          'replacement',
+        ]);
+        expect(
+          (await db.doc('posts/replacement').get()).data()?['mediaPath'],
+          'posts/alice/replacement.jpg',
+        );
+        await db.doc('moderationPosts/old').update({'ownerId': 'bob'});
+        await expectLater(create(), throwsStateError);
+      } finally {
+        await directory.delete(recursive: true);
+      }
+    },
+  );
 }

@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:mooddare/core/branding/mood_wink.dart';
+import 'package:mooddare/features/profile/data/account_repository.dart';
+import '../data/welcome_history.dart';
 
 /// Wraps the navigator so an already-open camera or detail route cannot cover
 /// an account restriction. Backend rules independently enforce the restriction.
@@ -12,27 +14,36 @@ class AccountAccessGuard extends StatefulWidget {
   final bool enabled;
   final FirebaseAuth? auth;
   final FirebaseFirestore? firestore;
+  final Future<void> Function(String)? clearDeletedAccount;
+  final VoidCallback? onAccountDeleted;
   const AccountAccessGuard({
     super.key,
     required this.child,
     this.enabled = true,
     this.auth,
     this.firestore,
+    this.clearDeletedAccount,
+    this.onAccountDeleted,
   });
   @override
   State<AccountAccessGuard> createState() => _AccountAccessGuardState();
 }
 
-class _AccountAccessGuardState extends State<AccountAccessGuard> {
+class _AccountAccessGuardState extends State<AccountAccessGuard>
+    with WidgetsBindingObserver {
   late final _auth = widget.auth ?? FirebaseAuth.instance;
   late final _db = widget.firestore ?? FirebaseFirestore.instance;
   StreamSubscription<User?>? _session;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _access;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _deletion;
+  bool _erasing = false;
+  String? _deletionError;
   Timer? _expiry;
   Map<String, dynamic>? _restriction;
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.enabled) _start();
   }
 
@@ -45,9 +56,18 @@ class _AccountAccessGuardState extends State<AccountAccessGuard> {
   void _start() {
     _session = _auth.authStateChanges().listen((user) {
       _access?.cancel();
+      _deletion?.cancel();
       _expiry?.cancel();
       if (mounted) setState(() => _restriction = null);
       if (user == null) return;
+      _deletion = _db.doc('accountDeletions/${user.uid}').snapshots().listen((
+        snapshot,
+      ) {
+        if (snapshot.exists && _auth.currentUser?.uid == user.uid) {
+          _endDeletedSession(user.uid);
+        }
+      }, onError: (Object _) {});
+      _checkSession(user);
       _access = _db
           .doc('accountRestrictions/${user.uid}')
           .snapshots()
@@ -71,16 +91,103 @@ class _AccountAccessGuardState extends State<AccountAccessGuard> {
     });
   }
 
+  Future<void> _checkSession(User user) async {
+    try {
+      await user.reload();
+    } on FirebaseAuthException catch (error) {
+      if (error.code == 'user-not-found' &&
+          _auth.currentUser?.uid == user.uid) {
+        await _endDeletedSession(user.uid);
+      }
+    } catch (_) {
+      // Offline users retain their session; the server still enforces access.
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!widget.enabled) return;
+    final user = _auth.currentUser;
+    if (state == AppLifecycleState.resumed && user != null) _checkSession(user);
+  }
+
+  Future<void> _endDeletedSession(String uid) async {
+    if (!mounted || _erasing || _auth.currentUser?.uid != uid) return;
+    setState(() {
+      _erasing = true;
+      _deletionError = null;
+    });
+    try {
+      await (widget.clearDeletedAccount ??
+          AccountRepository.clearLocalAccountData)(uid);
+      try {
+        await WelcomeHistory.instance.resetAfterDeletion();
+      } catch (_) {}
+      if (_auth.currentUser?.uid == uid) {
+        await _auth.signOut();
+      }
+      if (mounted && _auth.currentUser == null) widget.onAccountDeleted?.call();
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _deletionError =
+              'Please retry to clear this device’s saved account data.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _erasing = false);
+    }
+  }
+
   @override
   void dispose() {
     _session?.cancel();
     _access?.cancel();
+    _deletion?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _expiry?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_erasing || _deletionError != null) {
+      return Stack(
+        children: [
+          widget.child,
+          Positioned.fill(
+            child: Scaffold(
+              body: SafeArea(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(28),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const MoodWink(size: 88),
+                        const SizedBox(height: 24),
+                        Text(
+                          _deletionError ?? 'Your account is being deleted.',
+                          textAlign: TextAlign.center,
+                        ),
+                        if (_deletionError != null)
+                          TextButton(
+                            onPressed: () {
+                              final uid = _auth.currentUser?.uid;
+                              if (uid != null) _endDeletedSession(uid);
+                            },
+                            child: const Text('Retry'),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     final data = _restriction;
     final until = (data?['until'] as Timestamp?)?.toDate();
     final blocked =

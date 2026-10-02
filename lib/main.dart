@@ -32,16 +32,22 @@ Future<void> main() async {
 }
 
 final _firebaseReady = ValueNotifier(false);
+final _rootNavigator = GlobalKey<NavigatorState>();
 
 class MoodDareApp extends StatelessWidget {
   const MoodDareApp({super.key});
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'MoodDare',
+    navigatorKey: _rootNavigator,
     builder: (_, child) => ValueListenableBuilder<bool>(
       valueListenable: _firebaseReady,
       builder: (_, ready, _) => AccountAccessGuard(
         enabled: ready,
+        onAccountDeleted: () => _rootNavigator.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const AuthGate(showWelcome: true)),
+          (_) => false,
+        ),
         child: DismissKeyboard(child: child ?? const SizedBox.shrink()),
       ),
     ),

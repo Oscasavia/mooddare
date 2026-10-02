@@ -157,10 +157,15 @@ class DraftRepository {
         }
         _changes.add(owner);
       });
-  Future<void> clear(String owner) => _serial(() async {
+  Future<void> clear(String owner) async {
+    // Authorize erasure when requested. A concurrent account-deletion listener
+    // may sign out while this waits for an already-running disk operation.
+    // The captured owner remains fixed; no other account's files are touched.
     _authorize(owner);
-    final folder = await _folder(owner);
-    if (await folder.exists()) await folder.delete(recursive: true);
-    _changes.add(owner);
-  });
+    return _serial(() async {
+      final folder = await _folder(owner);
+      if (await folder.exists()) await folder.delete(recursive: true);
+      _changes.add(owner);
+    });
+  }
 }

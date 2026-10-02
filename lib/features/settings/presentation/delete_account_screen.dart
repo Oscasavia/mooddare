@@ -80,6 +80,13 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
         await history.resetAfterDeletion();
       } catch (_) {}
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Account deletion requested. Cleanup will continue in the background.',
+            ),
+          ),
+        );
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
             builder:
@@ -140,7 +147,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Deleting your account removes your profile, posts, uploaded media, post likes, comments and connections. This cannot be undone.',
+                  'Deleting your account removes your profile, posts, uploaded media, likes, comments, saved dares and connections. Once accepted, cleanup continues securely even if you close the app. This cannot be undone.',
                 ),
                 const SizedBox(height: 24),
                 TextField(
@@ -197,7 +204,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                         ),
                   child: Text(
                     _busy
-                        ? 'Finishing up…'
+                        ? 'Sending request…'
                         : _verify
                         ? account.password
                               ? 'Verify and delete account'
@@ -216,7 +223,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                   const Padding(
                     padding: EdgeInsets.only(top: 16),
                     child: Text(
-                      'Finishing up. Please keep the app open.',
+                      'Confirming your deletion request. Please wait.',
                       textAlign: TextAlign.center,
                     ),
                   )

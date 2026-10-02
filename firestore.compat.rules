@@ -1,11 +1,19 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function deletingAccount(uid) {
+      return exists(/databases/$(database)/documents/accountDeletions/$(uid));
+    }
     function signedIn() {
       return request.auth != null && (!exists(/databases/$(database)/documents/accountRestrictions/$(request.auth.uid))
-        || (get(/databases/$(database)/documents/accountRestrictions/$(request.auth.uid)).data.status != 'banned'
+        || (get(/databases/$(database)/documents/accountRestrictions/$(request.auth.uid)).data.status != 'deleting'
+          && get(/databases/$(database)/documents/accountRestrictions/$(request.auth.uid)).data.status != 'banned'
           && (get(/databases/$(database)/documents/accountRestrictions/$(request.auth.uid)).data.status != 'suspended'
             || get(/databases/$(database)/documents/accountRestrictions/$(request.auth.uid)).data.until <= request.time)));
+    }
+    match /accountDeletions/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow write, list: if false;
     }
     match /moderationPosts/{id} {
       allow get: if signedIn();
@@ -42,7 +50,7 @@ service cloud.firestore {
       allow delete: if owner(uid);
       match /blocked/{authorId} {
         allow read, delete: if owner(uid);
-        allow create, update: if owner(uid) && authorId != uid
+        allow create, update: if owner(uid) && authorId != uid && !deletingAccount(authorId)
           && request.resource.data.keys().hasOnly(['createdAt'])
           && request.resource.data.createdAt == request.time;
       }
@@ -106,6 +114,7 @@ service cloud.firestore {
         && request.resource.data.recipientId != request.auth.uid
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && exists(/databases/$(database)/documents/users/$(request.resource.data.recipientId))
+        && !deletingAccount(request.resource.data.recipientId)
         && existsAfter(/databases/$(database)/documents/users/$(request.auth.uid)/following/$(request.resource.data.recipientId))
         && existsAfter(/databases/$(database)/documents/users/$(request.resource.data.recipientId)/following/$(request.auth.uid))
         && !existsAfter(/databases/$(database)/documents/users/$(request.auth.uid)/blocked/$(request.resource.data.recipientId))
@@ -120,6 +129,7 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == follower && follower != target
         && exists(/databases/$(database)/documents/users/$(follower))
         && exists(/databases/$(database)/documents/users/$(target))
+        && !deletingAccount(target)
         && !existsAfter(/databases/$(database)/documents/users/$(follower)/blocked/$(target))
         && !existsAfter(/databases/$(database)/documents/users/$(target)/blocked/$(follower))
         && request.resource.data.keys().hasOnly(['createdAt'])
@@ -215,6 +225,7 @@ service cloud.firestore {
         allow read: if signedIn() && exists(/databases/$(database)/documents/posts/$(id));
         allow create: if signedIn() && exists(/databases/$(database)/documents/posts/$(id))
           && get(/databases/$(database)/documents/posts/$(id)).data.get('deleting', false) == false
+          && !deletingAccount(get(/databases/$(database)/documents/posts/$(id)).data.authorId)
           && request.resource.data.keys().hasOnly(['authorId', 'text', 'createdAt', 'likedBy'])
           && request.resource.data.authorId == request.auth.uid && validText()
           && request.resource.data.get('likedBy', []) == []
@@ -249,7 +260,7 @@ service cloud.firestore {
         function validReplyTarget() {
           let data = request.resource.data;
           return !data.keys().hasAny(['replyToId', 'replyToAuthorId'])
-            || (data.replyToAuthorId is string
+            || (data.replyToAuthorId is string && !deletingAccount(data.replyToAuthorId)
               && (!data.keys().hasAny(['replyToId'])
                 ? data.replyToAuthorId == data.rootAuthorId
                 : (data.replyToId is string && data.replyToId.size() > 0 && data.replyToId.size() <= 128
@@ -260,12 +271,14 @@ service cloud.firestore {
         allow read: if signedIn() && exists(/databases/$(database)/documents/posts/$(id));
         allow create: if signedIn() && exists(/databases/$(database)/documents/posts/$(id))
           && get(/databases/$(database)/documents/posts/$(id)).data.get('deleting', false) == false
+          && !deletingAccount(get(/databases/$(database)/documents/posts/$(id)).data.authorId)
           && request.resource.data.keys().hasOnly(['authorId', 'text', 'createdAt', 'likedBy', 'parentId', 'rootAuthorId', 'replyToId', 'replyToAuthorId'])
           && request.resource.data.authorId == request.auth.uid && validText()
           && request.resource.data.parentId is string
           && exists(/databases/$(database)/documents/posts/$(id)/comments/$(request.resource.data.parentId))
           && get(/databases/$(database)/documents/posts/$(id)/comments/$(request.resource.data.parentId)).data.get('deleting', false) == false
           && get(/databases/$(database)/documents/posts/$(id)/comments/$(request.resource.data.parentId)).data.get('moderationRemoved', false) == false
+          && !deletingAccount(request.resource.data.rootAuthorId)
           && request.resource.data.rootAuthorId == get(/databases/$(database)/documents/posts/$(id)/comments/$(request.resource.data.parentId)).data.authorId
           && validReplyTarget()
           && request.resource.data.get('likedBy', []) == []
@@ -313,6 +326,7 @@ service cloud.firestore {
         let data = request.resource.data;
         return data.keys().hasOnly(['userId','reporterId','reason','createdAt'])
           && data.userId is string && data.userId != request.auth.uid
+          && !deletingAccount(data.userId)
           && id == request.auth.uid + '_user_' + data.userId
           && exists(/databases/$(database)/documents/users/$(data.userId))
           && data.reason in ['spam','harassment','hate','sexualContent','violence','impersonation','other'];

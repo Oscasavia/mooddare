@@ -11,6 +11,22 @@ void main() {
   });
   tearDown(() => directory.delete(recursive: true));
   test(
+    'account deletion waits for pending writes and removes files only for that account',
+    () async {
+      final write = store.save('alice', ['bob']);
+      final clear = store.clear('alice');
+      await Future.wait([write, clear]);
+      await store.save('bob', ['alice']);
+      await store.clear('alice');
+      expect(await store.load('alice'), isEmpty);
+      expect(await store.load('bob'), ['alice']);
+      expect(
+        await File('${directory.path}/people-search-alice.json').exists(),
+        isFalse,
+      );
+    },
+  );
+  test(
     'history persists across instances, isolates accounts and clears',
     () async {
       expect(await store.load('alice'), isEmpty);

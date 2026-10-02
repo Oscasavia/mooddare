@@ -19,7 +19,10 @@ async function sendPush(db, messaging, event) {
     const refs=[event.data.ref, db.doc(`users/${uid}`), db.doc(`users/${uid}/preferences/notifications`)];
     if(weekly) refs.push(db.doc(`weeklyDares/${n.weeklyDareId}`));
     else refs.push(db.doc(`users/${uid}/blocked/${n.actorId}`),db.doc(`users/${n.actorId}/blocked/${uid}`),db.doc(`users/${n.actorId}`));
+    refs.push(db.doc(`accountDeletions/${uid}`));
+    if(!weekly)refs.push(db.doc(`accountDeletions/${n.actorId}`));
     const docs = await tx.getAll(...refs);
+    if(docs.slice(weekly?-1:-2).some(d=>d.exists))return false;
     if (!docs[0].exists || docs[0].data().pushAttempted || !docs[1].exists || docs[2].data()?.push === false || docs[2].data()?.[category(n.kind)] === false || !pushBodies[n.kind]) return false;
     if(weekly) {
       if(!activeWeek(n.weeklyDareId,docs[3].data(),Date.now())) return false;

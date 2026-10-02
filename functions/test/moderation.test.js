@@ -121,3 +121,11 @@ run('HTTP routes deny anonymous access and serve an authorized report queue',asy
  await h({method:'GET',path:'/admin-api/reports',query:{},get:()=> 'Bearer token'},res);assert.equal(status,200);assert.equal(output.items.length,1);
  await h({method:'GET',path:'/admin-api/action',query:{},get:()=> 'Bearer token'},res);assert.equal(status,404);
 });
+run('restore uses current archive after account cleanup scrubs references during media work',async()=>{
+ await m.requestAction(db,'staff',input('remove'));await m.processAction(db,auth,bucket,'op');
+ await m.requestAction(db,'staff',input('restore','restore'));
+ const raced={...bucket,file:name=>({...bucket.file(name),setMetadata:async value=>{
+   metadata=value;await db.doc(`moderationContent/${m.key('posts/post')}`).update({'original.likedBy':[]});
+ }})};
+ await m.processAction(db,auth,raced,'restore');assert.deepEqual((await db.doc('posts/post').get()).data().likedBy,[]);
+});

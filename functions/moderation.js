@@ -64,6 +64,7 @@ async function requestAction(db,staff,input){
     const archive=await tx.get(db.doc(`moderationContent/${key(path)}`));
     const original=archive.data()?.removed?archive.data().original:content.data();
     const userId=report.data().userId||original?.authorId;
+    if(userId&&(await tx.get(db.doc(`accountDeletions/${userId}`))).exists)fail('Account deletion is in progress.',409);
     if(['suspend','ban','reinstate'].includes(action)){
       if(!userId)fail('Account not found.',404);
       const protectedAccount=await tx.get(db.doc(`moderationStaff/${userId}`));
@@ -100,10 +101,12 @@ async function processAction(db,auth,bucket,operationId){
   if(!claimed)return;
   const d=claimed,archive=db.doc(`moderationContent/${key(d.path)}`),live=db.doc(d.path);
   try{
+    if(d.userId&&(await db.doc(`accountDeletions/${d.userId}`).get()).exists)fail('Account deletion is in progress.',409);
     if(['remove','restore'].includes(d.action)){
       if(d.action==='remove')await db.runTransaction(async tx=>{
         const [a,c]=await tx.getAll(archive,live);if(a.data()?.removed)return;
         if(!c.exists)fail('Content no longer exists.',409);
+        if((await tx.get(db.doc(`accountDeletions/${c.data().authorId}`))).exists)fail('Account deletion is in progress.',409);
         tx.set(archive,{original:c.data(),path:d.path,removed:true,updatedAt:stamp()});
         if(d.path.split('/').length===2){tx.set(db.doc(`moderationPosts/${live.id}`),{removed:true});tx.delete(live);}
         else tx.update(live,{text:'This comment was removed by MoodDare.',moderationRemoved:true,likedBy:[]});
@@ -126,23 +129,29 @@ async function processAction(db,auth,bucket,operationId){
         const [a,owner,c]=await tx.getAll(archive,db.doc(`users/${restored.authorId}`),live);
         if(!a.data()?.removed)return;
         if(!owner.exists)fail('The author has deleted their account.',409);
+        if((await tx.get(db.doc(`accountDeletions/${restored.authorId}`))).exists)fail('Account deletion is in progress.',409);
         if(d.path.split('/').length>2){const parent=await tx.get(db.doc(d.path.split('/').slice(0,2).join('/')));if(!parent.exists||!c.exists)fail('Content or parent was deleted; restoration cancelled.',409);}
-        tx.set(live,restored);tx.update(archive,{removed:false,updatedAt:stamp()});
+        // Re-read the archive inside the transaction: account cleanup may have
+        // removed liker IDs or reply mentions since the media URL was prepared.
+        tx.set(live,{...a.data().original,...(d.path.split('/').length===2?{mediaUrl:restored.mediaUrl}:{})});tx.update(archive,{removed:false,updatedAt:stamp()});
         if(d.path.split('/').length===2)tx.delete(db.doc(`moderationPosts/${live.id}`));
       });
       }
     } else if(['suspend','ban','reinstate'].includes(d.action)){
-      await db.doc(`accountRestrictions/${d.userId}`).set({status:d.action==='ban'?'banned':d.action==='suspend'?'suspended':'active',until:d.until,reason:d.reason,updatedAt:stamp()});
+      await db.runTransaction(async tx=>{
+        if((await tx.get(db.doc(`accountDeletions/${d.userId}`))).exists)fail('Account deletion is in progress.',409);
+        tx.set(db.doc(`accountRestrictions/${d.userId}`),{status:d.action==='ban'?'banned':d.action==='suspend'?'suspended':'active',until:d.until,reason:d.reason,updatedAt:stamp()});
+      });
       // Firestore/Storage restrictions take effect even for existing ID tokens.
       if(d.action!=='reinstate')await auth.revokeRefreshTokens(d.userId);
     }
     await db.runTransaction(async tx=>{
-      const current=await tx.get(ref);if(current.data()?.lease!==lease)fail('Action lease changed.',409);
+      const current=await tx.get(ref);if(d.userId&&(await tx.get(db.doc(`accountDeletions/${d.userId}`))).exists)fail('Account deletion is in progress.',409);if(current.data()?.lease!==lease)fail('Action lease changed.',409);
       tx.update(ref,{status:'done',completedAt:stamp(),leaseUntil:Timestamp.fromMillis(0),error:FieldValue.delete()});
       tx.set(db.doc(`moderationReviews/${d.reportId}`),{status:'resolved',action:d.action,reason:d.reason,staff:d.staff,updatedAt:stamp()});
       tx.delete(db.doc(`moderationLocks/${key(d.lockPath)}`));
     });
-  }catch(e){await ref.update({status:'retry',error:'Action incomplete. Retry after checking the content.',leaseUntil:Timestamp.fromMillis(0)});throw e;}
+  }catch(e){await db.runTransaction(async tx=>{if((await tx.get(ref)).exists)tx.update(ref,{status:'retry',error:'Action incomplete. Retry after checking the content.',leaseUntil:Timestamp.fromMillis(0)});});throw e;}
 }
 async function media(db,bucket,reportId){
   const view=await detail(db,reportId);if(!view.content||view.path.split('/').length!==2||!view.path.startsWith('posts/'))fail('No media available.',404);

@@ -62,3 +62,16 @@ const {getAuth}=require('firebase-admin/auth');
 const {getStorage}=require('firebase-admin/storage');
 const {handler}=require('./moderation_http');
 exports.moderationApi=onRequest({timeoutSeconds:120,memory:'512MiB',cors:['https://mooddare.web.app','https://mooddare.firebaseapp.com']},handler(db,getAuth(),getStorage().bucket('mooddare.firebasestorage.app')));
+
+// Deletion requests are accepted durably before the app signs out. A scheduler
+// recovers failed invocations and performs the final expired-token sweep.
+const deletion=require('./account_deletion');
+const {onCall}=require('firebase-functions/v2/https');
+const deletionBucket=()=>getStorage().bucket('mooddare.firebasestorage.app');
+exports.requestAccountDeletion=onCall({timeoutSeconds:30},request=>deletion.requestDeletion(db,request));
+exports.eraseAccount=onDocumentCreated({document:'accountDeletions/{uid}',retry:true,timeoutSeconds:540,memory:'512MiB',maxInstances:1},event=>deletion.processDeletion(db,getAuth(),deletionBucket(),event.params.uid));
+exports.recoverAccountDeletions=onSchedule({schedule:'every 10 minutes',timeoutSeconds:540,memory:'512MiB',maxInstances:1},()=>deletion.recoverDeletions(db,getAuth(),deletionBucket()));
+// Covers account removals through older apps or an administrator as well.
+exports.eraseDeletedAuthAccount=require('firebase-functions/v1').region('us-central1').runWith({failurePolicy:true}).auth.user().onDelete(user=>deletion.enqueueDeletion(db,user.uid));
+const {sweepUploads}=require('./abandoned_uploads');
+exports.cleanupAbandonedUploads=onSchedule({schedule:'every 60 minutes',timeoutSeconds:540,memory:'256MiB',maxInstances:1},()=>sweepUploads(db,getAuth(),deletionBucket()));

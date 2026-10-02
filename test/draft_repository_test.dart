@@ -223,4 +223,21 @@ void main() {
     await cleared.future.timeout(const Duration(seconds: 5));
     await sub.cancel();
   });
+  test(
+    'authorized account erasure completes after sign-out without clearing the next account',
+    () async {
+      await repo.save(draft());
+      owner = 'bob';
+      await repo.save(draft(uid: 'bob'));
+      await expectLater(repo.clear('alice'), throwsStateError);
+      owner = 'alice';
+      final clearing = repo.clear('alice');
+      owner = null;
+      await clearing;
+      owner = 'bob';
+      expect(await repo.list('bob'), hasLength(1));
+      owner = 'alice';
+      expect(await repo.list('alice'), isEmpty);
+    },
+  );
 }

@@ -48,4 +48,15 @@ class RecentSearchStore {
     _pending = operation.catchError((Object _) {});
     return operation;
   }
+
+  Future<void> clear(String uid) {
+    final operation = _pending.then((_) async {
+      final file = await _file(uid);
+      for (final candidate in [file, File('${file.path}.tmp')]) {
+        if (await candidate.exists()) await candidate.delete();
+      }
+    });
+    _pending = operation.catchError((Object _) {});
+    return operation;
+  }
 }

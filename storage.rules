@@ -3,7 +3,8 @@ service firebase.storage {
   match /b/{bucket}/o {
     function active() {
       return request.auth != null && (!firestore.exists(/databases/(default)/documents/accountRestrictions/$(request.auth.uid))
-        || (firestore.get(/databases/(default)/documents/accountRestrictions/$(request.auth.uid)).data.status != 'banned'
+        || (firestore.get(/databases/(default)/documents/accountRestrictions/$(request.auth.uid)).data.status != 'deleting'
+          && firestore.get(/databases/(default)/documents/accountRestrictions/$(request.auth.uid)).data.status != 'banned'
           && (firestore.get(/databases/(default)/documents/accountRestrictions/$(request.auth.uid)).data.status != 'suspended'
             || firestore.get(/databases/(default)/documents/accountRestrictions/$(request.auth.uid)).data.until <= request.time)));
     }

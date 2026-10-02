@@ -5,6 +5,7 @@ import 'package:firebase_storage_mocks/firebase_storage_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mooddare/core/app_theme.dart';
+import 'package:mooddare/features/auth/data/welcome_history.dart';
 import 'package:mooddare/features/auth/presentation/account_access_guard.dart';
 import 'package:mooddare/features/feed/data/repositories/post_repository.dart';
 import 'package:mooddare/models/comment_model.dart';
@@ -12,6 +13,56 @@ import 'moments_test.dart' show openFeed, tapMedia;
 import 'support/moments_fakes.dart';
 
 void main() {
+  testWidgets(
+    'remote deletion covers open routes, clears local data and ends the session; failed local cleanup retries',
+    (tester) async {
+      final db = FakeFirebaseFirestore();
+      final auth = MockFirebaseAuth(
+        signedIn: true,
+        mockUser: MockUser(uid: 'member'),
+      );
+      var fail = true;
+      var completed = false;
+      final cleared = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        WelcomeHistory.channel,
+        (_) async => null,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          WelcomeHistory.channel,
+          null,
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (_, child) => AccountAccessGuard(
+            auth: auth,
+            firestore: db,
+            child: child!,
+            clearDeletedAccount: (uid) async {
+              if (fail) throw StateError('disk unavailable');
+              cleared.add(uid);
+            },
+            onAccountDeleted: () => completed = true,
+          ),
+          home: const Scaffold(body: Text('Camera open')),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await db.doc('accountDeletions/member').set({'status': 'pending'});
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Please retry to clear'), findsOneWidget);
+      expect(auth.currentUser?.uid, 'member');
+      fail = false;
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(cleared, ['member']);
+      expect(auth.currentUser, isNull);
+      expect(completed, isTrue);
+    },
+  );
+
   test(
     'comment and reply reports preserve target and reporter without copying text',
     () async {

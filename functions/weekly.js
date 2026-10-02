@@ -33,15 +33,15 @@ async function announceWeek(db, {now=()=>Date.now(), pageSize=100, maxPages=5}={
     const page=await query.get();
     const count=await db.runTransaction(async tx=> {
       const refs=[job,weekRef];
-      for(const user of page.docs) refs.push(user.ref, user.ref.collection('preferences').doc('notifications'),user.ref.collection('notifications').doc(`weekly_${id}`));
+      for(const user of page.docs) refs.push(user.ref, user.ref.collection('preferences').doc('notifications'),user.ref.collection('notifications').doc(`weekly_${id}`),db.doc(`accountDeletions/${user.id}`));
       const docs=await tx.getAll(...refs);
       if(docs[0].data()?.complete || (docs[0].data()?.cursor ?? null)!==cursor) return -1;
       const current=now();
       if(new Date(current).getUTCDay()!==1 || !activeWeek(id,docs[1].data(),current)) return -1;
       let created=0;
       for(let i=0;i<page.docs.length;i++) {
-        const [user,prefs,existing]=docs.slice(2+i*3,5+i*3);
-        if(!user.exists || existing.exists || prefs.data()?.weeklyDares===false) continue;
+        const [user,prefs,existing,deletion]=docs.slice(2+i*4,6+i*4);
+        if(deletion.exists || !user.exists || existing.exists || prefs.data()?.weeklyDares===false) continue;
         // This announces the rollover, rather than backfilling new accounts.
         if(user.data().createdAt?.toMillis?.()>docs[1].data().startsAt.toMillis()) continue;
         tx.create(existing.ref,{kind:'weekly',recipientId:user.id,weeklyDareId:id,read:false,

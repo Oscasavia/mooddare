@@ -88,7 +88,26 @@ class PostRepository {
         await mediaFile.length() > 30 * 1024 * 1024) {
       throw const FormatException('Choose a capture smaller than 30 MB.');
     }
-    final id = postId ?? const Uuid().v4();
+    var id = postId ?? const Uuid().v4();
+    // An abandoned upload may have been reclaimed after seven days. Follow its
+    // server-assigned replacement so retries remain safe and idempotent.
+    for (var attempt = 0; attempt < 8; attempt++) {
+      final marker = await _firestore
+          .doc('moderationPosts/$id')
+          .get(const GetOptions(source: Source.server));
+      final data = marker.data();
+      if (data?['reason'] != 'abandoned-upload') break;
+      final replacement = data?['replacementPostId'];
+      if (data?['ownerId'] != user.uid ||
+          replacement is! String ||
+          !MomentLinks.validId(replacement) ||
+          attempt == 7) {
+        throw StateError(
+          'This upload is no longer available. Please save a new draft.',
+        );
+      }
+      id = replacement;
+    }
     final doc = _firestore.collection('posts').doc(id);
     // Retrying an acknowledged or ambiguously completed post never duplicates it.
     if ((await doc.get()).exists) return;

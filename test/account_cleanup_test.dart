@@ -1,11 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
-import 'package:firebase_storage_mocks/firebase_storage_mocks.dart';
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mooddare/features/profile/data/account_repository.dart';
-import 'package:mooddare/features/profile/data/social_repository.dart';
 
 class RecentToken implements IdTokenResult {
   @override
@@ -14,124 +11,77 @@ class RecentToken implements IdTokenResult {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-// MockUser deliberately exposes mutable account state for tests.
 // ignore: must_be_immutable
 class RecentUser extends MockUser {
   RecentUser() : super(uid: 'alice', isAnonymous: false);
-  bool deleted = false;
   @override
   Future<IdTokenResult> getIdTokenResult([bool forceRefresh = false]) async =>
       RecentToken();
   @override
-  Future<void> delete() async {
-    deleted = true;
-  }
+  Future<void> delete() =>
+      throw StateError('Only the server deletes Auth accounts.');
 }
 
 void main() {
   test(
-    'account cleanup removes own replies, replies to own orphaned threads, follows in both directions and keeps other content',
+    'clears local drafts and detaches push, but signs out only after durable server acceptance',
     () async {
-      final db = FakeFirebaseFirestore(), user = RecentUser();
-      final auth = MockFirebaseAuth(mockUser: user, signedIn: true);
-      final storage = MockFirebaseStorage();
-      final social = SocialRepository(firestore: db, auth: auth);
-      await db.doc('users/alice').set({
-        'id': 'alice',
-        'username_lower': 'alice',
-      });
-      await db.doc('usernames/alice').set({'uid': 'alice'});
-      await social.setFollowing('bob', true);
-      await db.doc('users/bob/following/alice').set({
-        'createdAt': Timestamp.now(),
-      });
-      await db.doc('users/alice/followers/bob').set({
-        'createdAt': Timestamp.now(),
-      });
-      await db.doc('posts/other').set({
-        'authorId': 'bob',
-        'likedBy': ['alice', 'bob'],
-      });
-      for (final parent in ['other', 'orphan']) {
-        await db.doc('posts/$parent/comments/root').set({
-          'authorId': 'alice',
-          'text': 'root',
-        });
-        await db.doc('posts/$parent/replies/r').set({
-          'authorId': 'bob',
-          'parentId': 'root',
-          'rootAuthorId': 'alice',
-          'text': 'reply',
-        });
-      }
-      await db.doc('posts/other/comments/keep').set({
-        'authorId': 'bob',
-        'text': 'keep',
-      });
-      await db.doc('posts/other/replies/own').set({
-        'authorId': 'alice',
-        'parentId': 'keep',
-        'rootAuthorId': 'bob',
-        'text': 'mine',
-      });
-      await db.doc('posts/other/replies/keep').set({
-        'authorId': 'bob',
-        'parentId': 'keep',
-        'rootAuthorId': 'bob',
-        'text': 'keep',
-      });
-      await db.doc('users/alice/blocked/charlie').set({
-        'createdAt': Timestamp.now(),
-      });
-      await db.doc('reports/alice_other').set({'reporterId': 'alice'});
-      await db.doc('reports/alice_user_bob').set({
-        'reporterId': 'alice',
-        'userId': 'bob',
-        'reason': 'spam',
-      });
-      String? clearedDraftOwner;
-      await AccountRepository(
-        deleteLocalDrafts: (uid) async {
-          clearedDraftOwner = uid;
-          expect(user.deleted, false);
-        },
-        firestore: db,
+      final auth = MockFirebaseAuth(mockUser: RecentUser(), signedIn: true);
+      final accepted = Completer<void>();
+      final calls = <String>[];
+      final repo = AccountRepository(
         auth: auth,
-        storage: storage,
-      ).deleteAccount();
-      expect(user.deleted, true);
-      expect(clearedDraftOwner, 'alice');
-      expect((await db.doc('users/alice').get()).exists, false);
-      expect((await db.doc('usernames/alice').get()).exists, false);
-      expect((await db.collectionGroup('following').get()).docs, isEmpty);
-      expect((await db.collectionGroup('followers').get()).docs, isEmpty);
-      expect(
-        (await db.collectionGroup('comments').get()).docs.map((d) => d.id),
-        ['keep'],
+        deleteLocalDrafts: (uid) async {
+          calls.add('drafts:$uid');
+        },
+        detachPush: () async {
+          calls.add('push');
+        },
+        requestDeletion: (_) {
+          calls.add('request');
+          return accepted.future;
+        },
       );
-      expect(
-        (await db.collectionGroup('replies').get()).docs.map((d) => d.id),
-        ['keep'],
-      );
-      expect((await db.doc('posts/other').get()).data()!['likedBy'], ['bob']);
-      expect((await db.collectionGroup('blocked').get()).docs, isEmpty);
-      expect((await db.collection('reports').get()).docs, isEmpty);
+      final deleting = repo.deleteAccount();
+      await Future<void>.delayed(Duration.zero);
+      expect(calls, ['drafts:alice', 'push', 'request']);
+      expect(auth.currentUser?.uid, 'alice');
+      accepted.complete();
+      await deleting;
+      expect(auth.currentUser, isNull);
     },
   );
   test(
-    'old authentication and signed-out callers cannot start destructive cleanup',
+    'failed acceptance remains signed in and can be retried safely',
     () async {
-      final db = FakeFirebaseFirestore();
+      final auth = MockFirebaseAuth(mockUser: RecentUser(), signedIn: true);
+      var fail = true;
+      final repo = AccountRepository(
+        auth: auth,
+        deleteLocalDrafts: (_) async {},
+        detachPush: () async {},
+        requestDeletion: (_) async {
+          if (fail) throw StateError('offline');
+        },
+      );
+      await expectLater(repo.deleteAccount(), throwsStateError);
+      expect(auth.currentUser?.uid, 'alice');
+      fail = false;
+      await repo.deleteAccount();
+      expect(auth.currentUser, isNull);
+    },
+  );
+  test(
+    'old authentication and signed-out callers cannot request cleanup',
+    () async {
       final auth = MockFirebaseAuth(
         mockUser: MockUser(uid: 'alice'),
         signedIn: true,
       );
       final repo = AccountRepository(
-        firestore: db,
         auth: auth,
-        storage: MockFirebaseStorage(),
+        requestDeletion: (_) => throw StateError('Must not request'),
       );
-      await db.doc('users/alice').set({'id': 'alice'});
       await expectLater(
         repo.deleteAccount(),
         throwsA(
@@ -142,9 +92,34 @@ void main() {
           ),
         ),
       );
-      expect((await db.doc('users/alice').get()).exists, true);
       await auth.signOut();
       await expectLater(repo.deleteAccount(), throwsStateError);
+    },
+  );
+  test(
+    'an account switch during local cleanup cannot delete the next account',
+    () async {
+      final auth = MockFirebaseAuth(mockUser: RecentUser(), signedIn: true);
+      var requested = false;
+      final repo = AccountRepository(
+        auth: auth,
+        deleteLocalDrafts: (_) => auth.signOut(),
+        detachPush: () async {},
+        requestDeletion: (_) async {
+          requested = true;
+        },
+      );
+      await expectLater(
+        repo.deleteAccount(),
+        throwsA(
+          isA<FirebaseAuthException>().having(
+            (e) => e.code,
+            'code',
+            'user-mismatch',
+          ),
+        ),
+      );
+      expect(requested, false);
     },
   );
 }
