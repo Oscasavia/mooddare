@@ -2,7 +2,7 @@
 // ignore_for_file: type=lint
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+    show defaultTargetPlatform, kIsWeb, kReleaseMode, TargetPlatform;
 
 /// Default [FirebaseOptions] for use with your Firebase apps.
 ///
@@ -24,7 +24,7 @@ class DefaultFirebaseOptions {
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return android;
+        return kReleaseMode ? androidRelease : android;
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
@@ -52,6 +52,14 @@ class DefaultFirebaseOptions {
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCpu6iM86JCIQ0xk5SArXPzT85JAUB8-wU',
     appId: '1:1010705723283:android:7e0fad8456d00af6270266',
+    messagingSenderId: '1010705723283',
+    projectId: 'mooddare',
+    storageBucket: 'mooddare.firebasestorage.app',
+  );
+
+  static const FirebaseOptions androidRelease = FirebaseOptions(
+    apiKey: 'AIzaSyCpu6iM86JCIQ0xk5SArXPzT85JAUB8-wU',
+    appId: '1:1010705723283:android:c08f77f47d452ca3270266',
     messagingSenderId: '1010705723283',
     projectId: 'mooddare',
     storageBucket: 'mooddare.firebasestorage.app',

@@ -1,6 +1,7 @@
 // MOODDARE_FLUTTER_SDK=/path/to/flutter flutter test tooling/export_website_assets.dart
 // Exports actual Flutter widgets with bundled example moods, never live users.
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -16,6 +17,53 @@ import 'package:mooddare/features/dares/presentation/screens/dares_screen.dart';
 import 'package:mooddare/features/dares/presentation/screens/dare_generation_screen.dart';
 import 'package:mooddare/features/settings/presentation/legal_screen.dart';
 import 'package:mooddare/models/mood_model.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mooddare/models/post_model.dart';
+import 'package:mooddare/models/user_model.dart';
+import 'package:mooddare/features/feed/presentation/screens/feed_screen.dart';
+import 'package:mooddare/features/dares/data/repositories/weekly_dare_repository.dart';
+import 'package:mooddare/features/dares/data/repositories/dare_library_repository.dart';
+import '../test/support/moments_fakes.dart';
+import '../test/support/fixture_images.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+
+class WebsitePaths extends PathProviderPlatform {
+  final String path;
+  WebsitePaths(this.path);
+  @override
+  Future<String?> getApplicationSupportPath() async => path;
+}
+
+class WebsiteWeek extends WeeklyDareRepository {
+  @override
+  Stream<WeeklyDare?> watch(DateTime now) => Stream.value(
+    WeeklyDare(
+      id: WeeklyDare.weekId(now),
+      title: 'A little joy',
+      prompt: const DarePrompt(
+        text: 'Capture one small thing that made you smile today.',
+        moodId: 'happy',
+        moodName: 'Happy',
+      ),
+      startsAt: WeeklyDare.weekStart(now),
+      endsAt: WeeklyDare.weekStart(now).add(const Duration(days: 7)),
+    ),
+  );
+  @override
+  Stream<bool> completed(String weekId) => Stream.value(false);
+}
+
+Widget websiteNavigation(int selected) => NavigationBar(
+  selectedIndex: selected,
+  destinations: const [
+    NavigationDestination(
+      icon: Icon(Icons.dynamic_feed_outlined),
+      label: 'Moments',
+    ),
+    NavigationDestination(icon: MoodWink(size: 26), label: 'Discover'),
+    NavigationDestination(icon: Icon(Icons.person_outline), label: 'You'),
+  ],
+);
 
 void exportLegal(String name, String title, List<LegalSection> sections) {
   const escape = HtmlEscape();
@@ -36,6 +84,15 @@ void main() {
   testWidgets('export real app screens and approved branding for the website', (
     tester,
   ) async {
+    final previewDirectory = Directory.systemTemp.createTempSync(
+      'mooddare-web-preview-',
+    );
+    final originalPaths = PathProviderPlatform.instance;
+    PathProviderPlatform.instance = WebsitePaths(previewDirectory.path);
+    addTearDown(() {
+      PathProviderPlatform.instance = originalPaths;
+      previewDirectory.deleteSync(recursive: true);
+    });
     final sdk =
         Platform.environment['MOODDARE_FLUTTER_SDK'] ??
         Platform.environment['FLUTTER_ROOT'];
@@ -79,6 +136,11 @@ void main() {
     final appTheme = AppTheme.build();
     // Explicit button styles do not inherit the test renderer's text theme.
     final theme = appTheme.copyWith(
+      appBarTheme: appTheme.appBarTheme.copyWith(
+        titleTextStyle: appTheme.appBarTheme.titleTextStyle?.copyWith(
+          fontFamily: 'Roboto',
+        ),
+      ),
       filledButtonTheme: FilledButtonThemeData(
         style: appTheme.filledButtonTheme.style!.copyWith(
           textStyle: WidgetStatePropertyAll(
@@ -95,6 +157,7 @@ void main() {
       Widget child, {
       Size size = const Size(390, 844),
       double pixelRatio = 2,
+      Future<void> Function()? beforeCapture,
     }) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = size;
@@ -117,6 +180,14 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      });
+      await tester.pumpAndSettle();
+      if (beforeCapture != null) {
+        await beforeCapture();
+        await tester.pumpAndSettle();
+      }
       expect(tester.takeException(), isNull);
       await tester.runAsync(() async {
         final boundary =
@@ -145,6 +216,7 @@ void main() {
       Scaffold(
         body: DaresScreen(
           repository: DaresRepository(loadMoods: () async => []),
+          weeklyRepository: WebsiteWeek(),
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: 1,
@@ -165,8 +237,11 @@ void main() {
           ],
         ),
       ),
+      beforeCapture: () => tester.tap(find.byTooltip('Collapse weekly dare')),
     );
-    final creative = DaresRepository.starterMoods.first;
+    final creative = DaresRepository.starterMoods.firstWhere(
+      (mood) => mood.id == 'creative',
+    );
     await capture(
       'dare',
       DareDisplayScreen(
@@ -183,6 +258,76 @@ void main() {
       ),
     );
     await capture('welcome', const WelcomeScreen());
+    // An original mascot illustration is the example post. Never export a
+    // real member's photo, username, comments or engagement from production.
+    await capture(
+      'moment-art',
+      const Scaffold(
+        body: SizedBox.expand(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFF5C9BB),
+                  Color(0xFFB5A1EC),
+                  Color(0xFF555778),
+                ],
+              ),
+            ),
+            child: Center(child: MoodWink(size: 210)),
+          ),
+        ),
+      ),
+    );
+    final sample = PostModel(
+      id: 'website-example',
+      moodId: 'happy',
+      moodName: 'Happy',
+      dareText: 'Capture one small thing that made you smile today.',
+      mediaUrl: 'https://example.invalid/mooddare-illustration',
+      mediaType: 'image',
+      authorId: 'example',
+      createdAt: Timestamp.fromDate(
+        DateTime.now().subtract(const Duration(hours: 2)),
+      ),
+      expiresAt: Timestamp.fromDate(
+        DateTime.now().add(const Duration(hours: 22)),
+      ),
+      likedBy: const [],
+    );
+    final samplePosts = MemoryPosts([sample])
+      ..authors['example'] = UserModel(
+        id: 'example',
+        username: 'mooddare',
+        createdAt: Timestamp.now(),
+      );
+    final originalImages = debugNetworkImageHttpClientProvider;
+    debugNetworkImageHttpClientProvider = () =>
+        FixtureImages(File('website/assets/moment-art.png').readAsBytesSync());
+    await tester.runAsync(() async {
+      final image = NetworkImage(sample.mediaUrl);
+      final stream = image.resolve(ImageConfiguration.empty);
+      final done = Completer<void>();
+      final listener = ImageStreamListener(
+        (_, _) => done.complete(),
+        onError: (Object e, StackTrace? s) => done.completeError(e),
+      );
+      stream.addListener(listener);
+      await done.future;
+      stream.removeListener(listener);
+    });
+    await capture(
+      'moments',
+      Scaffold(
+        body: FeedScreen(repository: samplePosts),
+        bottomNavigationBar: websiteNavigation(0),
+      ),
+    );
+    debugNetworkImageHttpClientProvider = originalImages;
+    await samplePosts.commentChanges.close();
+    await samplePosts.removalChanges.close();
     await capture(
       'social-preview',
       Scaffold(

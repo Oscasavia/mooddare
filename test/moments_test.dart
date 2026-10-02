@@ -17,6 +17,7 @@ import 'package:video_player/video_player.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 import 'support/moments_fakes.dart';
 import 'support/fixture_images.dart';
+import 'package:mooddare/features/feed/data/feed_preferences.dart';
 
 Future<void> openFeed(
   WidgetTester tester,
@@ -25,6 +26,7 @@ Future<void> openFeed(
   Size size = const Size(390, 844),
   double textScale = 1,
   RouteFactory? onGenerateRoute,
+  FeedPreferences? preferences,
 }) async {
   final previous = VideoPlayerPlatform.instance;
   VideoPlayerPlatform.instance = video ?? MemoryVideo();
@@ -74,7 +76,7 @@ Future<void> openFeed(
       ),
       navigatorObservers: [appRouteObserver],
       onGenerateRoute: onGenerateRoute,
-      home: FeedScreen(repository: repository),
+      home: FeedScreen(repository: repository, preferences: preferences),
     ),
   );
   await tester.pumpAndSettle();

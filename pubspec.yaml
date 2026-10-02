@@ -1,7 +1,7 @@
 name: mooddare
 description: Mood-based challenges, a photo beauty studio, and shared moments.
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.8.1
@@ -38,6 +38,7 @@ dev_dependencies:
   fake_cloud_firestore: ^3.1.0
   firebase_auth_mocks: ^0.14.1
   firebase_storage_mocks: ^0.7.0
+  path_provider_platform_interface: ^2.1.2
 
 flutter:
   uses-material-design: true

@@ -7,6 +7,7 @@ class PostModel {
   final String mediaUrl;
   final String mediaType;
   final String authorId;
+  final bool deleting;
   final Timestamp createdAt;
   final Timestamp expiresAt;
   final List<String> likedBy; // Changed from reactions map
@@ -19,6 +20,7 @@ class PostModel {
     required this.mediaUrl,
     required this.mediaType,
     required this.authorId,
+    this.deleting = false,
     required this.createdAt,
     required this.expiresAt,
     required this.likedBy,
@@ -34,6 +36,7 @@ class PostModel {
       mediaUrl: data['mediaUrl'] ?? '',
       mediaType: data['mediaType'] ?? '',
       authorId: data['authorId'] ?? '',
+      deleting: data['deleting'] == true,
       createdAt: data['createdAt'] ?? Timestamp.now(),
       expiresAt: data['expiresAt'] ?? Timestamp.now(),
       likedBy: List<String>.from(data['likedBy'] ?? []),

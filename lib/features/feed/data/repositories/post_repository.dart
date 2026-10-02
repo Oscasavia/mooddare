@@ -188,7 +188,7 @@ class PostRepository {
     return query
         .where('expiresAt', isGreaterThan: Timestamp.now())
         .orderBy('expiresAt', descending: true)
-        .limit(60)
+        .limit(120)
         .snapshots()
         .map((snapshot) => snapshot.docs.map(PostModel.fromFirestore).toList());
   }

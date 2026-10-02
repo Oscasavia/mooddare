@@ -38,7 +38,9 @@ so serving the site does not require audio synthesis or rendering tools.
 ## Screenshots and policy pages
 
 `tooling/export_website_assets.dart` renders the actual Flutter screens, using
-only built-in moods. No real profile, email, photo or post is included. The wordmark
+only built-in moods, an illustrative weekly dare and a fictional Mood-wink post.
+The gallery shows Discover, a selected dare and Moments; the Welcome capture is
+also refreshed for later use. No real member's profile, email, photo or post is included. The wordmark
 and mascot come from the approved app artwork. Roboto is loaded from the Flutter
 SDK when rendering; the website itself uses system fonts and makes no font requests.
 PNG screenshots are committed, so browsing the site needs no Flutter installation.

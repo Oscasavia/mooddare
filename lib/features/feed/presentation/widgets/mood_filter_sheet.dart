@@ -1,10 +1,21 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../data/feed_ranker.dart';
 
 class MoodFilterSheet extends StatefulWidget {
   final List<MapEntry<String, String>> moods;
   final String? selectedId;
-  const MoodFilterSheet({super.key, required this.moods, this.selectedId});
+  final FeedOrder? order;
+  final ValueChanged<FeedOrder>? onOrderChanged;
+  final VoidCallback? onReset;
+  const MoodFilterSheet({
+    super.key,
+    required this.moods,
+    this.selectedId,
+    this.order,
+    this.onOrderChanged,
+    this.onReset,
+  });
   @override
   State<MoodFilterSheet> createState() => _MoodFilterSheetState();
 }
@@ -75,6 +86,46 @@ class _MoodFilterSheetState extends State<MoodFilterSheet> {
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   children: [
+                    if (widget.order != null) ...[
+                      for (final choice in FeedOrder.values)
+                        ListTile(
+                          leading: Icon(
+                            choice == FeedOrder.forYou
+                                ? Icons.favorite_border_rounded
+                                : Icons.schedule_rounded,
+                          ),
+                          title: Text(
+                            choice == FeedOrder.forYou ? 'For you' : 'Latest',
+                          ),
+                          subtitle: Text(
+                            choice == FeedOrder.forYou
+                                ? 'A mix inspired by what you enjoy'
+                                : 'Newest first · learning paused',
+                          ),
+                          trailing: widget.order == choice
+                              ? const Icon(Icons.check_rounded)
+                              : null,
+                          onTap: () {
+                            Navigator.pop(context);
+                            widget.onOrderChanged?.call(choice);
+                          },
+                        ),
+                      ListTile(
+                        leading: const Icon(Icons.restart_alt_rounded),
+                        title: const Text('Reset feed preferences'),
+                        subtitle: const Text(
+                          'Your activity history is private. Reset it anytime.',
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          widget.onReset?.call();
+                        },
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+                        child: Text('MOODS'),
+                      ),
+                    ],
                     ListTile(
                       title: const Text('All moods'),
                       trailing: widget.selectedId == null

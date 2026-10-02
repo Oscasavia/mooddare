@@ -179,7 +179,7 @@ test('mood sampler updates the prompt and accessible selection', async () => {
 
 test('all screenshots enlarge, close with Escape/button and restore keyboard focus', async () => {
   await visit('/', 390);
-  for (const screen of ['discover', 'dare', 'welcome']) {
+  for (const screen of ['discover', 'dare', 'moments']) {
     await evaluate(`{const button = document.querySelector('[data-screen="${screen}"]');button.focus();button.click();}`);
     assert.equal(await evaluate(`document.querySelector('#screen-dialog').open`), true);
     assert.equal(await evaluate(`document.body.classList.contains('dialog-open')`), true);
@@ -211,7 +211,7 @@ test('privacy and terms load offline-style without scripts at narrow widths', as
     assert.equal(await evaluate(`document.querySelectorAll('script').length`), 0);
     assert.match(await evaluate(`document.body.textContent`), /MoodDare team/);
     if (page === 'privacy') assert.match(await evaluate(`document.body.textContent`), /Firebase Cloud Messaging processes a device registration token/);
-    assert.match(await evaluate(`document.body.textContent`), /Last updated September 29, 2026/);
+    assert.match(await evaluate(`document.body.textContent`), /Last updated October 1, 2026/);
   }
 });
 

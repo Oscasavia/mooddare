@@ -1,4 +1,5 @@
 import '../../../links/moment_links.dart';
+import '../../data/feed_ranker.dart';
 import 'package:mooddare/core/widgets/action_menu_label.dart';
 import 'package:mooddare/features/dares/data/repositories/dare_library_repository.dart';
 import 'package:mooddare/features/dares/presentation/widgets/dare_actions.dart';
@@ -28,6 +29,7 @@ class DareProofCard extends StatefulWidget {
   final bool isFullScreen, isActive;
   final bool openComments;
   final VoidCallback? onHidden;
+  final ValueChanged<FeedActivity>? onActivity;
   final PostRepository? repository;
   const DareProofCard({
     super.key,
@@ -37,6 +39,7 @@ class DareProofCard extends StatefulWidget {
     this.openComments = false,
     this.isActive = false,
     this.onHidden,
+    this.onActivity,
     this.repository,
   });
   @override
@@ -54,6 +57,10 @@ class _DareProofCardState extends State<DareProofCard>
   late Future<int> _commentCount;
   VideoPlayerController? _video;
   Timer? _timer;
+  Timer? _engagementTimer;
+  int _visibleSeconds = 0, _playedSeconds = 0;
+  Duration? _lastPosition;
+  bool _imageReady = false, _sentView = false, _sentCompletion = false;
   StreamSubscription<bool>? _removal;
   bool _removed = false;
   PageRoute<dynamic>? _route;
@@ -108,6 +115,12 @@ class _DareProofCardState extends State<DareProofCard>
       }
     });
     if (widget.post.mediaType == 'video') _loadVideo();
+    if (widget.onActivity != null) {
+      _engagementTimer = Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => _measureView(),
+      );
+    }
     if (widget.openComments) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _comments();
@@ -197,6 +210,45 @@ class _DareProofCardState extends State<DareProofCard>
     }
   }
 
+  void _measureView() {
+    if (!_shouldPlay || _route?.isCurrent != true) {
+      _lastPosition = null;
+      return;
+    }
+    if (widget.post.mediaType == 'video') {
+      final value = _video?.value;
+      if (value == null ||
+          !value.isInitialized ||
+          !value.isPlaying ||
+          value.isBuffering) {
+        _lastPosition = null;
+        return;
+      }
+      final previous = _lastPosition;
+      _lastPosition = value.position;
+      // Seeks, buffering and background time are not watch time.
+      if (previous == null) return;
+      final delta = (value.position - previous).inMilliseconds;
+      if (delta <= 0 || delta > 1800) return;
+      _playedSeconds++;
+      _visibleSeconds++;
+      if (!_sentCompletion &&
+          value.duration.inMilliseconds > 0 &&
+          value.position.inMilliseconds >=
+              value.duration.inMilliseconds * .85 &&
+          _playedSeconds * 1000 >= value.duration.inMilliseconds * .65) {
+        _sentCompletion = true;
+        widget.onActivity?.call(FeedActivity.completed);
+      }
+    } else if (_imageReady) {
+      _visibleSeconds++;
+    }
+    if (!_sentView && _visibleSeconds >= 5) {
+      _sentView = true;
+      widget.onActivity?.call(FeedActivity.viewed);
+    }
+  }
+
   @override
   void didPushNext() {
     _covered = true;
@@ -238,6 +290,7 @@ class _DareProofCardState extends State<DareProofCard>
     WidgetsBinding.instance.removeObserver(this);
     appRouteObserver.unsubscribe(this);
     _timer?.cancel();
+    _engagementTimer?.cancel();
     _removal?.cancel();
     _heart.dispose();
     unawaited(_video?.dispose());
@@ -274,6 +327,7 @@ class _DareProofCardState extends State<DareProofCard>
             post: widget.post,
             repository: _repository,
             onHidden: widget.onHidden,
+            onActivity: widget.onActivity,
             dareLibrary: _dareLibrary,
           ),
         ),
@@ -306,6 +360,9 @@ class _DareProofCardState extends State<DareProofCard>
     });
     try {
       await _repository.toggleLike(widget.post.id, uid);
+      widget.onActivity?.call(
+        wasLiked ? FeedActivity.unlike : FeedActivity.like,
+      );
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -322,11 +379,17 @@ class _DareProofCardState extends State<DareProofCard>
 
   Future<void> _action(String action) async {
     if (!mounted) return;
+    if (action == 'notInterested') {
+      widget.onActivity?.call(FeedActivity.notInterested);
+      _hide();
+      return;
+    }
     if (action == 'saveDare') {
       if (_savingDare) return;
       setState(() => _savingDare = true);
       try {
         await _dareLibrary.save(DarePrompt.fromPost(widget.post));
+        widget.onActivity?.call(FeedActivity.saved);
         _message('Dare saved to your profile.');
       } catch (_) {
         _message('Could not save this dare. Please try again.');
@@ -418,6 +481,10 @@ class _DareProofCardState extends State<DareProofCard>
     if (widget.post.mediaType != 'video') {
       return Image.network(
         widget.post.mediaUrl,
+        frameBuilder: (context, child, frame, synchronous) {
+          _imageReady = synchronous || frame != null;
+          return child;
+        },
         fit: widget.isFullScreen ? BoxFit.contain : BoxFit.cover,
         errorBuilder: (_, _, _) =>
             const Center(child: Icon(Icons.broken_image_outlined, size: 44)),
@@ -583,6 +650,15 @@ class _DareProofCardState extends State<DareProofCard>
                                   child: ActionMenuLabel(
                                     action: MenuAction.hide,
                                     text: 'Hide for now',
+                                  ),
+                                ),
+                              if (widget.onActivity != null &&
+                                  widget.post.authorId != _uid)
+                                const PopupMenuItem(
+                                  value: 'notInterested',
+                                  child: ActionMenuLabel(
+                                    action: MenuAction.hide,
+                                    text: 'Not interested',
                                   ),
                                 ),
                             ],

@@ -9,7 +9,7 @@ class LegalSection {
   const LegalSection(this.title, this.body);
 }
 
-const legalUpdated = 'September 29, 2026';
+const legalUpdated = 'October 1, 2026';
 
 const termsSections = <LegalSection>[
   LegalSection(
@@ -50,7 +50,7 @@ const termsSections = <LegalSection>[
   ),
   LegalSection(
     'Leaving MoodDare',
-    'You can stop using the app at any time and request account deletion from Settings → Delete account. You may need to verify your identity. Keep the app open until deletion finishes; if it fails, retry or contact us. See the Privacy Policy for information about retention, backups and copies saved by other people.',
+    'You can stop using the app at any time and request account deletion from Settings → Delete account. You may need to verify your identity. Once MoodDare accepts your request, deletion continues on our servers even if you close the app. If the request cannot be accepted, retry or contact us. See the Privacy Policy for information about retention, backups and copies saved by other people.',
   ),
   LegalSection(
     'Changes and questions',
@@ -76,6 +76,10 @@ const privacySections = <LegalSection>[
     'MoodDare stores notification preferences, activity identifiers and read status to provide your private activity inbox. If you enable phone alerts, Firebase Cloud Messaging processes a device registration token linked to your signed-in account to deliver them. You can change notification categories or disable phone alerts in Settings. Notification entries are removed after about 30 days; inactive device registrations are removed after about 60 days. Signing out removes the current device registration. Phone alerts do not include the text of comments or replies.',
   ),
   LegalSection(
+    'Personalized Moments',
+    'For you uses the moments you spend time viewing, video completion, likes, saved dares, follows and Not interested choices to suggest a varied mix of recent posts. This activity history is private to your account and is not used to diagnose your mood or health. The feed uses up to your 200 most recent activity records; records expire after 30 days and are removed during daily cleanup. In the Moments filter menu, choose Latest to pause new activity learning and see newest posts first, or reset feed preferences to delete this history. Resetting does not remove your public likes, saved dares or follows. Account deletion removes recommendation history too.',
+  ),
+  LegalSection(
     'Camera, microphone and face effects',
     'Camera access lets you take photos and videos. Microphone access lets you record sound. Photo-library or media permissions are used when you select or save media. You can manage these permissions in your device settings; disabling them may limit the related feature. Face detection and beauty effects process images and face landmarks on your device. MoodDare does not use these landmarks to identify you or upload them as a face template. Edited photos or videos may contain your face and are uploaded when you choose to post; a profile photo is uploaded when you save it to your profile.',
   ),
@@ -93,7 +97,7 @@ const privacySections = <LegalSection>[
   ),
   LegalSection(
     'Retention and deletion',
-    'Moments leave the feed after 24 hours, but this does not delete the post or its media. Your posts remain available through your profile until deleted. You can delete your own posts and comments and request account deletion in Settings. Account deletion removes the profile, uploaded media, posts and associated account data handled by the deletion process. Interrupted deletion may leave data until you retry or contact us. Some records may remain in service-provider logs or backups for their retention periods, or where legally required. Copies downloaded or shared by others are outside our control. Local cached files may remain until cleared by the app, operating system or removal of the app.',
+    'Moments leave the feed after 24 hours, but this does not delete the post or its media. Your posts remain available through your profile until deleted. You can delete your own posts and comments and request account deletion in Settings. Account deletion removes the profile, uploaded media, posts and associated account data handled by the deletion process. Accepted deletion requests continue on our servers and retry temporary failures. Cloud Storage keeps recoverable soft-deleted copies for its configured seven-day recovery period. Some records may remain in service-provider logs or backups for their retention periods, or where legally required. Copies downloaded or shared by others are outside our control. Local cached files may remain until cleared by the app, operating system or removal of the app.',
   ),
   LegalSection(
     'Your choices and requests',

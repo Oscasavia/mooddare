@@ -120,7 +120,7 @@ function stages(db,auth,bucket,uid,check) {
     ...['senderId','recipientId'].map(f=>()=>clearQuery(db,q('dareInvites',f),check)),
     ...['reporterId','userId'].map(f=>()=>eraseReports(db,q('reports',f),check)),
     async()=>clearQuery(db,q('pushTokens','uid'),check),
-    async()=>clearQuery(db,g('notifications','actorId'),check),
+    async()=>{await clearQuery(db,g('notifications','actorId'),check);await clearQuery(db,g('feedHistory','authorId'),check);},
     async()=>clearQuery(db,g('notifications','recipientId'),check),
     async()=>clearQuery(db,q('usernames','uid'),check),
     async()=>clearQuery(db,q('moderationPosts','ownerId'),check),

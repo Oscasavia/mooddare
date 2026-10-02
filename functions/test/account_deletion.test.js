@@ -66,7 +66,13 @@ run('erases Auth, all account media, orphaned descendants and cross-account refe
  };
  await Promise.all(Object.entries(values).map(([p,v])=>put(p,v)));
  for(const name of ['posts/erase/own.jpg','posts/erase/unposted.mp4','posts/erase/nested/old.jpg','profile_pictures/erase/old.jpg','profile_pictures/erase','posts/keep/keep.jpg','posts/erase-other/keep.jpg'])objects.add(name);
+ await put('users/erase/feedHistory/own',{authorId:'keep'});
+ await put('users/keep/feedHistory/deleted-author',{authorId:'erase'});
+ await put('users/keep/feedHistory/keep',{authorId:'keep'});
  await d.requestDeletion(db,request(),{now:clock});await erase();
+ assert.equal(await exists('users/erase/feedHistory/own'),false);
+ assert.equal(await exists('users/keep/feedHistory/deleted-author'),false);
+ assert.equal(await exists('users/keep/feedHistory/keep'),true);
  await assert.rejects(auth.getUser('erase'),{code:'auth/user-not-found'});
  assert.equal((await auth.getUser('keep')).disabled,false);
  assert.deepEqual([...objects].sort(),['posts/erase-other/keep.jpg','posts/keep/keep.jpg']);

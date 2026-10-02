@@ -44,6 +44,7 @@ jobs:
       - run: python3 tooling/check_coverage.py --minimum 75
       - run: flutter test test/membership_preview_test.dart --dart-define=MOODDARE_MEMBERSHIP_PREVIEW=true
       - run: flutter build apk --debug --target-platform android-arm64
+      - run: python3 tooling/check_android_native.py build/app/outputs/flutter-apk/app-debug.apk
       - run: ./gradlew :app:testDebugUnitTest -Ptarget-platform=android-arm64
         working-directory: android
   firebase-rules:

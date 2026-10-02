@@ -12,10 +12,13 @@ import 'package:mooddare/models/post_model.dart';
 import '../../data/repositories/post_repository.dart';
 import '../widgets/dare_proof_card.dart';
 import '../widgets/mood_filter_sheet.dart';
+import '../../data/feed_preferences.dart';
+import '../../data/feed_ranker.dart';
 
 class FeedScreen extends StatefulWidget {
   final PostRepository? repository;
-  const FeedScreen({super.key, this.repository});
+  final FeedPreferences? preferences;
+  const FeedScreen({super.key, this.repository, this.preferences});
   @override
   State<FeedScreen> createState() => _FeedScreenState();
 }
@@ -33,6 +36,65 @@ class _FeedScreenState extends State<FeedScreen> {
   final List<PostModel> _loaded = [];
   final _moodOptions = <String, String>{};
   bool _exitArmed = false;
+  FeedPreferences? _preferences;
+  bool _preferencesLoading = false;
+  final _order = <String>[];
+  String? _visibleId;
+  bool _changingMood = false;
+
+  void _activity(PostModel post, FeedActivity activity) {
+    unawaited(_preferences?.record(post, activity).catchError((Object _) {}));
+  }
+
+  Future<void> _setOrder(FeedOrder order) async {
+    try {
+      await _preferences?.setOrder(order);
+      if (mounted) _refresh();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not save your feed preference. Try again.'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _resetPreferences() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Start fresh?'),
+        content: const Text(
+          'Clear what Moments has learned from your activity. Your likes, saved dares and follows stay as they are.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reset feed'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await _preferences?.reset();
+      if (mounted) _refresh();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not reset your feed. Please retry.'),
+          ),
+        );
+      }
+    }
+  }
 
   void _disarmExit() {
     _exitArmed = false;
@@ -42,6 +104,8 @@ class _FeedScreenState extends State<FeedScreen> {
     if (_pages.hasClients) _pages.jumpToPage(0);
     setState(() {
       _index = 0;
+      _order.clear();
+      _visibleId = null;
       _posts = _repository.getPosts(moodId: _moodId);
     });
   }
@@ -83,7 +147,13 @@ class _FeedScreenState extends State<FeedScreen> {
       showDragHandle: true,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => MoodFilterSheet(moods: moods, selectedId: _moodId),
+      builder: (_) => MoodFilterSheet(
+        moods: moods,
+        selectedId: _moodId,
+        order: _preferences?.order,
+        onOrderChanged: _setOrder,
+        onReset: _resetPreferences,
+      ),
     );
     if (!mounted || selected == null) return;
     _selectMood(
@@ -98,9 +168,12 @@ class _FeedScreenState extends State<FeedScreen> {
     _disarmExit();
     if (_pages.hasClients) _pages.jumpToPage(0);
     setState(() {
+      _changingMood = id != _moodId;
       _moodId = id;
       _moodName = name;
       _index = 0;
+      _order.clear();
+      _visibleId = null;
       _posts = _repository.getPosts(moodId: _moodId);
     });
   }
@@ -109,6 +182,24 @@ class _FeedScreenState extends State<FeedScreen> {
   void initState() {
     super.initState();
     _repository = widget.repository ?? PostRepository();
+    // Injected repositories can run independently of Firebase (tests/previews).
+    _preferences =
+        widget.preferences ??
+        (widget.repository == null && _repository.currentUserId != null
+            ? FeedPreferences.current()
+            : null);
+    if (_preferences != null) {
+      _preferencesLoading = true;
+      _preferences!
+          .load()
+          .timeout(const Duration(seconds: 8))
+          .catchError((Object _) {
+            // Fresh moments still work offline or if preferences are unavailable.
+          })
+          .whenComplete(() {
+            if (mounted) setState(() => _preferencesLoading = false);
+          });
+    }
     _posts = _repository.getPosts(moodId: _moodId);
     _repository
         .getMoodOptions()
@@ -223,23 +314,59 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
               );
             }
-            if (!snapshot.hasData) {
+            final waiting = snapshot.connectionState == ConnectionState.waiting;
+            if (!snapshot.hasData ||
+                (waiting && _changingMood) ||
+                _preferencesLoading) {
               return const Center(child: CircularProgressIndicator());
             }
+            if (!waiting) _changingMood = false;
             for (final post in snapshot.data!) {
               if (!_loaded.any((p) => p.moodId == post.moodId)) {
                 _loaded.add(post);
               }
             }
-            final posts = snapshot.data!
+            final candidates = snapshot.data!
                 .where(
                   (p) =>
                       (_moodId == null || p.moodId == _moodId) &&
+                      !p.deleting &&
                       !_hidden.contains(p.id) &&
                       !_blocked.contains(p.authorId) &&
                       p.expiresAt.toDate().isAfter(DateTime.now()),
                 )
                 .toList();
+            final ranked = _preferences == null
+                ? candidates
+                : FeedRanker.rank(
+                    candidates,
+                    now: DateTime.now(),
+                    viewerId: _repository.currentUserId,
+                    history: _preferences?.history.values ?? const [],
+                    following: _preferences?.following ?? const {},
+                    blocked: _blocked,
+                    order: _preferences?.order ?? FeedOrder.latest,
+                  );
+            final byId = {for (final post in ranked) post.id: post};
+            if (!waiting) {
+              _order.removeWhere((id) => !byId.containsKey(id));
+              _order.addAll(
+                ranked.map((p) => p.id).where((id) => !_order.contains(id)),
+              );
+            }
+            final posts = waiting
+                ? ranked
+                : _order.map((id) => byId[id]!).toList();
+            final anchor = _order.indexOf(_visibleId ?? '');
+            final target = anchor >= 0
+                ? anchor
+                : _index.clamp(0, posts.isEmpty ? 0 : posts.length - 1);
+            if (target != _index) {
+              _index = target;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted && _pages.hasClients) _pages.jumpToPage(_index);
+              });
+            }
             if (posts.isEmpty) {
               if (_moodId != null) {
                 return AppEmptyState(
@@ -264,17 +391,26 @@ class _FeedScreenState extends State<FeedScreen> {
               );
             }
             final active = _index.clamp(0, posts.length - 1);
+            if (!waiting) _visibleId = posts[active].id;
             return PageView.builder(
               key: ValueKey(_moodId),
               controller: _pages,
               scrollDirection: Axis.vertical,
               itemCount: posts.length,
-              onPageChanged: (i) => setState(() => _index = i),
+              onPageChanged: (i) => setState(() {
+                _index = i;
+                _visibleId = posts[i].id;
+              }),
               itemBuilder: (context, i) => DareProofCard(
                 key: ValueKey(posts[i].id),
                 post: posts[i],
                 repository: _repository,
                 isActive: i == active,
+                onActivity:
+                    _preferences?.ready == true &&
+                        _preferences?.order == FeedOrder.forYou
+                    ? (activity) => _activity(posts[i], activity)
+                    : null,
                 onHidden: () => setState(() => _hidden.add(posts[i].id)),
               ),
             );

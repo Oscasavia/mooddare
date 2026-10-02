@@ -16,7 +16,7 @@ if (signingFile.exists()) signingFile.inputStream().use { signingProperties.load
 
 android {
     namespace = "com.example.mooddare"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -30,7 +30,7 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 23
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -54,6 +54,18 @@ android {
 
 }
 
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.applicationId.set("com.mooddare.app")
+    }
+}
+
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.name.contains("Release") && !it.name.startsWith("clean") } && !signingFile.exists()) {
+        throw GradleException("Release signing is missing. Follow docs/ANDROID_PLAY_RELEASE.md; never use the debug key for Play.")
+    }
+}
+
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
@@ -72,7 +84,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // Bundled detector works offline, including on the first launch.
     implementation("com.google.mlkit:face-detection:16.1.7")
-    implementation("com.google.mlkit:face-mesh-detection:16.0.0-beta1")
+    implementation("com.google.mlkit:face-mesh-detection:16.0.0-beta3")
     // Match the CameraX version used by the pinned Flutter camera plugin.
     implementation("androidx.camera:camera-camera2:1.5.0-beta01")
     implementation("androidx.camera:camera-lifecycle:1.5.0-beta01")

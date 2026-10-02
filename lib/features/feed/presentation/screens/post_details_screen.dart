@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:mooddare/models/post_model.dart';
 import 'package:mooddare/features/feed/presentation/widgets/dare_proof_card.dart';
 import '../../data/repositories/post_repository.dart';
+import '../../data/feed_ranker.dart';
 
 class PostDetailsScreen extends StatelessWidget {
   final DareLibraryRepository? dareLibrary;
@@ -11,6 +12,7 @@ class PostDetailsScreen extends StatelessWidget {
   final bool openComments;
   final PostRepository? repository;
   final VoidCallback? onHidden;
+  final ValueChanged<FeedActivity>? onActivity;
   const PostDetailsScreen({
     super.key,
     required this.post,
@@ -18,6 +20,7 @@ class PostDetailsScreen extends StatelessWidget {
     this.dareLibrary,
     this.repository,
     this.onHidden,
+    this.onActivity,
   });
 
   @override
@@ -29,6 +32,7 @@ class PostDetailsScreen extends StatelessWidget {
         dareLibrary: dareLibrary,
         repository: repository,
         onHidden: onHidden,
+        onActivity: onActivity,
         isFullScreen: true,
         isActive: true,
       ),

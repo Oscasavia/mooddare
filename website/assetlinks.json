@@ -1,1 +1,26 @@
-[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"com.example.mooddare","sha256_cert_fingerprints":["62:88:0C:0F:FA:2C:A0:AD:83:6C:B2:30:AE:98:92:B7:A2:01:08:04:EF:09:B6:C6:0F:F7:CF:96:AE:19:EE:A5"]}}]
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.example.mooddare",
+      "sha256_cert_fingerprints": [
+        "62:88:0C:0F:FA:2C:A0:AD:83:6C:B2:30:AE:98:92:B7:A2:01:08:04:EF:09:B6:C6:0F:F7:CF:96:AE:19:EE:A5"
+      ]
+    }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.mooddare.app",
+      "sha256_cert_fingerprints": [
+        "D9:32:7F:DA:F9:CC:B6:C1:CB:5E:0C:4B:20:3E:E5:E9:D4:37:1F:FA:23:5D:EB:27:04:9A:22:94:4C:68:2E:42"
+      ]
+    }
+  }
+]

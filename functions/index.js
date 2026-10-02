@@ -50,6 +50,7 @@ const {sendPush} = require('./push');
 exports.pushNotification = onDocumentCreated('users/{uid}/notifications/{id}', event => sendPush(db, getMessaging(), event));
 exports.expireNotifications = onSchedule('every day 03:00', async () => {
   await clear(db.collectionGroup('notifications').where('expiresAt','<=',Timestamp.now()));
+  await clear(db.collectionGroup('feedHistory').where('expiresAt','<=',Timestamp.now()));
   await clear(db.collection('pushTokens').where('updatedAt','<=',Timestamp.fromMillis(Date.now()-60*86400000)));
 });
 const {announceWeek} = require('./weekly');

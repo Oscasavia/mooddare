@@ -817,3 +817,41 @@ test('an abandoned-upload fence prevents a late post commit and storage overwrit
   await assertFails(uploadBytes(ref(env.authenticatedContext('alice').storage(),'posts/alice/one.jpg'),new Uint8Array([1]),{contentType:'image/jpeg'}));
   await assertSucceeds(setDoc(doc(db('alice'),'posts/replacement'),{...post(),mediaPath:'posts/alice/replacement.jpg'}));
 });
+
+test('personalization history is owner-only and validates post identity and retention', async () => {
+  await setDoc(doc(db('alice'), 'posts/one'), post());
+  const data = {authorId:'alice', moodId:null, viewed:true, completed:false, liked:false, saved:false, notInterested:false, updatedAt:serverTimestamp(), expiresAt:Timestamp.fromMillis(Date.now()+30*86400000)};
+  const history = doc(db('bob'), 'users/bob/feedHistory/one');
+  await assertSucceeds(setDoc(history, data));
+  await assertSucceeds(getDoc(history));
+  await assertFails(getDoc(doc(db('alice'), 'users/bob/feedHistory/one')));
+  await assertFails(getDocs(collection(db('alice'), 'users/bob/feedHistory')));
+  await assertFails(setDoc(doc(db('alice'), 'users/bob/feedHistory/one'), data));
+  for (const changes of [{authorId:'invented'}, {moodId:'invented'}, {viewed:3}, {score:100}, {expiresAt:Timestamp.fromMillis(Date.now()+32*86400000)}, {updatedAt:Timestamp.fromMillis(1)}]) {
+    await assertFails(setDoc(history, {...data,...changes}));
+  }
+  await assertFails(setDoc(doc(db('bob'), 'users/bob/feedHistory/missing'), data));
+  await assertFails(setDoc(doc(db('alice'), 'users/alice/feedHistory/one'), data));
+  await assertSucceeds(deleteDoc(history));
+});
+test('feed order is private, constrained and disabled for restricted accounts', async () => {
+  const preference=doc(db('bob'),'users/bob/preferences/feed');
+  await assertSucceeds(setDoc(preference,{order:'forYou'}));
+  await assertSucceeds(setDoc(preference,{order:'latest'}));
+  await assertFails(setDoc(preference,{order:'viral'}));
+  await assertFails(setDoc(preference,{order:'latest',public:true}));
+  await assertFails(getDoc(doc(db('alice'),'users/bob/preferences/feed')));
+  await env.withSecurityRulesDisabled(async c => setDoc(doc(c.firestore(),'accountRestrictions/bob'),{status:'deleting'}));
+  await assertFails(setDoc(preference,{order:'forYou'}));
+});
+test('deleted, expired and deleting authors cannot receive new recommendation activity', async () => {
+  await setDoc(doc(db('alice'), 'posts/one'), post());
+  const value={authorId:'alice',moodId:null,viewed:true,completed:false,liked:false,saved:false,notInterested:false,updatedAt:serverTimestamp(),expiresAt:Timestamp.fromMillis(Date.now()+86400000)};
+  const target=doc(db('bob'),'users/bob/feedHistory/one');
+  await env.withSecurityRulesDisabled(async c=> updateDoc(doc(c.firestore(),'posts/one'),{deleting:true}));
+  await assertFails(setDoc(target,value));
+  await env.withSecurityRulesDisabled(async c=> updateDoc(doc(c.firestore(),'posts/one'),{deleting:false,expiresAt:Timestamp.fromMillis(1)}));
+  await assertFails(setDoc(target,value));
+  await env.withSecurityRulesDisabled(async c=> {await updateDoc(doc(c.firestore(),'posts/one'),{expiresAt:Timestamp.fromMillis(Date.now()+86400000)});await setDoc(doc(c.firestore(),'accountDeletions/alice'),{status:'pending'});});
+  await assertFails(setDoc(target,value));
+});
