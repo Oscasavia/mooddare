@@ -314,3 +314,20 @@ test('malformed shared links never create an app intent or inject URL content', 
     assert.equal(await evaluate("document.querySelector('#open-app').hasAttribute('href')"),false);
   }
 });
+
+test('deletion page offers separate external requests and works on mobile', async () => {
+  await cdp.send('Emulation.setDeviceMetricsOverride', {width:360,height:800,deviceScaleFactor:1,mobile:true});
+  await cdp.send('Page.navigate', {url:base+'/delete-data.html'});
+  await until("document.querySelector('#selected-data')");
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'),true);
+  for (const [section,subject] of [['account','MoodDare account deletion'],['selected-data','MoodDare data deletion']]) {
+    const href=await evaluate(`document.querySelector('#${section} a[href^="mailto:"]').getAttribute('href')`);
+    const url=new URL(href);
+    assert.equal(url.pathname,'oscasavia@gmail.com');
+    assert.equal(url.searchParams.get('subject'),subject);
+  }
+  assert.match(await evaluate('document.body.innerText'),/seven-day recovery period/);
+  assert.match(await evaluate('document.body.innerText'),/without installing or signing in/);
+  assert.match(await evaluate('document.body.innerText'),/handles emailed requests manually/);
+  assert.equal(await evaluate("document.querySelector('input[type=password]') === null"),true);
+});
