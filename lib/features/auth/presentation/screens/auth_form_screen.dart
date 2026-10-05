@@ -17,15 +17,20 @@ class AuthFormScreen extends StatefulWidget {
 class _AuthFormScreenState extends State<AuthFormScreen> {
   final _form = GlobalKey<FormState>();
   final _email = TextEditingController(), _password = TextEditingController();
+  final _confirmPassword = TextEditingController();
+  final _confirmationFocus = FocusNode();
   final _accountLink = TapGestureRecognizer();
   late final _auth = widget.repository ?? AuthRepository();
   late bool _signUp = widget.signUp;
-  bool _busy = false, _obscure = true;
+  bool _busy = false, _obscure = true, _obscureConfirmation = true;
   String? _error;
   void _switchAccountMode() {
     if (_busy) return;
     setState(() {
       _signUp = !_signUp;
+      _confirmPassword.clear();
+      _obscure = true;
+      _obscureConfirmation = true;
       _error = null;
     });
   }
@@ -63,6 +68,8 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
   void dispose() {
     _email.dispose();
     _password.dispose();
+    _confirmPassword.dispose();
+    _confirmationFocus.dispose();
     _accountLink.dispose();
     super.dispose();
   }
@@ -127,12 +134,23 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                         controller: _password,
                         enabled: !_busy,
                         obscureText: _obscure,
+                        autocorrect: false,
+                        enableSuggestions: false,
                         autofillHints: [
                           _signUp
                               ? AutofillHints.newPassword
                               : AutofillHints.password,
                         ],
-                        onFieldSubmitted: (_) => _submit(),
+                        textInputAction: _signUp
+                            ? TextInputAction.next
+                            : TextInputAction.done,
+                        onFieldSubmitted: (_) {
+                          if (_signUp) {
+                            _confirmationFocus.requestFocus();
+                          } else {
+                            _submit();
+                          }
+                        },
                         decoration: InputDecoration(
                           labelText: 'Password',
                           prefixIcon: const Icon(Icons.lock_outline),
@@ -155,6 +173,43 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
                             ? 'Use at least 8 characters'
                             : null,
                       ),
+                      if (_signUp) ...[
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _confirmPassword,
+                          focusNode: _confirmationFocus,
+                          enabled: !_busy,
+                          obscureText: _obscureConfirmation,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          autofillHints: const [AutofillHints.newPassword],
+                          textInputAction: TextInputAction.done,
+                          onFieldSubmitted: (_) => _submit(),
+                          decoration: InputDecoration(
+                            labelText: 'Confirm password',
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            suffixIcon: IconButton(
+                              tooltip: _obscureConfirmation
+                                  ? 'Show confirm password'
+                                  : 'Hide confirm password',
+                              onPressed: () => setState(
+                                () => _obscureConfirmation =
+                                    !_obscureConfirmation,
+                              ),
+                              icon: Icon(
+                                _obscureConfirmation
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                              ),
+                            ),
+                          ),
+                          validator: (value) => value == null || value.isEmpty
+                              ? 'Confirm your password'
+                              : value != _password.text
+                              ? 'Passwords do not match'
+                              : null,
+                        ),
+                      ],
                       if (!_signUp)
                         Align(
                           alignment: Alignment.centerRight,
