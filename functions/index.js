@@ -73,6 +73,17 @@ exports.requestAccountDeletion=onCall({timeoutSeconds:30},request=>deletion.requ
 exports.eraseAccount=onDocumentCreated({document:'accountDeletions/{uid}',retry:true,timeoutSeconds:540,memory:'512MiB',maxInstances:1},event=>deletion.processDeletion(db,getAuth(),deletionBucket(),event.params.uid));
 exports.recoverAccountDeletions=onSchedule({schedule:'every 10 minutes',timeoutSeconds:540,memory:'512MiB',maxInstances:1},()=>deletion.recoverDeletions(db,getAuth(),deletionBucket()));
 // Covers account removals through older apps or an administrator as well.
-exports.eraseDeletedAuthAccount=require('firebase-functions/v1').region('us-central1').runWith({failurePolicy:true}).auth.user().onDelete(user=>deletion.enqueueDeletion(db,user.uid));
+exports.eraseDeletedAuthAccount=require('firebase-functions/v1').region('us-central1').runWith({failurePolicy:true}).auth.user().onDelete(async(user,context)=>{
+  await deletion.enqueueDeletion(db,user.uid);
+  if(user.providerData?.length)await analytics.recordLifecycle(db,'accountDeletions',context.eventId,context.timestamp);
+});
 const {sweepUploads}=require('./abandoned_uploads');
 exports.cleanupAbandonedUploads=onSchedule({schedule:'every 60 minutes',timeoutSeconds:540,memory:'256MiB',maxInstances:1},()=>sweepUploads(db,getAuth(),deletionBucket()));
+
+const analytics=require('./analytics');
+exports.recordMoodSelection=onCall({timeoutSeconds:15},request=>analytics.recordMood(db,request));
+exports.countNewProfile=onDocumentCreated({document:'users/{uid}',retry:true},event=>analytics.recordLifecycle(db,'signups',event.id,event.time));
+exports.expireAnalyticsReceipts=onSchedule({schedule:'every day 04:00',timeoutSeconds:540},async()=>{
+  await clear(db.collectionGroup('analyticsReceipts').where('expiresAt','<=',Timestamp.now()));
+  await clear(db.collectionGroup('analyticsState').where('expiresAt','<=',Timestamp.now()));
+});

@@ -6,7 +6,7 @@ const validDate = value => typeof value === 'string' && Number.isFinite(Date.par
 export function validateSnapshot(data, rangeDays) {
   if (data?.status === 'not-connected') return data;
   const metrics = data?.metrics;
-  if (data?.status !== 'ready' || data.schemaVersion !== 1 || data.rangeDays !== rangeDays ||
+  if (data?.status !== 'ready' || ![1, 2].includes(data.schemaVersion) || data.rangeDays !== rangeDays ||
       ![7, 30].includes(rangeDays) || !validDate(data.generatedAt) ||
       !validDate(data.startDate) || !validDate(data.endDate) ||
       Date.parse(data.endDate) - Date.parse(data.startDate) !== rangeDays * 86400000 ||
@@ -23,6 +23,11 @@ export function validateSnapshot(data, rangeDays) {
       data.communityDares.some(r => r.participants > r.moments || r.participants > metrics.communityParticipants) ||
       metrics.communityParticipants > data.communityDares.reduce((sum, r) => sum + r.participants, 0)) {
     throw Error('Analytics totals are inconsistent. Please try refreshing.');
+  }
+  if (data.schemaVersion === 2 && (!validDate(data.trackingStartedAt) ||
+      Date.parse(data.trackingStartedAt) > Date.parse(data.generatedAt) ||
+      !['signups','accountDeletions','currentProfiles','posts','creators','likes'].every(k=>count(metrics[k])) || metrics.creators > metrics.posts)) {
+    throw Error('Analytics coverage or totals are invalid.');
   }
   return data;
 }
@@ -46,6 +51,12 @@ export function renderAnalytics(data, {loading = false, error = false} = {}) {
   for (const [id, key] of [['selections', 'moodSelections'], ['participants', 'communityParticipants'], ['moments', 'communityMoments']]) {
     $('analytics-' + id).textContent = ready ? number(data.metrics[key]) : '—';
   }
+  for (const key of ['signups','accountDeletions','currentProfiles','posts','creators','likes']) {
+    $('analytics-' + key).textContent = ready && data.schemaVersion === 2 ? number(data.metrics[key]) : '—';
+  }
+  $('analytics-coverage').hidden = !ready || data.schemaVersion !== 2;
+  $('analytics-coverage').textContent = ready && data.schemaVersion === 2
+    ? `Mood selections, signups and account deletions are measured from ${new Date(data.trackingStartedAt).toLocaleString(undefined,{timeZone:'UTC'})} UTC. Earlier activity is not available. Mood counts require the updated app and a successful connection. Signups count newly created profiles; deletions count removed registered sign-in accounts, including admin removals. Current profiles is today's total. Post, creator, like and community totals use posts created in the selected period that still exist; deleted or moderated-away posts are excluded. Likes are the current likes on those posts, not new likes during the period. Staff and test accounts are included.` : '';
   $('analytics-notice').hidden = ready || loading || error;
   $('mood-sort').disabled = !ready || !data.moods.length;
   if (!ready) {

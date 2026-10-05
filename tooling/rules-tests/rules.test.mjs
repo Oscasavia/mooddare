@@ -669,7 +669,7 @@ for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
 for (const policy of ['firestore.rules','firestore.compat.rules']) {
   test(`${policy}: moderation records cannot be forged, read or deleted by app clients`,async()=>{
     await env.cleanup();env=await initializeTestEnvironment({projectId:'demo-mooddare',firestore:{rules:await readFile(new URL(`../../${policy}`,import.meta.url),'utf8')},storage:{rules:await readFile(new URL('../../storage.rules',import.meta.url),'utf8')}});
-    for(const c of ['moderationStaff','moderationContent','moderationActions','moderationLocks','moderationReviews','accountRestrictions']){
+    for(const c of ['moderationStaff','moderationContent','moderationActions','moderationLocks','moderationReviews','accountRestrictions','analyticsConfig','analyticsDaily','analyticsReceipts','users/alice/analyticsReceipts','users/alice/analyticsState']){
       await env.withSecurityRulesDisabled(ctx=>setDoc(doc(ctx.firestore(),`${c}/secret`),{enabled:true}));
       for(const path of [`${c}/secret`,`${c}/secret/nested/item`]){
         await assertFails(getDoc(doc(db('alice'),path)));await assertFails(setDoc(doc(db('alice'),path),{enabled:true}));await assertFails(deleteDoc(doc(db('alice'),path)));

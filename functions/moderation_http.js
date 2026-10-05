@@ -10,6 +10,7 @@ function handler(db,auth,bucket){return async(req,res)=>{
     if(!write){
       if(route==='session')return res.json({uid:staff});
       if(route==='reports')return res.json(await m.list(db,'reports',req.query.cursor));
+      if(route==='analytics')return res.json(await require('./analytics').snapshot(db,req.query.days));
       if(route==='history')return res.json(await m.list(db,'moderationActions',req.query.cursor));
       if(route==='detail')return res.json(await m.detail(db,req.query.id));
       if(route==='media'){const {file,type}=await m.media(db,bucket,req.query.id);res.type(type);const stream=file.createReadStream();stream.on('error',()=>res.destroy());stream.pipe(res);return;}

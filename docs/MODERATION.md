@@ -97,7 +97,7 @@ Dashboard code lives in `tooling/admin/`; the reproducible bundled assets are in
 `website/admin/`. Hosting rewrites `/admin-api/**` to the authenticated API. Admin
 HTML/JS/API responses use no-store, and the page is excluded from indexing. The
 public marketing site retains its original policy; only admin routes permit the
-Firebase Google sign-in dependencies. The dashboard does not initialize analytics.
+Firebase Google sign-in dependencies. The dashboard loads staff-only first-party aggregates; it does not initialize an advertising or Firebase Analytics SDK.
 
 ## Validation
 
@@ -158,8 +158,7 @@ all mutations still require the existing confirmation, reason and backend staff
 checks. Reported media remains opt-in to load. Stale asynchronous responses cannot
 repopulate a signed-out workspace.
 
-The Analytics navigation opens a prepared aggregate dashboard. It currently
-shows Not connected and makes no analytics requests or event collection calls.
-See [ADMIN_ANALYTICS.md](ADMIN_ANALYTICS.md) for the adapter, snapshot contract,
-metric definitions and future collection plan. New metrics must be served through
-a staff-authorized backend, not direct reads of raw user activity.
+The Analytics navigation loads live first-party aggregates from the staff-authorized
+backend. See [ADMIN_ANALYTICS.md](ADMIN_ANALYTICS.md) for the snapshot contract,
+metric definitions, tracking coverage, retention and deployment details.
+Raw user activity is never fetched directly by the browser.

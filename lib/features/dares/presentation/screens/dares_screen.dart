@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:mooddare/core/analytics/product_analytics.dart';
 import '../widgets/weekly_dare_card.dart';
 import '../../data/repositories/weekly_dare_repository.dart';
 import 'dare_library_screen.dart';
@@ -13,7 +15,13 @@ import 'dare_generation_screen.dart';
 class DaresScreen extends StatefulWidget {
   final DaresRepository? repository;
   final WeeklyDareRepository? weeklyRepository;
-  const DaresScreen({super.key, this.repository, this.weeklyRepository});
+  final ProductAnalytics? analytics;
+  const DaresScreen({
+    super.key,
+    this.repository,
+    this.weeklyRepository,
+    this.analytics,
+  });
   @override
   State<DaresScreen> createState() => _DaresScreenState();
 }
@@ -50,6 +58,7 @@ class _DaresScreenState extends State<DaresScreen> {
       showMoodPreview(context, mood);
       return;
     }
+    unawaited((widget.analytics ?? ProductAnalytics()).moodSelected(mood.id));
     Navigator.push(
       context,
       MaterialPageRoute(

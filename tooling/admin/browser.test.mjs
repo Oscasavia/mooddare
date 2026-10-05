@@ -319,3 +319,17 @@ test('mobile review fits and sign-out clears the workspace',async()=>{
  await evaluate(`document.querySelector('#signout').click()`);await until(`document.querySelector('#workspace').hidden`);assert.equal(await evaluate(`document.querySelector('#queue').children.length`),0);
  assert.deepEqual(errors.filter(e=>!e.includes('403 (Forbidden)')&&!e.includes('503 (Service Unavailable)')),[]);
 });
+
+ test('live analytics contract shows coverage and growth on desktop and mobile',async()=>{
+ const live={...snapshot,schemaVersion:2,trackingStartedAt:'2026-10-05T00:00:00Z',metrics:{...snapshot.metrics,signups:12,accountDeletions:2,currentProfiles:53,posts:100,creators:50,likes:230}};
+ for(const width of [1440,390]){
+  await visit('/admin/',width,1000);await evaluate(`document.querySelector('#signin').click()`);await until(`!document.querySelector('#workspace').hidden`);
+  await evaluate(`window.analyticsFixture=${JSON.stringify(live)};document.querySelector('#analytics').click()`);await until(`document.querySelector('#analytics-state').textContent==='Connected'`);
+  assert.equal(await evaluate(`document.querySelector('#analytics-signups').textContent`),'12');
+  assert.equal(await evaluate(`document.querySelector('#analytics-accountDeletions').textContent`),'2');
+  assert.ok(await evaluate(`document.querySelector('#analytics-coverage').textContent.includes('Earlier activity is not available')`));
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('#signout')).paddingLeft`),width===1440?'17px':'10px');
+  assert.ok(await evaluate(`document.documentElement.scrollWidth<=innerWidth`));
+  await screenshot(`analytics-connected-v2-fixture-${width}`);
+ }
+});

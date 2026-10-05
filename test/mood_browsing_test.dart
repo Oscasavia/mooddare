@@ -1,3 +1,4 @@
+import 'package:mooddare/core/analytics/product_analytics.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +15,7 @@ Future<void> openCatalog(
   Future<List<MoodModel>> Function()? load,
   Size size = const Size(400, 850),
   double scale = 1,
+  ProductAnalytics? analytics,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -29,6 +31,7 @@ Future<void> openCatalog(
         child: child!,
       ),
       home: DaresScreen(
+        analytics: analytics,
         repository: DaresRepository(loadMoods: load ?? () async => []),
       ),
     ),
@@ -57,6 +60,53 @@ Future<void> choose(WidgetTester tester, String collection) async {
 }
 
 void main() {
+  testWidgets(
+    'only opening an available mood emits analytics, not preview or search',
+    (tester) async {
+      final events = <Map<String, String>>[];
+      await openCatalog(
+        tester,
+        analytics: ProductAnalytics(
+          signedIn: () => true,
+          send: (d) async {
+            events.add(d);
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(events, isEmpty);
+      await choose(tester, 'daring');
+      final preview = find.byKey(
+        const ValueKey('mood_preview-daring-adventurous'),
+      );
+      await tester.ensureVisible(preview);
+      await tester.tap(preview);
+      await tester.pumpAndSettle();
+      expect(events, isEmpty);
+      Navigator.of(tester.element(find.byType(MoodPreviewContent))).pop();
+      await tester.pumpAndSettle();
+      tester
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: find.byType(CustomScrollView),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          )
+          .position
+          .jumpTo(0);
+      await tester.pumpAndSettle();
+      await choose(tester, 'free');
+      final playable = find.byKey(const ValueKey('mood_creative'));
+      await tester.ensureVisible(playable);
+      await tester.tap(playable);
+      await tester.pumpAndSettle();
+      expect(events.single['moodId'], 'creative');
+      expect(find.byType(DareDisplayScreen), findsOneWidget);
+    },
+  );
+
   for (final width in [320.0, 344.0, 390.0]) {
     for (final scale in [1.0, 1.5, 2.0]) {
       testWidgets(

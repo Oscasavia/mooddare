@@ -9,7 +9,7 @@ class LegalSection {
   const LegalSection(this.title, this.body);
 }
 
-const legalUpdated = 'October 1, 2026';
+const legalUpdated = 'October 5, 2026';
 
 const termsSections = <LegalSection>[
   LegalSection(
@@ -78,6 +78,10 @@ const privacySections = <LegalSection>[
   LegalSection(
     'Personalized Moments',
     'For you uses the moments you spend time viewing, video completion, likes, saved dares, follows and Not interested choices to suggest a varied mix of recent posts. This activity history is private to your account and is not used to diagnose your mood or health. The feed uses up to your 200 most recent activity records; records expire after 30 days and are removed during daily cleanup. In the Moments filter menu, choose Latest to pause new activity learning and see newest posts first, or reset feed preferences to delete this history. Resetting does not remove your public likes, saved dares or follows. Account deletion removes recommendation history too.',
+  ),
+  LegalSection(
+    'Community analytics',
+    'We use first-party aggregate counts to understand which available moods people select, account growth and deletion, and participation in community dares. Counts of posts, creators and likes are calculated from existing community content. Mood selections are counted when you open an available mood while signed in and online; previews and private For you history are not used. Authentication protects the counting endpoint. Short-lived receipts prevent duplicate counts and abuse: account-linked receipts and rate limits expire after 32 days and are removed during daily cleanup or account deletion. Unlinked lifecycle-event receipts expire after 90 days. Daily totals contain no account identifiers or content and may remain after account deletion. Only authorized staff can view these aggregates. This does not use advertising identifiers or track activity across other apps.',
   ),
   LegalSection(
     'Camera, microphone and face effects',
