@@ -1,1 +1,15 @@
-{"name":"mooddare-admin-build","private":true,"type":"module","scripts":{"build":"esbuild src.js --bundle --minify --format=esm --outfile=../../website/admin/app.js"},"dependencies":{"firebase":"11.10.0"},"devDependencies":{"esbuild":"0.25.12"}}
+{
+  "name": "mooddare-admin-build",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src.js --bundle --minify --format=esm --outfile=../../website/admin/app.js",
+    "test": "node --test analytics.test.mjs browser.test.mjs"
+  },
+  "dependencies": {
+    "firebase": "11.10.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}

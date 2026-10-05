@@ -24,7 +24,7 @@ jobs:
       - run: npm ci --ignore-scripts --prefix tooling/admin
       - run: npm run build --prefix tooling/admin
       - run: git diff --exit-code -- website/admin/app.js
-      - run: node --test tooling/admin/browser.test.mjs
+      - run: npm test --prefix tooling/admin
   flutter:
     runs-on: ubuntu-latest
     steps:

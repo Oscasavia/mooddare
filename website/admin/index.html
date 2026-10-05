@@ -1,10 +1,64 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>MoodDare · Moderation</title><link rel="icon" href="/assets/favicon.svg"><link rel="stylesheet" href="/admin/styles.css"><script type="module" src="/admin/app.js"></script></head><body>
-<header><a href="/admin/" aria-label="MoodDare moderation"><img src="/assets/wordmark.png" alt="mooddare"></a><span>Community care</span><button id="signout" hidden>Sign out</button></header>
-<main><section id="login" class="welcome"><img src="/assets/mood-wink.svg" alt="" width="100"><p class="eyebrow">PRIVATE WORKSPACE</p><h1>A little care.<br>A better community.</h1><p>Review concerns, protect your community, and keep a clear record of each decision.</p><button id="signin" class="primary">Continue with Google</button><p class="muted">Access is limited to approved MoodDare staff.</p></section>
-<p id="status" role="status" aria-live="polite"></p>
-<section id="workspace" hidden><div class="heading"><div><p class="eyebrow">MOODDARE MODERATION</p><h1>Community care</h1></div><button id="refresh">Refresh</button></div>
-<nav aria-label="Workspace"><button id="reports" aria-pressed="true">Reports</button><button id="history" aria-pressed="false">Action history</button></nav>
-<div class="layout"><section aria-label="Review queue"><div class="tools"><label>Find a report<input id="search" type="search" placeholder="Reason or ID"></label><label>Status<select id="filter"><option value="all">All reports</option><option value="pending">Needs review</option><option value="resolved">Resolved</option></select></label></div><div id="queue"></div><button id="more" hidden>Load more</button><p class="muted">Search and filters apply to loaded results.</p></section>
-<section id="detail" class="detail" aria-label="Report details"><div class="empty"><img src="/assets/mood-wink.svg" width="64" alt=""><h2>Make room for good moments.</h2><p>Select a report to review its context.</p></div></section></div></section></main>
-<dialog id="confirm"><form method="dialog"><h2 id="confirm-title">Confirm action</h2><p id="confirm-description"></p><label>Reason<textarea id="reason" required minlength="5" maxlength="500" rows="4" placeholder="Explain your decision. Account restriction reasons are visible to the affected user."></textarea></label><div class="actions"><button value="cancel" formnovalidate>Cancel</button><button id="confirm-submit" value="confirm" class="primary">Confirm</button></div></form></dialog>
-</body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#15141b">
+  <title>MoodDare · Community workspace</title>
+  <link rel="icon" href="/assets/favicon.svg">
+  <link rel="stylesheet" href="/admin/styles.css">
+  <script type="module" src="/admin/app.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to workspace</a>
+<aside class="sidebar">
+  <a class="brand" href="/admin/" aria-label="MoodDare community workspace"><img src="/assets/mood-wink.svg" width="36" height="36" alt=""><img src="/assets/wordmark.png" class="wordmark" alt="mooddare"></a>
+  <p class="sidebar-caption">A space to help good things grow.</p>
+  <nav id="navigation" aria-label="Workspace" hidden>
+    <p class="nav-label">WORKSPACE</p>
+    <button id="reports" aria-pressed="true"><span class="nav-icon" aria-hidden="true">▤</span><span>Reports</span><span id="nav-count" class="nav-count" hidden></span></button>
+    <button id="history" aria-pressed="false"><span class="nav-icon" aria-hidden="true">↺</span><span>Action history</span></button>
+    <button id="analytics" aria-pressed="false"><span class="nav-icon" aria-hidden="true">▥</span><span>Analytics</span></button>
+  </nav>
+  <div class="sidebar-foot"><span class="staff-label"><span class="status-dot"></span>Private staff workspace</span><button id="signout" class="quiet" hidden>Sign out <span aria-hidden="true">↗</span></button></div>
+</aside>
+<main id="main" tabindex="-1">
+  <section id="login" class="welcome">
+    <div class="welcome-copy"><p class="eyebrow">MOODDARE · COMMUNITY CARE</p><h1>A little care.<br>A better<br><em>community.</em></h1><p class="intro">Behind every good moment is a community worth looking after.</p><button id="signin" class="primary">Continue with Google <span aria-hidden="true">↗</span></button><p class="muted">For approved MoodDare staff only.</p></div>
+    <div class="welcome-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="mascot-tile"><img src="/assets/mood-wink.svg" alt="" width="144" height="144"></div><span class="art-caption">GOOD MOMENTS START WITH CARE</span></div>
+  </section>
+  <p id="status" role="status" aria-live="polite" hidden></p>
+  <section id="workspace" hidden>
+    <header class="heading"><div><p class="eyebrow">YOUR COMMUNITY, CARED FOR</p><h1 id="page-title">Community care</h1><p id="page-description" class="intro">A thoughtful decision starts with a little context.</p></div><button id="refresh" class="secondary"><span aria-hidden="true">↻</span> Refresh</button></header>
+    <section id="moderation-view">
+      <div class="section-label"><h2 id="summary-title">Queue at a glance</h2><span id="scope-note">Loaded reports only</span></div>
+      <div class="summary-grid" aria-label="Loaded results summary">
+        <article class="metric"><span id="metric-label-1">Needs review</span><strong id="metric-value-1">—</strong><span class="metric-foot"><span class="status-dot amber"></span><span id="metric-note-1">Waiting for a decision</span></span></article>
+        <article class="metric"><span id="metric-label-2">Resolved</span><strong id="metric-value-2">—</strong><span class="metric-foot"><span class="status-dot"></span><span id="metric-note-2">Reviewed by your team</span></span></article>
+        <article class="metric metric-accent"><span id="metric-label-3">Reports loaded</span><strong id="metric-value-3">—</strong><span id="metric-note-3" class="metric-foot">Every concern deserves attention</span></article>
+      </div>
+      <div class="layout" id="review-layout">
+        <section class="queue-panel" aria-label="Review queue"><div class="panel-heading"><h2 id="queue-title">Report inbox</h2><span id="result-count" class="muted"></span></div><div class="tools"><label>Search loaded results<input id="search" type="search" placeholder="Reason, account or report ID"></label><label id="filter-label">Status<select id="filter"><option value="all">All reports</option><option value="pending">Needs review</option><option value="resolved">Resolved</option></select></label></div><div id="queue"></div><div class="queue-footer"><button id="more" class="secondary" hidden>Load more</button><p class="muted">Search, filters and counts reflect loaded results.</p></div></section>
+        <section id="detail" class="detail" aria-label="Report details" tabindex="-1"></section>
+      </div>
+    </section>
+    <section id="analytics-view" hidden aria-label="Community analytics">
+      <div class="analytics-toolbar"><div><span class="badge" id="analytics-state">Not connected</span><p id="analytics-updated" class="muted">Activity tracking has not been enabled.</p></div><label>Date range<select id="analytics-range"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option></select></label></div>
+      <div class="summary-grid" aria-label="Community activity totals">
+        <article class="metric"><span>Mood selections</span><strong id="analytics-selections">—</strong><span class="metric-foot">Selections made in Discover</span></article>
+        <article class="metric"><span>Community participants</span><strong id="analytics-participants">—</strong><span class="metric-foot">Unique people who published a dare moment</span></article>
+        <article class="metric metric-accent"><span>Community moments</span><strong id="analytics-moments">—</strong><span class="metric-foot">Published community-dare posts</span></article>
+      </div>
+      <div id="analytics-notice" class="connection-note"><span class="notice-icon" aria-hidden="true">↗</span><div><h2>A clearer picture of your community.</h2><p>See which moods people choose and how they take part in community dares. These insights will appear here once activity tracking is connected.</p></div></div>
+      <div class="analytics-grid">
+        <section class="analytics-panel"><div class="panel-heading"><div><p class="eyebrow">FIND THEIR FAVORITES</p><h2>Mood selections</h2></div><label class="compact-label">Sort by<select id="mood-sort"><option value="most">Most selected</option><option value="least">Least selected</option></select></label></div><p class="panel-description">Compare every mood, including those with no selections.</p><div id="mood-results"></div></section>
+        <section class="analytics-panel"><div class="panel-heading"><div><p class="eyebrow">SMALL DARES, SHARED MOMENTS</p><h2>Community dares</h2></div></div><p class="panel-description">Participation counts people who published a moment for a community dare.</p><div id="community-results"></div></section>
+      </div>
+      <p class="analytics-footnote">Each participant is counted once in the total, even if they join several dares. Dates use UTC.</p>
+    </section>
+  </section>
+</main>
+<dialog id="confirm" aria-labelledby="confirm-title" aria-describedby="confirm-description"><form method="dialog"><p class="eyebrow">REVIEW YOUR DECISION</p><h2 id="confirm-title">Confirm action</h2><p id="confirm-description"></p><label>Reason<textarea id="reason" required minlength="5" maxlength="500" rows="4" placeholder="Explain your decision" aria-describedby="reason-help"></textarea></label><p id="reason-help" class="muted">Account restriction reasons are visible to the affected user.</p><div class="actions"><button value="cancel" formnovalidate class="secondary">Cancel</button><button id="confirm-submit" value="confirm" class="primary">Confirm</button></div></form></dialog>
+</body>
+</html>

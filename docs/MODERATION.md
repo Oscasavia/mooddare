@@ -147,3 +147,19 @@ and the test account were deleted. No feed post was created by the test. The
 owner also confirmed retrying the original butterfly video successfully posted.
 
 Reference: https://firebase.google.com/docs/rules/manage-deploy#manage_permissions_for_cross-service_cloud_storage_security_rules
+
+## Portal layout and analytics preparation — 2026-10-05
+
+Reports and Action history use a split queue/detail layout on desktop. On phones
+and tablets, opening a report shows a focused detail view with Back to results;
+the queue search and filter remain intact. Summaries explicitly count only loaded
+results. Account restrictions are grouped separately from content decisions, and
+all mutations still require the existing confirmation, reason and backend staff
+checks. Reported media remains opt-in to load. Stale asynchronous responses cannot
+repopulate a signed-out workspace.
+
+The Analytics navigation opens a prepared aggregate dashboard. It currently
+shows Not connected and makes no analytics requests or event collection calls.
+See [ADMIN_ANALYTICS.md](ADMIN_ANALYTICS.md) for the adapter, snapshot contract,
+metric definitions and future collection plan. New metrics must be served through
+a staff-authorized backend, not direct reads of raw user activity.
