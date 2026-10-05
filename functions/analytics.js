@@ -61,7 +61,7 @@ async function recordLifecycle(db,kind,eventId,at){
  });
 }
 async function bounded(query){const rows=await query.limit(20001).get();if(rows.size>20000){const e=Error('Analytics needs a larger aggregation job before this period can be displayed.');e.status=503;throw e;}return rows.docs;}
-async function snapshot(db,rangeDays,now=Date.now()){
+async function snapshot(db,rangeDays,now=Date.now(),environment='production'){
  rangeDays=Number(rangeDays);if(![7,30].includes(rangeDays)){const e=Error('Choose 7 or 30 days.');e.status=400;throw e;}
  const config=await db.doc('analyticsConfig/current').get();if(!config.exists)return {status:'not-connected'};
  const end=Date.parse(day(now))+DAY,start=end-rangeDays*DAY;
@@ -86,6 +86,6 @@ async function snapshot(db,rangeDays,now=Date.now()){
  }
  metrics.creators=creators.size;metrics.communityParticipants=participants.size;
  if(moods.size>500||dares.size>500)throw Error('Analytics catalog exceeds supported size');
- return {status:'ready',schemaVersion:2,rangeDays,generatedAt:new Date(now).toISOString(),startDate:new Date(start).toISOString(),endDate:new Date(end).toISOString(),trackingStartedAt:config.data().startedAt.toDate().toISOString(),metrics,moods:[...moods.values()],communityDares:[...dares.values()].sort((a,b)=>b.id.localeCompare(a.id)).map(({people,...d})=>({...d,participants:people.size}))};
+ return {product:await require('./product_metrics').report(db,rangeDays,environment,now),status:'ready',schemaVersion:2,rangeDays,generatedAt:new Date(now).toISOString(),startDate:new Date(start).toISOString(),endDate:new Date(end).toISOString(),trackingStartedAt:config.data().startedAt.toDate().toISOString(),metrics,moods:[...moods.values()],communityDares:[...dares.values()].sort((a,b)=>b.id.localeCompare(a.id)).map(({people,...d})=>({...d,participants:people.size}))};
 }
 module.exports={recordMood,recordLifecycle,snapshot,catalog};

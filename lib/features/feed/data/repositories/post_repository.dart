@@ -1,3 +1,4 @@
+import 'package:mooddare/core/analytics/product_analytics.dart';
 import '../../../links/moment_links.dart';
 import 'package:mooddare/features/dares/data/repositories/weekly_dare_repository.dart';
 import 'package:mooddare/features/profile/data/social_repository.dart';
@@ -143,6 +144,7 @@ class PostRepository {
     final data = <String, dynamic>{
       if (challenge?.isActive(DateTime.now()) ?? false)
         'weeklyDareId': challenge!.id,
+      'analyticsEnvironment': ProductAnalytics.environment,
       'dareText': dareText.trim(),
       if (moodId != null && moodName != null) ...{
         'moodId': moodId,

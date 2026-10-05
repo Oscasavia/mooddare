@@ -333,3 +333,16 @@ test('mobile review fits and sign-out clears the workspace',async()=>{
   await screenshot(`analytics-connected-v2-fixture-${width}`);
  }
 });
+
+test('App and Website sections keep independent ranges and render product insights safely at all widths',async()=>{
+ const product={startedAt:'2026-10-05T00:00:00Z',environment:'production',active:{daily:12,weekly:24,monthly:45},retention:[{day:1,eligible:10,returned:4},{day:7,eligible:0,returned:0},{day:30,eligible:0,returned:0}],app:{events:{share_completed:7,moment_published:8},firstSteps:{signup_completed:3},moods:{},errors:{},timings:{},community:{}},website:{events:{page_view:15},sessions:8,pages:{home:{page:'/',count:15}},clicks:{},videos:{'launch-2026-10':{video_start:6,video_25:4,video_complete:2}}},trend:[]};
+ await visit('/admin/',1440,1000);await evaluate(`document.querySelector('#signin').click()`);await until(`!document.querySelector('#workspace').hidden`);
+ await evaluate(`window.analyticsFixture={...${JSON.stringify(snapshot)},product:${JSON.stringify(product)}};document.querySelector('#analytics').click()`);await until(`document.querySelector('#product-insights').textContent.includes('Returning members')`);
+ assert.ok(await evaluate(`document.querySelector('#product-insights').textContent.includes('Not enough time')`));
+ await evaluate(`window.analyticsFixture={...window.analyticsFixture,rangeDays:7,startDate:'2026-09-29T00:00:00Z'};document.querySelector('#analytics-range').value='7';document.querySelector('#analytics-range').dispatchEvent(new Event('change'))`);await until(`document.querySelector('#analytics-state').textContent==='Connected'`);
+ await evaluate(`window.analyticsFixture={...window.analyticsFixture,rangeDays:30,startDate:${JSON.stringify(snapshot.startDate)}};document.querySelector('#analytics-website').click()`);await until(`document.querySelector('#product-insights').textContent.includes('Promo videos')`);
+ assert.equal(await evaluate(`document.querySelector('#analytics-range').value`),'30');assert.equal(await evaluate(`document.querySelector('#legacy-insights').hidden`),true);
+ for(const width of [1440,390,320]){await cdp.send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:width<600});assert.ok(await evaluate(`document.documentElement.scrollWidth<=innerWidth`));await screenshot('website-insights-'+width);}
+ await evaluate(`window.analyticsFixture={...window.analyticsFixture,rangeDays:7,startDate:'2026-09-29T00:00:00Z'};document.querySelector('#analytics-app').click()`);await until(`document.querySelector('#product-insights').textContent.includes('Returning members')`);assert.equal(await evaluate(`document.querySelector('#analytics-range').value`),'7');
+ await screenshot('app-insights-mobile');
+});

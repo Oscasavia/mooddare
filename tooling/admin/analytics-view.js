@@ -1,3 +1,4 @@
+import {renderProduct} from './product-view.js';
 import {$, text, number} from './dom.js';
 
 const count = value => Number.isSafeInteger(value) && value >= 0;
@@ -41,6 +42,7 @@ function empty(target, symbol, title, description) {
 }
 
 export function renderAnalytics(data, {loading = false, error = false} = {}) {
+  renderProduct(data);
   const ready = data?.status === 'ready';
   const badge = $('analytics-state');
   badge.textContent = loading ? 'Loading insights' : error ? 'Unavailable' : ready ? 'Connected' : 'Not connected';

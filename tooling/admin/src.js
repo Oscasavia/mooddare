@@ -10,6 +10,8 @@ await setPersistence(auth, browserSessionPersistence);
 let rows = [], cursor = null, mode = 'reports', selected = null, blob = null;
 let sessionGeneration = 0, viewGeneration = 0, detailGeneration = 0;
 let loading = false, acting = false, authorized = false, snapshot = null;
+let analyticsSection='app';
+const analyticsRanges={app:'30',website:'30'};
 const date = v => v ? new Date((v._seconds ?? v.seconds) * 1000).toLocaleString() : 'Date unavailable';
 const labels = {remove:'Remove content', restore:'Restore content', dismiss:'Dismiss report', suspend:'Suspend for 7 days', ban:'Ban account', reinstate:'Lift restriction'};
 function status(message) { $('status').textContent = message; $('status').hidden = !message; }
@@ -95,7 +97,7 @@ async function load(more = false, {quiet = false} = {}) {
   try {
     if (tab === 'analytics') {
       const rangeDays = Number($('analytics-range').value);
-      const result = await loadAnalytics({rangeDays, api});
+      const result = await loadAnalytics({rangeDays, environment:analyticsSection==='website'?'production':$('analytics-environment').value, api});
       if (current !== viewGeneration || session !== sessionGeneration) return;
       snapshot = validateSnapshot(result, rangeDays); renderAnalytics(snapshot);
     } else {
@@ -247,6 +249,15 @@ function changeMode(tab) {
 $('refresh').onclick = async () => { await load(); if (selected && mode !== 'analytics') await open(selected,{focus:false}); };
 $('more').onclick = () => load(true);
 $('search').oninput = render; $('filter').onchange = render;
-$('analytics-range').onchange = () => { ++viewGeneration; loading = false; load(); };
+$('analytics-range').onchange = () => { analyticsRanges[analyticsSection]=$('analytics-range').value; ++viewGeneration; loading = false; load(); };
+$('analytics-environment').onchange=()=>{++viewGeneration;loading=false;load();};
+for(const section of ['app','website']) $('analytics-'+section).onclick=()=>{
+ analyticsSection=section;
+ for(const name of ['app','website']) $('analytics-'+name).setAttribute('aria-pressed',String(name===section));
+ $('analytics-range').value=analyticsRanges[section];
+ $('analytics-environment-label').hidden=section==='website';
+ $('legacy-insights').hidden=section==='website';
+ ++viewGeneration;loading=false;load();
+};
 $('mood-sort').onchange = () => renderAnalytics(snapshot);
 for (const tab of ['reports','history','analytics']) $(tab).onclick = () => changeMode(tab);

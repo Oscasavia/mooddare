@@ -1,3 +1,4 @@
+import 'package:mooddare/core/analytics/product_analytics.dart';
 import '../../drafts/data/draft_repository.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -19,6 +20,9 @@ class AccountRepository {
   }) : deleteLocalDrafts = deleteLocalDrafts ?? clearLocalAccountData;
 
   static Future<void> clearLocalAccountData(String uid) async {
+    try {
+      await ProductAnalytics.instance.queue.clear(uid);
+    } catch (_) {}
     await DraftRepository.instance.clear(uid);
     await RecentSearchStore.instance.clear(uid);
   }

@@ -65,3 +65,5 @@ test-results/
 
 /build
 /releases/
+
+/android/.kotlin/

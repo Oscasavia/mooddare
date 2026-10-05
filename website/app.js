@@ -1,3 +1,4 @@
+import {watchVideo} from './metrics.js';
 import { release } from './config.js';
 
 const samples = {
@@ -108,6 +109,7 @@ export function applyReleaseConfig(config) {
     video.append('Your browser does not support embedded video. ', fallback);
     container.classList.toggle('film-portrait', usePortrait);
     container.replaceChildren(video);
+    watchVideo(video,config.promoVideoId);
   }
 }
 

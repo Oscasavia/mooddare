@@ -1,3 +1,4 @@
+import 'core/analytics/analytics_lifecycle.dart';
 import 'features/links/moment_links.dart';
 import 'features/auth/presentation/account_access_guard.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -69,6 +70,7 @@ Future<void> _initializeFirebase() async {
     );
   }
   _firebaseReady.value = true;
+  await AnalyticsLifecycle.start();
   if (PushService.instance == null) {
     final service = PushService(
       auth: FirebaseAuth.instance,

@@ -1,12 +1,46 @@
-# Admin analytics
+# App and website analytics
 
-The staff-only Analytics tab loads `/admin-api/analytics?days=7|30` through the
-same verified Google identity and enabled `moderationStaff` authorization as the
-moderation tools. Browser clients cannot read or write analytics Firestore
-collections directly. The portal receives aggregates, never user identifiers,
-post text, email addresses, media, or private For you history.
+Analytics has separate App and Website sections. Each remembers its own 7/30-day UTC range. App activity defaults to Production; Development & staff is a separate filter. The expandable earlier-tracking section uses the previous all-account, existing-content calculations and is explicitly labeled.
 
-## What the numbers mean
+## New app measurements
+
+- Daily/weekly/monthly active members: distinct signed-in members observed today / the last 7 / last 30 UTC days. Foreground activity is sampled on sign-in, resume and every five minutes, plus tracked feature actions. These windows do not change with the report range.
+- Returning members: exact D1, D7 and D30 return rates, starting on first observation (including existing members), not installation. Each rate uses the selected number of fully observed eligible cohorts, offset by the return day. An immature cohort is excluded, not reported as zero retention.
+- Registration attempts, successful registrations, login attempts/completions/failures, first profile setup, mood selection, dare views/shuffles, camera openings, posting attempts/success/failure and duration. First-step counters deduplicate member milestones; event totals are not a matched-user conversion funnel. Registration success depends on the updated client successfully reporting the completed registration.
+- Published moments: server-side creation events counted once per post ID, including posts later deleted or moderated. Restoring the same post does not add a publication. Likes count additions, including an unlike followed by another like.
+- Account deletions: registered Firebase Auth deletion events, including administrator removals. The deletion job retains the environment classification before erasing account state. This measures Auth removal, not completion of every cleanup stage.
+- Shares: share-sheet openings, successful native share actions, and unavailable confirmation results. Only native success increments the server-owned public post share counter. Dismissal does not. This is not proof of message delivery or recipient views. Numeric like/comment/share counts hide at zero; action buttons remain visible.
+- Reliability: upload/auth failure categories and app errors by platform/version, plus mean posting duration and attempts lasting at least ten seconds. Posting duration includes export and upload. Release crash traces are sent to Firebase Crashlytics, without deliberately setting account IDs or adding user content; debug collection is disabled.
+
+New app events retain their original ID, timestamp, environment, version, platform and session in a bounded on-device queue (200 events, seven days). Only events belonging to the currently signed-in account are delivered; the server verifies the expected UID again. Anonymous sign-in attempts use a separate session scope. Permanent post/account restrictions are acknowledged without counting; temporary failures retry on subsequent events/resume. This is best-effort telemetry: disabled connectivity, a full/expired queue, unsupported old clients and uninstallation can lose data.
+
+## Website measurements
+
+First-party `/website-metrics` receives normalized page views, internal navigation, active store-download links, contact clicks, mood-demo interactions, screenshot openings, FAQ openings and video milestones. It excludes query strings, referrers, arbitrary links and individual moment IDs. It honors Do Not Track and Global Privacy Control. No advertising SDK or cross-site identifier is used.
+
+Sessions are random browser-tab IDs stored in sessionStorage, not verified unique people. New sessions count on first observation. Requests are bounded and rate-limited; automated clients can still influence public telemetry. Events queue in memory for at most 24 hours, flush periodically/on backgrounding with keepalive and reuse IDs on retries; closing a tab while offline can lose events.
+
+Video starts, 25/50/75% coverage, completion and errors deduplicate per tab session and video version. Coverage counts distinct played segments while visible; seeks and replays do not inflate coverage. Completion requires ending after at least 90% coverage. Portrait and landscape cuts of the same creative share one version.
+
+When replacing a promo film, change `release.promoVideoId` in `website/config.js` and add the new ID to `analyticsConfig/current.webVideoIds` before deployment. Keep old IDs in the registry for cached pages; old aggregates stay separate. The initial ID is `launch-2026-10`.
+
+## Storage, access and operation
+
+The staff-only `/admin-api/analytics?days=7|30&environment=production|development` requires verified Google authentication and enabled `moderationStaff`, just like moderation. Firestore rules deny direct client access to all metric collections and writes to `posts.shareCount`. The portal receives aggregates, not account IDs or post content.
+
+`analyticsConfig/current.productStartedAt` defines the new collection boundary; never reset it. `node tooling/analytics/manage.cjs --enable-product` initializes it once, creates a private rotating-IP-hash salt, and registers the initial video version. Existing legacy `startedAt` stays intact. Do not log the salt or OAuth tokens.
+
+New stores: `productDaily`, `productCohorts`, `websiteDaily`, `analyticsPresence`, `analyticsVisits`, `analyticsTraffic`, `analyticsPublications`, plus account-scoped `users/{uid}/productMetrics` and receipts. Enabled `moderationStaff` or `analyticsExclusions/{uid}` routes incoming activity to development; release/debug build metadata also separates traffic. Exclusion is evaluated at receipt time, not retroactively. Post environment metadata classifies publication and likes; staff exclusions additionally apply to the actor. Older posts without metadata default to production.
+
+Account-scoped state is erased with the account. Random-key presence summaries retain only environment/activity dates, expire after 35 days, and lose their account-to-key mapping on deletion. Daily aggregates remain; per-post publication hashes remain to prevent a later restore inflating historical totals. Receipt cleanup uses the existing 32/90-day jobs; anonymous app-attempt session receipts expire after nine days (longer than the offline queue); website session/rate-limit records expire after two days and the product cleanup job runs daily. IP buckets rotate every 15 minutes; raw IPs are not stored in analytics documents (infrastructure logs have their own retention).
+
+Capacity is intentionally bounded: at most 2000 member events per UTC day, 500 events per public session receipt, 600 public batches per 15-minute network bucket, 20 events per request. Active-user reads cap at 20,000 presence documents per environment and fail visibly above that threshold instead of truncating totals. Plan a scheduled rollup/warehouse before approaching that scale. Raw infrastructure/Crashlytics costs and retention are managed in Firebase.
+
+App changes require an updated installed build. Website changes start after Hosting deployment. New events cannot reconstruct activity before instrumentation. Test fixtures and emulator traffic never go to production.
+
+## Earlier tracking definitions
+
+### Legacy metrics
 
 | Metric | Definition |
 | --- | --- |

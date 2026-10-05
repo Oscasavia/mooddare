@@ -95,6 +95,13 @@
     ],
     "rewrites": [
       {
+        "source": "/website-metrics",
+        "function": {
+          "functionId": "websiteMetrics",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "/admin-api/**",
         "function": {
           "functionId": "moderationApi",

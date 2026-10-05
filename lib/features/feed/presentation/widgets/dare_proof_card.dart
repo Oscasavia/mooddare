@@ -1,3 +1,4 @@
+import 'package:mooddare/core/analytics/product_analytics.dart';
 import '../../../links/moment_links.dart';
 import '../../data/feed_ranker.dart';
 import 'package:mooddare/core/widgets/action_menu_label.dart';
@@ -75,7 +76,7 @@ class _DareProofCardState extends State<DareProofCard>
       _commenting = false,
       _viewingLikes = false,
       _scrubbing = false;
-  int _likes = 0;
+  int _likes = 0, _shares = 0;
   bool _downloading = false, _savingDare = false;
   late final _dareLibrary = widget.dareLibrary ?? DareLibraryRepository();
   String? get _uid => _repository.currentUserId;
@@ -107,6 +108,7 @@ class _DareProofCardState extends State<DareProofCard>
     _author = _repository.getAuthor(widget.post.authorId);
     _commentCount = _repository.getCommentCount(widget.post.id);
     _liked = widget.post.likedBy.contains(_uid);
+    _shares = widget.post.shareCount;
     _likes = widget.post.likedBy.length;
     _timer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) {
@@ -277,6 +279,9 @@ class _DareProofCardState extends State<DareProofCard>
   @override
   void didUpdateWidget(covariant DareProofCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.post.shareCount != widget.post.shareCount) {
+      _shares = widget.post.shareCount;
+    }
     if (!_liking) {
       _liked = widget.post.likedBy.contains(_uid);
       _likes = widget.post.likedBy.length;
@@ -463,12 +468,25 @@ class _DareProofCardState extends State<DareProofCard>
     _syncPlayback();
     final box = context.findRenderObject() as RenderBox?;
     try {
-      await Share.share(
+      ProductAnalytics.instance.track('share_opened', postId: widget.post.id);
+      final result = await Share.share(
         '${widget.post.dareText}\n${MomentLinks.url(widget.post.id)}\n#MoodDare',
         sharePositionOrigin: box == null
             ? null
             : box.localToGlobal(Offset.zero) & box.size,
       );
+      if (result.status == ShareResultStatus.success) {
+        ProductAnalytics.instance.track(
+          'share_completed',
+          postId: widget.post.id,
+        );
+        if (mounted) setState(() => _shares++);
+      } else if (result.status == ShareResultStatus.unavailable) {
+        ProductAnalytics.instance.track(
+          'share_unconfirmed',
+          postId: widget.post.id,
+        );
+      }
     } catch (_) {
       _message('Could not open sharing. Please try again.');
     } finally {
@@ -736,10 +754,11 @@ class _DareProofCardState extends State<DareProofCard>
                                   size: 22,
                                 ),
                               ),
-                              Text(
-                                compactCount(_likes),
-                                semanticsLabel: '$_likes likes',
-                              ),
+                              if (_likes > 0)
+                                Text(
+                                  compactCount(_likes),
+                                  semanticsLabel: '$_likes likes',
+                                ),
                             ],
                           ),
                           Row(
@@ -756,15 +775,19 @@ class _DareProofCardState extends State<DareProofCard>
                               ),
                               FutureBuilder<int>(
                                 future: _commentCount,
-                                builder: (_, snapshot) => Text(
-                                  snapshot.hasData
-                                      ? compactCount(snapshot.data!)
-                                      : '—',
-                                  key: const ValueKey('moment_comment_count'),
-                                  semanticsLabel: snapshot.hasData
-                                      ? '${snapshot.data} comments'
-                                      : 'Comment count unavailable',
-                                ),
+                                builder: (_, snapshot) => snapshot.data == 0
+                                    ? const SizedBox.shrink()
+                                    : Text(
+                                        snapshot.hasData
+                                            ? compactCount(snapshot.data!)
+                                            : '—',
+                                        key: const ValueKey(
+                                          'moment_comment_count',
+                                        ),
+                                        semanticsLabel: snapshot.hasData
+                                            ? '${snapshot.data} comments'
+                                            : 'Comment count unavailable',
+                                      ),
                               ),
                             ],
                           ),
@@ -773,6 +796,12 @@ class _DareProofCardState extends State<DareProofCard>
                             onPressed: _share,
                             icon: const ShareIcon(color: Colors.white),
                           ),
+                          if (_shares > 0)
+                            Text(
+                              compactCount(_shares),
+                              semanticsLabel: "$_shares shares",
+                              key: const ValueKey("moment_share_count"),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 4),

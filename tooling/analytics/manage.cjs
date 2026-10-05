@@ -9,7 +9,8 @@ const client=new OAuth2Client();client.setCredentials({access_token:tokens.acces
 const db=new Firestore({projectId:'mooddare',auth:new GoogleAuth({authClient:client})});
 (async()=>{
  if(process.argv.includes('--enable'))await db.runTransaction(async tx=>{const ref=db.doc('analyticsConfig/current');if(!(await tx.get(ref)).exists)tx.create(ref,{startedAt:Timestamp.now()});});
+ if(process.argv.includes('--enable-product'))await db.runTransaction(async tx=>{const ref=db.doc('analyticsConfig/current'),old=(await tx.get(ref)).data()||{};tx.set(ref,{productStartedAt:old.productStartedAt||Timestamp.now(),trafficSalt:old.trafficSalt||require('node:crypto').randomBytes(32).toString('hex'),webVideoIds:[...new Set([...(old.webVideoIds||[]),'launch-2026-10'])]},{merge:true});});
  for(const group of ['analyticsReceipts','analyticsState'])await db.collectionGroup(group).where('expiresAt','<=',Timestamp.now()).limit(1).get();
- const snapshot=await require('../../functions/analytics').snapshot(db,30);
- console.log(JSON.stringify({status:snapshot.status,trackingStartedAt:snapshot.trackingStartedAt,metrics:snapshot.metrics,moodRows:snapshot.moods?.length,communityDareRows:snapshot.communityDares?.length},null,2));
+ const snapshot=await require('../../functions/analytics').snapshot(db,30,Date.now(),process.argv.includes('--development')?'development':'production');
+ console.log(JSON.stringify({status:snapshot.status,productStartedAt:snapshot.product?.startedAt,active:snapshot.product?.active,events:snapshot.product?.app.events,websiteEvents:snapshot.product?.website.events,trackingStartedAt:snapshot.trackingStartedAt,metrics:snapshot.metrics,moodRows:snapshot.moods?.length,communityDareRows:snapshot.communityDares?.length},null,2));
 })().catch(e=>{console.error('Analytics operation failed:',e.code||e.name);process.exitCode=1;});

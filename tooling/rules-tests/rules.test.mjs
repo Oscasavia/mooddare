@@ -669,7 +669,7 @@ for (const policy of ['firestore.rules', 'firestore.compat.rules']) {
 for (const policy of ['firestore.rules','firestore.compat.rules']) {
   test(`${policy}: moderation records cannot be forged, read or deleted by app clients`,async()=>{
     await env.cleanup();env=await initializeTestEnvironment({projectId:'demo-mooddare',firestore:{rules:await readFile(new URL(`../../${policy}`,import.meta.url),'utf8')},storage:{rules:await readFile(new URL('../../storage.rules',import.meta.url),'utf8')}});
-    for(const c of ['moderationStaff','moderationContent','moderationActions','moderationLocks','moderationReviews','accountRestrictions','analyticsConfig','analyticsDaily','analyticsReceipts','users/alice/analyticsReceipts','users/alice/analyticsState']){
+    for(const c of ['moderationStaff','moderationContent','moderationActions','moderationLocks','moderationReviews','accountRestrictions','analyticsConfig','analyticsDaily','analyticsReceipts','users/alice/analyticsReceipts','users/alice/analyticsState','users/alice/productMetrics','productDaily','productCohorts','websiteDaily','analyticsPresence','analyticsTraffic','analyticsVisits','analyticsPublications','analyticsExclusions']){
       await env.withSecurityRulesDisabled(ctx=>setDoc(doc(ctx.firestore(),`${c}/secret`),{enabled:true}));
       for(const path of [`${c}/secret`,`${c}/secret/nested/item`]){
         await assertFails(getDoc(doc(db('alice'),path)));await assertFails(setDoc(doc(db('alice'),path),{enabled:true}));await assertFails(deleteDoc(doc(db('alice'),path)));
@@ -854,4 +854,13 @@ test('deleted, expired and deleting authors cannot receive new recommendation ac
   await assertFails(setDoc(target,value));
   await env.withSecurityRulesDisabled(async c=> {await updateDoc(doc(c.firestore(),'posts/one'),{expiresAt:Timestamp.fromMillis(Date.now()+86400000)});await setDoc(doc(c.firestore(),'accountDeletions/alice'),{status:'pending'});});
   await assertFails(setDoc(target,value));
+});
+
+test('post share counter is server owned; environment metadata cannot be changed', async()=>{
+ const ref=doc(db('alice'),'posts/one');
+ await assertFails(setDoc(ref,{...post(),shareCount:10}));
+ await assertFails(setDoc(ref,{...post(),analyticsEnvironment:'invalid'}));
+ await assertSucceeds(setDoc(ref,{...post(),analyticsEnvironment:'development'}));
+ await assertFails(updateDoc(ref,{shareCount:1}));
+ await assertFails(updateDoc(ref,{analyticsEnvironment:'production'}));
 });

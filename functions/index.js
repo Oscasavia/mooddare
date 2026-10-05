@@ -75,7 +75,11 @@ exports.recoverAccountDeletions=onSchedule({schedule:'every 10 minutes',timeoutS
 // Covers account removals through older apps or an administrator as well.
 exports.eraseDeletedAuthAccount=require('firebase-functions/v1').region('us-central1').runWith({failurePolicy:true}).auth.user().onDelete(async(user,context)=>{
   await deletion.enqueueDeletion(db,user.uid);
-  if(user.providerData?.length)await analytics.recordLifecycle(db,'accountDeletions',context.eventId,context.timestamp);
+  if(user.providerData?.length){
+   await analytics.recordLifecycle(db,'accountDeletions',context.eventId,context.timestamp);
+   const job=await db.doc('accountDeletions/'+user.uid).get();
+   await product.serverEvent(db,{id:context.eventId,name:'account_deleted',uid:user.uid,env:job.data()?.analyticsEnvironment||'production',at:Date.parse(context.timestamp)});
+  }
 });
 const {sweepUploads}=require('./abandoned_uploads');
 exports.cleanupAbandonedUploads=onSchedule({schedule:'every 60 minutes',timeoutSeconds:540,memory:'256MiB',maxInstances:1},()=>sweepUploads(db,getAuth(),deletionBucket()));
@@ -86,4 +90,21 @@ exports.countNewProfile=onDocumentCreated({document:'users/{uid}',retry:true},ev
 exports.expireAnalyticsReceipts=onSchedule({schedule:'every day 04:00',timeoutSeconds:540},async()=>{
   await clear(db.collectionGroup('analyticsReceipts').where('expiresAt','<=',Timestamp.now()));
   await clear(db.collectionGroup('analyticsState').where('expiresAt','<=',Timestamp.now()));
+});
+
+const product=require('./product_metrics');
+exports.recordProductEvents=onCall({timeoutSeconds:60,maxInstances:3},req=>product.appEvents(db,req));
+exports.websiteMetrics=onRequest({timeoutSeconds:30,maxInstances:2,cors:false},(req,res)=>product.webEvents(db,req,res));
+exports.countProductPosts=onDocumentWritten({document:'posts/{post}',retry:true},event=>product.postWritten(db,event));
+exports.expireProductMetrics=onSchedule({schedule:'every day 04:30',timeoutSeconds:540},async()=>{
+ for(const c of ['analyticsPresence','analyticsVisits','analyticsTraffic'])await clear(db.collection(c).where('expiresAt','<=',Timestamp.now()));
+});
+
+exports.countProfileSetup=onDocumentWritten({document:'users/{uid}',retry:true},async event=>{
+ const before=event.data?.before.data(),after=event.data?.after.data();
+ if(after?.username&&!before?.username){
+  const dev=await db.doc('users/'+event.params.uid+'/productMetrics/development').get();
+  const prod=await db.doc('users/'+event.params.uid+'/productMetrics/production').get();
+  await product.serverEvent(db,{id:'profile:'+event.params.uid,name:'profile_completed',uid:event.params.uid,env:dev.exists&&!prod.exists?'development':'production',at:Date.parse(event.time)});
+ }
 });

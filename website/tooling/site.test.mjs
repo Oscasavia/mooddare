@@ -204,15 +204,17 @@ test('FAQ works and local links have real destinations', async () => {
   }
 });
 
-test('privacy and terms load offline-style without scripts at narrow widths', async () => {
+test('privacy and terms remain readable with scripts disabled at narrow widths', async () => {
+  await cdp.send('Emulation.setScriptExecutionDisabled',{value:true});
   for (const page of ['privacy', 'terms']) {
     await visit(`/${page}.html`, 320);
     assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth`), true);
-    assert.equal(await evaluate(`document.querySelectorAll('script').length`), 0);
+    assert.equal(await evaluate(`document.querySelectorAll('script:not([src="/metrics.js"])').length`), 0);
     assert.match(await evaluate(`document.body.textContent`), /MoodDare team/);
     if (page === 'privacy') assert.match(await evaluate(`document.body.textContent`), /Firebase Cloud Messaging processes a device registration token/);
     assert.match(await evaluate(`document.body.textContent`), /Last updated October 5, 2026/);
   }
+  await cdp.send('Emulation.setScriptExecutionDisabled',{value:false});
 });
 
 test('invalid release URLs stay disabled; valid HTTPS URLs enable downloads and a non-autoplay video', async () => {
@@ -330,4 +332,21 @@ test('deletion page offers separate external requests and works on mobile', asyn
   assert.match(await evaluate('document.body.innerText'),/without installing or signing in/);
   assert.match(await evaluate('document.body.innerText'),/handles emailed requests manually/);
   assert.equal(await evaluate("document.querySelector('input[type=password]') === null"),true);
+});
+
+test('website analytics captures real interactions using normalized paths and versioned video wiring',async()=>{
+ const {identifier}=await cdp.send('Page.addScriptToEvaluateOnNewDocument',{source:`window.metricBatches=[];const originalFetch=window.fetch;window.fetch=(url,options)=>{if(url==='/website-metrics'){window.metricBatches.push(JSON.parse(options.body));return Promise.resolve(new Response(null,{status:204}));}return originalFetch(url,options);};`});
+ await visit('/?campaign=private-query');
+ await evaluate(`document.querySelector('[data-mood="creative"]').click();document.querySelector('[data-screen]').click();import('/metrics.js').then(m=>m.flush())`);
+ const events=await evaluate(`window.metricBatches.flatMap(b=>b.events)`);
+ assert.equal(events.filter(e=>e.name==='page_view').length,1);assert.ok(events.some(e=>e.name==='mood_demo'&&e.target==='creative'));assert.ok(events.some(e=>e.name==='screenshot_open'));
+ assert.ok(events.every(e=>e.page==='/'));assert.ok(!JSON.stringify(events).includes('private-query'));
+ await cdp.send('Page.removeScriptToEvaluateOnNewDocument',{identifier});
+});
+
+test('Do Not Track prevents metric requests and session identifier storage',async()=>{
+ const {identifier}=await cdp.send('Page.addScriptToEvaluateOnNewDocument',{source:`Object.defineProperty(navigator,'doNotTrack',{value:'1'});sessionStorage.removeItem('md-metrics-session');window.metricCalls=0;const original=fetch;window.fetch=(url,options)=>{if(url==='/website-metrics')window.metricCalls++;return original(url,options);};`});
+ await visit('/');await evaluate(`document.querySelector('[data-mood="chill"]').click();import('/metrics.js').then(m=>m.flush())`);
+ assert.equal(await evaluate(`window.metricCalls`),0);assert.equal(await evaluate(`sessionStorage.getItem('md-metrics-session')`),null);
+ await cdp.send('Page.removeScriptToEvaluateOnNewDocument',{identifier});
 });

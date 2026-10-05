@@ -13,7 +13,9 @@ async function enqueueDeletion(db,uid,{now=Date.now()}={}) {
   const ref=db.doc(`accountDeletions/${uid}`);
   await db.runTransaction(async tx=>{
     if((await tx.get(ref)).exists)return;
-    tx.create(ref,{stage:0,status:'pending',requestedAt:Timestamp.fromMillis(now),nextAttemptAt:Timestamp.fromMillis(now),attempts:0});
+    const [staff,excluded,dev,prod]=await Promise.all(['moderationStaff/'+uid,'analyticsExclusions/'+uid,'users/'+uid+'/productMetrics/development','users/'+uid+'/productMetrics/production'].map(path=>tx.get(db.doc(path))));
+    const analyticsEnvironment=staff.data()?.enabled||excluded.data()?.enabled||(dev.exists&&!prod.exists)?'development':'production';
+    tx.create(ref,{analyticsEnvironment,stage:0,status:'pending',requestedAt:Timestamp.fromMillis(now),nextAttemptAt:Timestamp.fromMillis(now),attempts:0});
     tx.set(db.doc(`accountRestrictions/${uid}`),{status:'deleting'});
   });
   return ref;

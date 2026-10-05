@@ -11,6 +11,8 @@ export function makeServer() {
   return createServer(async (req, res) => {
     try {
       const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+      // Local previews acknowledge metrics without contacting production.
+      if(pathname === '/website-metrics' && req.method === 'POST'){res.writeHead(204);res.end();return;}
       const route = pathname === '/.well-known/assetlinks.json' ? '/assetlinks.json' : pathname.startsWith('/moment/') ? '/moment.html' : pathname;
       const path = resolve(root, '.' + (route.endsWith('/') ? route + 'index.html' : route));
       if (!path.startsWith(root + sep) || /\/(tooling|node_modules)\//.test(path) || !types[extname(path)]) {

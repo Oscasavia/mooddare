@@ -135,21 +135,31 @@ void main() {
             ),
           ),
         ).style.color;
-        final initialCountColor = countColor(0);
+        expect(
+          find.byWidgetPredicate(
+            (w) => w is Text && w.semanticsLabel == '0 likes',
+          ),
+          findsNothing,
+        );
         await tester.tap(find.byTooltip('Like'));
         await tester.pumpAndSettle();
         expect(
           tester.widget<Icon>(find.byIcon(Icons.favorite)).color,
           AppTheme.likedHeart,
         );
-        expect(countColor(1), initialCountColor);
+        expect(countColor(1), isNotNull);
         await tester.tap(find.byTooltip('Unlike'));
         await tester.pumpAndSettle();
         expect(
           tester.widget<Icon>(find.byIcon(Icons.favorite_outline)).color,
           Colors.white,
         );
-        expect(countColor(0), initialCountColor);
+        expect(
+          find.byWidgetPredicate(
+            (w) => w is Text && w.semanticsLabel == '0 likes',
+          ),
+          findsNothing,
+        );
         expect(tester.takeException(), isNull);
       }
     },
@@ -184,20 +194,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<Text>(find.byKey(const ValueKey('moment_comment_count')))
-            .data,
-        '0',
-      );
+      expect(find.byKey(const ValueKey('moment_comment_count')), findsNothing);
       await tester.pageBack();
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<Text>(find.byKey(const ValueKey('moment_comment_count')))
-            .data,
-        '0',
-      );
+      expect(find.byKey(const ValueKey('moment_comment_count')), findsNothing);
     },
   );
 

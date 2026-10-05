@@ -206,7 +206,8 @@ service cloud.firestore {
     match /posts/{id} {
       allow read: if signedIn();
       allow create: if signedIn() && !exists(/databases/$(database)/documents/moderationPosts/$(id))
-        && request.resource.data.keys().hasOnly(['dareText','mediaUrl','mediaPath','mediaType','authorId','createdAt','expiresAt','likedBy','moodId','moodName','weeklyDareId'])
+        && request.resource.data.keys().hasOnly(['dareText','mediaUrl','mediaPath','mediaType','authorId','createdAt','expiresAt','likedBy','moodId','moodName','weeklyDareId','analyticsEnvironment'])
+        && request.resource.data.get('analyticsEnvironment','production') in ['production','development']
         && (!('weeklyDareId' in request.resource.data) || validWeeklyDare(request.resource.data))
         && ((!('moodId' in request.resource.data) && !('moodName' in request.resource.data))
           || (request.resource.data.moodId is string && request.resource.data.moodId.size() > 0 && request.resource.data.moodId.size() <= 128

@@ -1,3 +1,4 @@
+import 'package:mooddare/core/analytics/product_analytics.dart';
 import 'package:mooddare/features/profile/data/social_repository.dart';
 import '../../data/repositories/dare_library_repository.dart';
 import '../widgets/dare_actions.dart';
@@ -32,6 +33,9 @@ class _DareDisplayScreenState extends State<DareDisplayScreen> {
   void initState() {
     super.initState();
     if (widget.mood.dareList.isNotEmpty) {
+      if (widget.mood.isAvailable) {
+        ProductAnalytics.instance.track('dare_viewed', moodId: widget.mood.id);
+      }
       _index = Random().nextInt(widget.mood.dareList.length);
     }
   }
@@ -42,6 +46,7 @@ class _DareDisplayScreenState extends State<DareDisplayScreen> {
         widget.mood.dareList.length < 2) {
       return;
     }
+    ProductAnalytics.instance.track('dare_shuffled', moodId: widget.mood.id);
     HapticFeedback.selectionClick();
     setState(
       () => _index =

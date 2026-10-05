@@ -1,3 +1,4 @@
+import 'package:mooddare/core/analytics/product_analytics.dart';
 import '../../../drafts/data/capture_draft.dart';
 import '../../../drafts/data/draft_repository.dart';
 import 'package:mooddare/core/widgets/action_menu_label.dart';
@@ -335,6 +336,14 @@ class _PreviewScreenState extends State<PreviewScreen>
       return;
     }
     if (_busy || _loading || _rendering || _error != null) return;
+    final timer = Stopwatch()..start();
+    if (action == 'post') {
+      ProductAnalytics.instance.track(
+        'upload_started',
+        moodId: widget.moodId,
+        weekId: widget.weeklyDareId,
+      );
+    }
     setState(() => _busy = true);
     try {
       final file = _isPhoto
@@ -352,6 +361,12 @@ class _PreviewScreenState extends State<PreviewScreen>
           mediaFile: file,
           mediaType: widget.mediaType,
           postId: _postId,
+        );
+        ProductAnalytics.instance.track(
+          'upload_succeeded',
+          moodId: widget.moodId,
+          weekId: widget.weeklyDareId,
+          durationMs: timer.elapsedMilliseconds,
         );
         _completed = true;
         _draftDebounce?.cancel();
@@ -390,6 +405,15 @@ class _PreviewScreenState extends State<PreviewScreen>
         );
       }
     } catch (error) {
+      if (action == 'post') {
+        ProductAnalytics.instance.track(
+          'upload_failed',
+          moodId: widget.moodId,
+          weekId: widget.weeklyDareId,
+          durationMs: timer.elapsedMilliseconds,
+          error: ProductAnalytics.errorCode(error),
+        );
+      }
       _message(
         action == 'post'
             ? postErrorMessage(error)

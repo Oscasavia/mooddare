@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node tooling/serve.mjs",
-    "test": "node --test tooling/site.test.mjs"
+    "test": "node --test tooling/site.test.mjs tooling/metrics.test.mjs"
   },
   "engines": {"node": ">=22"}
 }

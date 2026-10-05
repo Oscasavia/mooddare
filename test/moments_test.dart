@@ -212,12 +212,13 @@ void main() {
       final calls = <MethodCall>[];
       const channel = MethodChannel('dev.fluttercommunity.plus/share');
       var failShare = false;
+      var completeShare = false;
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
         call,
       ) async {
         calls.add(call);
         if (failShare) throw PlatformException(code: 'unavailable');
-        return 'dev.fluttercommunity.plus/share/dismissed';
+        return completeShare ? 'com.example.receiver' : '';
       });
       addTearDown(
         () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -240,6 +241,16 @@ void main() {
       await tester.tap(find.byTooltip('Share moment'));
       await tester.pumpAndSettle();
       expect(calls.length, 2);
+      expect(find.byKey(const ValueKey('moment_share_count')), findsNothing);
+      completeShare = true;
+      await tester.tap(find.byTooltip('Share moment'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('moment_share_count')))
+            .data,
+        '1',
+      );
       failShare = true;
       await tester.tap(find.byTooltip('Share moment'));
       await tester.pumpAndSettle();

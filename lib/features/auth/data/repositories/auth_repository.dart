@@ -1,3 +1,4 @@
+import 'package:mooddare/core/analytics/product_analytics.dart';
 import 'package:mooddare/features/notifications/data/push_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -28,6 +29,12 @@ class AuthRepository {
         ? await current!.linkWithCredential(credential)
         : await _firebaseAuth.signInWithCredential(credential);
     await _userRepository.upsertUser(result.user!);
+    ProductAnalytics.instance.track(
+      current?.isAnonymous == true ||
+              result.additionalUserInfo?.isNewUser == true
+          ? 'signup_completed'
+          : 'login_completed',
+    );
     return result;
   }
 
@@ -55,6 +62,7 @@ class AuthRepository {
             password: password,
           );
     await _userRepository.upsertUser(result.user!);
+    ProductAnalytics.instance.track('signup_completed');
     return result;
   }
 
@@ -67,6 +75,7 @@ class AuthRepository {
       password: password,
     );
     await _userRepository.upsertUser(result.user!);
+    ProductAnalytics.instance.track('login_completed');
     return result;
   }
 }

@@ -4,7 +4,8 @@ import {validateSnapshot} from './analytics-view.js';
 import {loadAnalytics} from './analytics-source.js';
 const fresh = () => ({status:'ready',schemaVersion:1,rangeDays:7,generatedAt:'2026-10-05T12:00:00Z',startDate:'2026-09-29T00:00:00Z',endDate:'2026-10-06T00:00:00Z',metrics:{moodSelections:12,communityParticipants:3,communityMoments:5},moods:[{id:'creative',name:'Creative',selections:12},{id:'chill',name:'Chill',selections:0}],communityDares:[{id:'week1',title:'A little wonder',participants:2,moments:3},{id:'week2',title:'Something kind',participants:2,moments:2}]});
 test('production adapter loads the selected range through the authenticated API',async()=>{
- const data=fresh();let route;assert.equal(await loadAnalytics({rangeDays:7,api:async r=>{route=r;return data;}}),data);assert.equal(route,'analytics?days=7');
+ const data=fresh();let route;assert.equal(await loadAnalytics({rangeDays:7,api:async r=>{route=r;return data;}}),data);assert.equal(route,'analytics?days=7&environment=production');
+ await loadAnalytics({rangeDays:30,environment:'development',api:async r=>{route=r;return data;}});assert.equal(route,'analytics?days=30&environment=development');
  await assert.rejects(loadAnalytics({rangeDays:30,api:async()=>{throw Error('offline');}}));
 });
 test('version 2 requires tracking coverage and validated growth metrics',()=>{

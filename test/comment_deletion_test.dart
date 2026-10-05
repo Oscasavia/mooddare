@@ -48,12 +48,8 @@ void main() {
           await tester.binding.handlePopRoute();
           await tester.pumpAndSettle();
           expect(
-            tester
-                .widget<Text>(
-                  find.byKey(const ValueKey('moment_comment_count')),
-                )
-                .data,
-            '0',
+            find.byKey(const ValueKey('moment_comment_count')),
+            findsNothing,
           );
         },
       );

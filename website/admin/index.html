@@ -44,7 +44,10 @@
       </div>
     </section>
     <section id="analytics-view" hidden aria-label="Community analytics">
-      <div class="analytics-toolbar"><div><span class="badge" id="analytics-state">Not connected</span><p id="analytics-updated" class="muted">Activity tracking has not been enabled.</p></div><label>Date range<select id="analytics-range"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option></select></label></div>
+      <div class="analytics-tabs" aria-label="Analytics sections"><button id="analytics-app" aria-pressed="true">App</button><button id="analytics-website" aria-pressed="false">Website</button></div>
+      <div class="analytics-toolbar"><div><span class="badge" id="analytics-state">Not connected</span><p id="analytics-updated" class="muted">Activity tracking has not been enabled.</p></div><label id="analytics-environment-label">Activity<select id="analytics-environment"><option value="production">Production</option><option value="development">Development &amp; staff</option></select></label><label>Date range<select id="analytics-range"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option></select></label></div>
+      <div id="product-insights"></div>
+      <details id="legacy-insights"><summary>Existing content &amp; earlier tracking (all accounts)</summary>
       <div class="summary-grid" aria-label="Community activity totals">
         <article class="metric"><span>Mood selections</span><strong id="analytics-selections">—</strong><span class="metric-foot">Selections made in Discover</span></article>
         <article class="metric"><span>Community participants</span><strong id="analytics-participants">—</strong><span class="metric-foot">Unique people who published a dare moment</span></article>
@@ -65,6 +68,7 @@
         <section class="analytics-panel"><div class="panel-heading"><div><p class="eyebrow">SMALL DARES, SHARED MOMENTS</p><h2>Community dares</h2></div></div><p class="panel-description">Participation counts people who published a moment for a community dare.</p><div id="community-results"></div></section>
       </div>
       <p class="analytics-footnote">Each participant is counted once in the total, even if they join several dares. Dates use UTC.</p>
+      </details>
     </section>
   </section>
 </main>

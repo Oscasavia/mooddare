@@ -1,0 +1,39 @@
+import {$,text,number} from './dom.js';
+let moodSort='most';
+const count=value=>Number.isFinite(value)&&value>=0?value:0;
+const n=value=>number(count(value));
+function cards(parent,rows){const grid=text('div','','insight-grid');for(const [title,value,detail]of rows){const card=text('article','','metric');card.append(text('span',title),text('strong',typeof value==='number'?n(value):value),text('span',detail,'metric-foot'));grid.append(card);}parent.append(grid);}
+function table(parent,title,columns,rows,description){const panel=text('section','','insight-panel');panel.append(text('h2',title));if(description)panel.append(text('p',description));if(!rows.length){panel.append(text('p','No activity recorded in this period.'));parent.append(panel);return;}
+ const wrap=text('div','','table-wrap'),table=text('table',''),head=text('thead',''),tr=text('tr','');for(const label of columns){const th=text('th',label);th.scope='col';tr.append(th);}head.append(tr);table.append(head);const body=text('tbody','');for(const row of rows){const tr=text('tr','');for(const v of row)tr.append(text('td',String(v)));body.append(tr);}table.append(body);wrap.append(table);panel.append(wrap);parent.append(panel);return panel;
+}
+export function renderProduct(data){
+ const target=$('product-insights');target.replaceChildren();
+ const website=$('analytics-website').getAttribute('aria-pressed')==='true';
+ $('legacy-insights').hidden=website;
+ const p=data?.product;
+ if(!p){if(data?.status==='ready')target.append(text('p','New tracking has not been enabled yet. Earlier app insights remain below.','analytics-footnote'));return;}
+ target.append(text('p',`${website?'Website traffic':p.environment==='production'?'Production app activity':'Development and staff activity'} · Measured from ${new Date(p.startedAt).toLocaleString(undefined,{timeZone:'UTC'})} UTC. Earlier activity cannot be reconstructed.`,'analytics-footnote'));
+ if(website){
+  const w=p.website,e=w.events||{};
+  cards(target,[['Page views',count(e.page_view),'Includes repeat visits'],['New tab sessions',count(w.sessions),'First observed sessions, not unique people'],['Download clicks',count(e.download_click),'Clicks on available store links'],['Film starts',Object.values(w.videos||{}).reduce((sum,v)=>sum+count(v.video_start),0),'Once per video version per session']]);
+  table(target,'Pages',['Page','Views'],Object.values(w.pages||{}).sort((a,b)=>b.count-a.count).map(r=>[r.page,n(r.count)]),'Page paths only; query strings and individual moment IDs are excluded.');
+  table(target,'Clicks & exploration',['Action','Destination','Count'],Object.values(w.clicks||{}).sort((a,b)=>b.count-a.count).map(r=>[r.name.replaceAll('_',' '),r.target,n(r.count)]));
+  table(target,'Promo videos',['Version','Started','25%','50%','75%','Completed','Errors'],Object.entries(w.videos||{}).map(([id,v])=>[id,...['video_start','video_25','video_50','video_75','video_complete','video_error'].map(k=>n(v[k]))]),'Each milestone counts once per video version per tab session. Watch progress uses playback time; seeking ahead does not count as watching. Completion requires reaching the end after at least 90% playback.');
+  target.append(text('p','First-party browser events respect Do Not Track and Global Privacy Control. Blocked tracking, closed tabs, offline visits and automated traffic can affect totals. Sessions are not verified human visitors.','analytics-footnote'));
+  return;
+ }
+ const a=p.app,e=a.events||{},steps=a.firstSteps||{};
+ cards(target,[['Daily active users',count(p.active.daily),'Signed-in members active today (UTC)'],['Weekly active users',count(p.active.weekly),'Unique members over the last 7 days'],['Monthly active users',count(p.active.monthly),'Unique members over the last 30 days'],['New registrations',count(steps.signup_completed),'First successful signup reported by the app'],['Account deletions',count(e.account_deleted),'Registered accounts removed by Firebase'],['Published moments',count(e.moment_published),'Includes posts later removed'],['Completed shares',count(e.share_completed),'Success reported by the phone share sheet'],['New likes',count(e.like_added),'Includes unlike/re-like actions'],['Mood selections',count(e.mood_selected),'Selections in Discover']]);
+ table(target,'Returning members',['Return day','Returned','Eligible cohort','Rate'],p.retention.map(r=>['Day '+r.day,n(r.returned),n(r.eligible),r.eligible?(100*r.returned/r.eligible).toFixed(1)+'%':'Not enough time']),`Cohorts start on a member’s first observed day, including existing members. Each return day uses the last ${data.rangeDays} fully observed cohorts eligible for that day. Today’s incomplete return day is excluded. Active-user cards always use today, 7 days and 30 days.`);
+ table(target,'Onboarding & dare journey',['Step','Events','First-time members'],[['Signup attempts','signup_started'],['Successful registrations','signup_completed'],['First profile setup','profile_completed'],['Mood selected','mood_selected'],['Dare viewed','dare_viewed'],['Dare shuffled','dare_shuffled'],['Camera opened','capture_started'],['Post attempts','upload_started'],['Post successes','upload_succeeded'],['Post failures','upload_failed']].map(([label,key])=>[label,n(e[key]),steps[key]===undefined?'—':n(steps[key])]),'Event totals show activity, not an ordered conversion funnel. First-time counts are recorded once per member since tracking began. Posting time includes media preparation and upload; successful retries can exceed published moments.');
+ const names=new Map((data.moods||[]).map(m=>[m.id,m.name])),selected=new Map(Object.values(a.moods||{}).map(m=>[m.id,m.count]));
+ for(const id of selected.keys())if(!names.has(id))names.set(id,id+' (retired)');
+ const moods=[...names].map(([id,name])=>[name,selected.get(id)||0]).sort((x,y)=>(moodSort==='least'?x[1]-y[1]:y[1]-x[1])||x[0].localeCompare(y[0]));
+ const moodPanel=table(target,'Mood popularity',['Mood','Selections'],moods.map(([name,value])=>[name,n(value)]),'Includes available moods with zero selections.');
+ if(moodPanel){const label=text('label','Sort moods '),select=document.createElement('select');select.id='product-mood-sort';for(const [value,title] of [['most','Most selected'],['least','Least selected']]){const option=text('option',title);option.value=value;select.append(option);}select.value=moodSort;select.onchange=()=>{moodSort=select.value;renderProduct(data);$('product-mood-sort').focus();};label.append(select);moodPanel.insertBefore(label,moodPanel.querySelector('.table-wrap'));}
+ table(target,'Community participation',['Action','Count'],[['Camera opened',n(e.community_started)],['Posting attempts',n(a.community?.upload_started)],['Successful post attempts',n(a.community?.upload_succeeded)]],'Counts actions on community dares. Existing unique-participant counts are available in the earlier tracking section below.');
+ table(target,'Reliability',['Event','Platform','Version','Reason','Count'],Object.values(a.errors||{}).sort((x,y)=>y.count-x.count).map(r=>[r.name,r.platform,r.version,r.code,n(r.count)]),'Only error categories are collected here. Release crash reports and stack traces are available in Firebase Crashlytics.');
+ table(target,'Posting speed',['Outcome','Attempts','Average','10s or longer'],Object.entries(a.timings||{}).map(([key,t])=>[key.replaceAll('_',' '),n(t.count),t.count?(t.totalMs/t.count/1000).toFixed(1)+'s':'—',n(t.slow)]));
+ table(target,'Daily activity',['UTC date','Active members','Published moments'],p.trend.map(r=>[r.day,n(r.active),n(r.posts)]));
+ target.append(text('p','Production excludes events sent by development builds and accounts marked as staff or excluded when received. Offline events retry for up to 7 days. Share success confirms a share-sheet action, not receipt or a view by another person.','analytics-footnote'));
+}

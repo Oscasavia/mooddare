@@ -1,3 +1,4 @@
+import 'package:mooddare/core/analytics/product_analytics.dart';
 import 'package:mooddare/features/drafts/data/draft_repository.dart';
 import 'dart:async';
 import 'dart:io';
@@ -96,6 +97,17 @@ class _LiveBeautyScreenState extends State<LiveBeautyScreen>
   @override
   void initState() {
     super.initState();
+    ProductAnalytics.instance.track(
+      'capture_started',
+      moodId: widget.moodId,
+      weekId: widget.weeklyDareId,
+    );
+    if (widget.weeklyDareId != null) {
+      ProductAnalytics.instance.track(
+        'community_started',
+        weekId: widget.weeklyDareId,
+      );
+    }
     WidgetsBinding.instance.addObserver(this);
     _countdown.addListener(_countdownChanged);
     _restoreAndStart();

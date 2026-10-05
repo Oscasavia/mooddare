@@ -58,7 +58,9 @@ class _DaresScreenState extends State<DaresScreen> {
       showMoodPreview(context, mood);
       return;
     }
-    unawaited((widget.analytics ?? ProductAnalytics()).moodSelected(mood.id));
+    unawaited(
+      (widget.analytics ?? ProductAnalytics.instance).moodSelected(mood.id),
+    );
     Navigator.push(
       context,
       MaterialPageRoute(

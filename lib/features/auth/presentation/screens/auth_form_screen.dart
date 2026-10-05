@@ -1,3 +1,4 @@
+import 'package:mooddare/core/analytics/product_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:mooddare/core/user_message.dart';
@@ -37,6 +38,9 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
 
   Future<void> _submit({bool google = false}) async {
     if (_busy || (!google && !_form.currentState!.validate())) return;
+    ProductAnalytics.instance.track(
+      _signUp && !google ? 'signup_started' : 'login_started',
+    );
     FocusScope.of(context).unfocus();
     setState(() {
       _busy = true;
@@ -58,6 +62,10 @@ class _AuthFormScreenState extends State<AuthFormScreen> {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } catch (error) {
+      ProductAnalytics.instance.track(
+        'auth_failed',
+        error: ProductAnalytics.errorCode(error),
+      );
       if (mounted) setState(() => _error = userMessage(error));
     } finally {
       if (mounted) setState(() => _busy = false);
